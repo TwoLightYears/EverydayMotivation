@@ -50,158 +50,136 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// ── Palette (from the concept's visual brief) ────────────────────────────
+const INK = "#141009";
+const BOARD = "#1B1610";
+const CHESTNUT = "#3F2E20";
+const CHESTNUT_HI = "#8A6338";
+const GOLD = "#C8B58C";
+const GOLD_HI = "#E9E1CE";
+const GRAY = "#8A8578";
+const GRID = "#221D14";
+const GRID_MAJOR = "#2C251A";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Spectrogram data ─────────────────────────────────────────────────────
+// 24 amplitude values, grouped into 6 bands of 4 bars — each band a
+// distinct mimicked sound source. Amplitudes are hand-shaped so each
+// band reads as a different spectrogram silhouette.
+const BAND_SIZE = 4;
+const AMPS: number[] = [
+  // KOOKABURRA — loud broadband cackle
+  0.72, 0.9, 0.83, 0.78,
+  // WHIPBIRD — soft ramp, sharp whip terminal note
+  0.4, 0.52, 0.98, 0.6,
+  // GREY SHRIKE-THRUSH — melodic mid
+  0.62, 0.7, 0.58, 0.66,
+  // SATIN BOWERBIRD — chattery mechanical
+  0.55, 0.78, 0.5, 0.72,
+  // PILOTBIRD — moderate three-note phrase
+  0.68, 0.75, 0.6, 0.5,
+  // YELLOW-TAILED BLACK-COCKATOO — harsh two-note call
+  0.94, 0.72, 0.86, 0.55,
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
+type Band = { label: string; sub: string };
+const BANDS: Band[] = [
+  { label: "KOOKABURRA", sub: "0:04" },
+  { label: "WHIPBIRD", sub: "0:11" },
+  { label: "SHRIKE-THRUSH", sub: "0:17" },
+  { label: "BOWERBIRD", sub: "0:23" },
+  { label: "PILOTBIRD", sub: "0:29" },
+  { label: "COCKATOO", sub: "0:35" },
 ];
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
+// ── Lyre-tail geometry ───────────────────────────────────────────────────
+const N = AMPS.length; // 24
+const BASE_Y = 720;
+const TOP_Y = 210;
+const H = BASE_Y - TOP_Y; // 510
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+const BOT_LEFT_X = 410;
+const BOT_RIGHT_X = 670;
+const TOP_LEFT_X = 240;
+const TOP_RIGHT_X = 840;
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
+const xBottom = (i: number): number =>
+  BOT_LEFT_X + (i / (N - 1)) * (BOT_RIGHT_X - BOT_LEFT_X);
+const xTopFull = (i: number): number =>
+  TOP_LEFT_X + (i / (N - 1)) * (TOP_RIGHT_X - TOP_LEFT_X);
+
+// Trapezoidal string: leans outward proportionally to its amplitude.
+const stringPath = (i: number, amp: number): string => {
+  const xb = xBottom(i);
+  const wB = 1.6;
+  const xt = xb + (xTopFull(i) - xb) * amp;
+  const wT = 2.4;
+  const yT = BASE_Y - amp * H;
+  return `M ${xb - wB} ${BASE_Y} L ${xb + wB} ${BASE_Y} L ${xt + wT} ${yT} L ${
+    xt - wT
+  } ${yT} Z`;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// Small circle at the tip of each string ("filamentary tuft").
+const tipXY = (i: number, amp: number): { x: number; y: number } => {
+  const xb = xBottom(i);
+  return {
+    x: xb + (xTopFull(i) - xb) * amp,
+    y: BASE_Y - amp * H,
+  };
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Overall paint-in for the strings: staggered spring, left-to-right.
+  const barProgress = (i: number): number => {
+    const delay = fps * (0.35 + i * 0.05); // ~55f delay for last bar
+    return spring({
+      frame: frame - delay,
+      fps,
+      config: { damping: 22, stiffness: 130, mass: 0.9 },
+    });
+  };
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Band labels + arm reveal, after strings finish.
+  const bandsInStart = fps * 1.9;
+  const bandOpacity = (i: number): number =>
+    interpolate(
+      frame,
+      [bandsInStart + i * 4, bandsInStart + i * 4 + 14],
+      [0, 1],
+      { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+    );
 
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  const armProgress = spring({
+    frame: frame - fps * 0.15,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 40, stiffness: 90, mass: 1.2 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  // Type reveal
+  const titleSpring = spring({
+    frame: frame - fps * 2.4,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+  const hookOpacity = interpolate(frame, [fps * 3.0, fps * 3.9], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Playhead sweep (loops after strings are drawn)
+  const playheadStart = fps * 3.2;
+  const playheadCycle = fps * 4;
+  const playheadX = (() => {
+    if (frame < playheadStart) return null;
+    const t = ((frame - playheadStart) % playheadCycle) / playheadCycle;
+    return TOP_LEFT_X + t * (TOP_RIGHT_X - TOP_LEFT_X);
+  })();
+
+  const FRAME = { x: 60, y: 130, w: 960, h: 700 };
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -225,11 +203,10 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: GOLD }}>2026 · 07 · 16</span>
       </div>
 
-      {/* Drafting frame + map */}
       <svg
         width={1080}
         height={1350}
@@ -241,12 +218,12 @@ export const PairingCard: React.FC = () => {
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={48}
+            height={48}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d={`M 48 0 L 0 0 0 48`}
               fill="none"
               stroke={GRID}
               strokeWidth={1}
@@ -256,29 +233,41 @@ export const PairingCard: React.FC = () => {
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={192}
+            height={192}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d={`M 192 0 L 0 0 0 192`}
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="50%" cy="45%" r="70%">
+            <stop offset="0%" stopColor="#221B12" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <radialGradient id="stage-glow" cx="50%" cy="88%" r="55%">
+            <stop offset="0%" stopColor={CHESTNUT_HI} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={BOARD} stopOpacity={0} />
+          </radialGradient>
+
+          <linearGradient id="string-grad" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor={CHESTNUT_HI} />
+            <stop offset="60%" stopColor={GOLD} />
+            <stop offset="100%" stopColor={GOLD_HI} />
+          </linearGradient>
+
+          <linearGradient id="arm-grad" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="#2A1E15" />
+            <stop offset="70%" stopColor={CHESTNUT} />
+            <stop offset="100%" stopColor={CHESTNUT_HI} />
+          </linearGradient>
+
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="4" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
@@ -287,7 +276,7 @@ export const PairingCard: React.FC = () => {
           </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Studio card */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
@@ -309,16 +298,23 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#332A1D"
           strokeWidth={1}
+        />
+
+        {/* Stage-glow behind the tail */}
+        <rect
+          x={FRAME.x}
+          y={FRAME.y}
+          width={FRAME.w}
+          height={FRAME.h}
+          fill="url(#stage-glow)"
         />
 
         {/* Corner crop marks */}
@@ -330,245 +326,328 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={CHESTNUT_HI} strokeWidth={1.5} fill="none">
+            <line x1={cx} y1={cy} x2={cx + sx * 24} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 24} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Frequency axis (only 3 marks, tucked inside the card) */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
+          stroke={GRID_MAJOR}
+          strokeWidth={1}
           fill={GRAY}
           fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
+          fontSize={9}
+          letterSpacing={2}
           fontWeight={500}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          {[
+            { y: TOP_Y + 30, hz: "8k" },
+            { y: TOP_Y + H * 0.5, hz: "4k" },
+            { y: BASE_Y - 4, hz: "0" },
+          ].map((t, i) => (
+            <g key={i}>
+              <line x1={125} y1={t.y} x2={140} y2={t.y} />
+              <text x={120} y={t.y + 3} textAnchor="end" stroke="none">
+                {t.hz}
+              </text>
+            </g>
+          ))}
+          <text
+            x={100}
+            y={(TOP_Y + BASE_Y) / 2}
+            textAnchor="middle"
+            transform={`rotate(-90 100 ${(TOP_Y + BASE_Y) / 2})`}
+            stroke="none"
+            letterSpacing={4}
+          >
+            HZ
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+        {/* Band labels above the lyre + tick marks */}
+        {BANDS.map((b, bi) => {
+          const centerI = bi * BAND_SIZE + (BAND_SIZE - 1) / 2;
+          const cx = xTopFull(centerI);
+          const op = bandOpacity(bi);
+          return (
+            <g key={b.label} opacity={op}>
+              <line
+                x1={cx}
+                y1={188}
+                x2={cx}
+                y2={196}
+                stroke={GOLD}
+                strokeWidth={1}
+              />
+              <text
+                x={cx}
+                y={178}
+                textAnchor="middle"
+                fill={GOLD_HI}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={600}
+                letterSpacing={1.8}
+              >
+                {b.label}
+              </text>
+              <text
+                x={cx}
+                y={162}
+                textAnchor="middle"
+                fill={GRAY}
+                fontFamily={inter}
+                fontSize={9}
+                fontWeight={500}
+                letterSpacing={2}
+              >
+                {b.sub}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Divider ticks between bands, along the caption strip */}
+        {[0, 1, 2, 3, 4, 5, 6].map((k) => {
+          // divider positions in the top-arc coord: between band k-1 and k
+          const iCut = k * BAND_SIZE - 0.5;
+          const cutX = xTopFull(Math.max(0, Math.min(N - 1, iCut)));
+          const op = bandOpacity(Math.min(5, k));
+          return (
+            <line
+              key={`div-${k}`}
+              x1={cutX}
+              y1={196}
+              x2={cutX}
+              y2={202}
+              stroke={CHESTNUT_HI}
+              strokeWidth={1}
+              opacity={0.6 * op}
+            />
+          );
+        })}
+
+        {/* Left arm (chestnut outer feather) */}
+        <g opacity={armProgress}>
+          <path
+            d="M 400 720
+               C 340 640, 260 470, 210 260
+               C 205 220, 232 200, 268 218"
+            fill="none"
+            stroke="url(#arm-grad)"
+            strokeWidth={16}
+            strokeLinecap="round"
+          />
+          <path
+            d="M 400 720
+               C 340 640, 260 470, 210 260
+               C 205 220, 232 200, 268 218"
+            fill="none"
+            stroke={CHESTNUT_HI}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeOpacity={0.85}
+          />
+          {/* Rachis fine hairs on left arm */}
+          {Array.from({ length: 10 }).map((_, i) => {
+            const t = 0.15 + i * 0.075;
+            const bx = 400 + (210 - 400) * t + Math.sin(t * 3) * 6;
+            const by = 720 + (260 - 720) * t;
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+              <line
+                key={`lh-${i}`}
+                x1={bx}
+                y1={by}
+                x2={bx - 22 + i * 0.6}
+                y2={by - 6}
+                stroke={CHESTNUT_HI}
+                strokeWidth={1}
+                strokeOpacity={0.55}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Right arm (mirror) */}
+        <g opacity={armProgress}>
+          <path
+            d="M 680 720
+               C 740 640, 820 470, 870 260
+               C 875 220, 848 200, 812 218"
+            fill="none"
+            stroke="url(#arm-grad)"
+            strokeWidth={16}
+            strokeLinecap="round"
+          />
+          <path
+            d="M 680 720
+               C 740 640, 820 470, 870 260
+               C 875 220, 848 200, 812 218"
+            fill="none"
+            stroke={CHESTNUT_HI}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeOpacity={0.85}
+          />
+          {Array.from({ length: 10 }).map((_, i) => {
+            const t = 0.15 + i * 0.075;
+            const bx = 680 + (870 - 680) * t - Math.sin(t * 3) * 6;
+            const by = 720 + (260 - 720) * t;
+            return (
+              <line
+                key={`rh-${i}`}
+                x1={bx}
+                y1={by}
+                x2={bx + 22 - i * 0.6}
+                y2={by - 6}
+                stroke={CHESTNUT_HI}
+                strokeWidth={1}
+                strokeOpacity={0.55}
+              />
+            );
+          })}
+        </g>
+
+        {/* Base cross-bar (perch/rachis) */}
+        <g opacity={armProgress}>
+          <rect
+            x={385}
+            y={716}
+            width={310}
+            height={9}
+            rx={3}
+            fill="url(#arm-grad)"
+          />
+          <rect x={385} y={716} width={310} height={2} rx={1} fill={CHESTNUT_HI} />
+          {/* time ticks on the crossbar */}
+          {Array.from({ length: 7 }).map((_, i) => {
+            const x = 385 + i * (310 / 6);
+            return (
+              <line
+                key={`tk-${i}`}
+                x1={x}
+                y1={728}
+                x2={x}
+                y2={i % 3 === 0 ? 734 : 731}
+                stroke={GRAY}
+                strokeWidth={1}
+              />
+            );
+          })}
+        </g>
+
+        {/* Strings (spectrogram) */}
+        <g filter="url(#soft-glow)">
+          {AMPS.map((amp, i) => {
+            const p = Math.max(0, Math.min(1, barProgress(i)));
+            const drawn = amp * p;
+            if (drawn < 0.01) return null;
+            const tip = tipXY(i, drawn);
+            return (
+              <g key={`bar-${i}`}>
+                <path
+                  d={stringPath(i, drawn)}
+                  fill="url(#string-grad)"
+                  opacity={0.95}
+                />
+                <circle cx={tip.x} cy={tip.y} r={2.6} fill={GOLD_HI} />
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Playhead sweep */}
+        {playheadX !== null && (
+          <g>
+            <line
+              x1={playheadX}
+              y1={TOP_Y - 8}
+              x2={playheadX}
+              y2={BASE_Y + 6}
+              stroke={GOLD_HI}
+              strokeWidth={1.2}
+              strokeOpacity={0.55}
+            />
+            <circle cx={playheadX} cy={TOP_Y - 8} r={3} fill={GOLD_HI} />
+          </g>
+        )}
+
+        {/* Compact bird silhouette below the lyre — the source */}
+        <g opacity={armProgress}>
+          {/* body — slim oval, back rising toward tail */}
+          <path
+            d="M 490 776
+               Q 480 762 500 758
+               Q 530 750 555 758
+               Q 568 762 566 772
+               Q 560 782 530 785
+               Q 505 785 490 776 Z"
+            fill="#0A0704"
+          />
+          {/* neck — thin and extended */}
+          <path
+            d="M 558 762 Q 572 754 582 749 L 587 754 Q 578 762 562 768 Z"
+            fill="#0A0704"
+          />
+          {/* head */}
+          <ellipse cx={588} cy={748} rx={9.5} ry={9} fill="#0A0704" />
+          {/* small crest */}
+          <path
+            d="M 588 740 L 590 733 L 594 741 Z"
+            fill="#0A0704"
+          />
+          {/* beak — slender */}
+          <polygon points="596,748 610,750 596,752" fill={CHESTNUT_HI} />
+          {/* eye */}
+          <circle cx={591} cy={747} r={1.5} fill={GOLD_HI} />
+          {/* legs — long */}
+          <line x1={514} y1={784} x2={514} y2={805} stroke="#0A0704" strokeWidth={2.2} />
+          <line x1={534} y1={784} x2={534} y2={805} stroke="#0A0704" strokeWidth={2.2} />
+          {/* feet */}
+          <path d="M 507 805 L 521 805 M 514 805 L 514 810" stroke="#0A0704" strokeWidth={2.2} />
+          <path d="M 527 805 L 541 805 M 534 805 L 534 810" stroke="#0A0704" strokeWidth={2.2} />
+        </g>
+
+        {/* Species tag under the bird */}
+        <g opacity={interpolate(frame, [fps * 2.0, fps * 2.7], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })}>
+          <line
+            x1={420}
+            y1={822}
+            x2={478}
+            y2={822}
+            stroke={CHESTNUT_HI}
+            strokeWidth={1}
+            strokeOpacity={0.55}
+          />
+          <line
+            x1={602}
+            y1={822}
+            x2={660}
+            y2={822}
+            stroke={CHESTNUT_HI}
+            strokeWidth={1}
+            strokeOpacity={0.55}
+          />
+          <text
+            x={540}
+            y={825}
+            textAnchor="middle"
+            fill={GOLD}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={4.5}
+            fontWeight={600}
+          >
+            MENURA NOVAEHOLLANDIAE
+          </text>
+        </g>
+
+        {/* Caption strip below the studio card */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
           fill={GRAY}
@@ -577,14 +656,14 @@ export const PairingCard: React.FC = () => {
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 3 · TAIL DISPLAY AS SPECTROGRAM OF THE MIMICRY SET</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
+            fill={GOLD}
             opacity={0.85}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            ≈72% OF RECITAL IS IMITATION
           </text>
         </g>
       </svg>
@@ -606,7 +685,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: GOLD,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -616,46 +695,44 @@ export const PairingCard: React.FC = () => {
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+          <span style={{ color: "#EFEADC", letterSpacing: 5 }}>
+            Foley Artist
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: "#F5EFDF",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
+            fontSize: 86,
+            lineHeight: 0.95,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The peer-reviewed
           <br />
-          city planner.
+          impersonator.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#D6D1C1",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
             maxWidth: 880,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          An adult male superb lyrebird spends roughly{" "}
+          <span style={{ color: GOLD, fontWeight: 600 }}>72% of his recital</span>{" "}
+          producing high-fidelity imitations of at least twenty other bird
+          species — mimicry so faithful the spectrograms overlay onto the
+          source calls.
         </div>
       </div>
 
@@ -677,11 +754,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Zann & Dunstan · Anim. Behav. 76 (2008) 1043–1054</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: GOLD }}>●</span> String = Mimicked Call
         </span>
       </div>
+
+      {/* Suppress unused-var warning for duration */}
+      <div style={{ display: "none" }}>{durationInFrames}</div>
     </AbsoluteFill>
   );
 };
