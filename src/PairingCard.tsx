@@ -50,168 +50,209 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// ── Palette (from the concept's visual brief) ─────────────────────────
+const INK = "#0B1220"; // deep tunnel-mouth midnight
+const BOARD = "#0F172A"; // slightly lifted drafting board
+const CROWN = "#1FA6C6"; // kingfisher iridescent crown turquoise
+const WING = "#0E4A78"; // deep kingfisher wing blue
+const BREAST = "#F16B29"; // kingfisher breast rusty orange
+const PAPER = "#F5F7FA"; // shinkansen white / drafting paper
+const GRID = "#152036";
+const GRID_MAJOR = "#1B2A47";
+const GRAY = "#6B7280";
+const DIM = "#9AA6B8"; // annotation text
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Drafting frame (poster coords) ────────────────────────────────────
+const FRAME = { x: 60, y: 120, w: 960, h: 640 };
+
+// Figure-local coordinate space (960 × 640) inside the frame.
+// Axis of symmetry runs horizontal at FIG_AXIS_Y; the shared vertex where
+// the beak tip meets the train nose tip sits at (FIG_VERTEX_X, FIG_AXIS_Y).
+const FIG_W = 960;
+const FIG_H = 640;
+const FIG_AXIS_Y = 340;
+const FIG_VERTEX_X = 500;
+
+// ── Kingfisher (top-down, right-facing) ───────────────────────────────
+// All coords in figure-local space. Head/body sit LEFT of vertex; beak
+// tapers rightward to (FIG_VERTEX_X, FIG_AXIS_Y).
+
+// Body silhouette (elongated teardrop, wings folded, head merged)
+const BIRD_BODY = `
+  M 130 ${FIG_AXIS_Y - 6}
+  Q 155 ${FIG_AXIS_Y - 46} 220 ${FIG_AXIS_Y - 44}
+  Q 300 ${FIG_AXIS_Y - 42} 355 ${FIG_AXIS_Y - 30}
+  Q 390 ${FIG_AXIS_Y - 22} 405 ${FIG_AXIS_Y - 14}
+  L 405 ${FIG_AXIS_Y + 14}
+  Q 390 ${FIG_AXIS_Y + 22} 355 ${FIG_AXIS_Y + 30}
+  Q 300 ${FIG_AXIS_Y + 42} 220 ${FIG_AXIS_Y + 44}
+  Q 155 ${FIG_AXIS_Y + 46} 130 ${FIG_AXIS_Y + 6}
+  Q 118 ${FIG_AXIS_Y} 130 ${FIG_AXIS_Y - 6}
+  Z
+`;
+
+// Crown / nape highlight (turquoise on top of head, viewed from above)
+const BIRD_CROWN = `
+  M 250 ${FIG_AXIS_Y - 42}
+  Q 300 ${FIG_AXIS_Y - 40} 355 ${FIG_AXIS_Y - 28}
+  Q 385 ${FIG_AXIS_Y - 20} 395 ${FIG_AXIS_Y - 12}
+  Q 355 ${FIG_AXIS_Y - 18} 300 ${FIG_AXIS_Y - 22}
+  Q 260 ${FIG_AXIS_Y - 26} 240 ${FIG_AXIS_Y - 30}
+  Q 232 ${FIG_AXIS_Y - 36} 250 ${FIG_AXIS_Y - 42}
+  Z
+`;
+
+// Upper wing (swept back, primary feathers ending in points)
+const BIRD_WING_UPPER = `
+  M 220 ${FIG_AXIS_Y - 40}
+  L 175 ${FIG_AXIS_Y - 92}
+  L 155 ${FIG_AXIS_Y - 90}
+  L 145 ${FIG_AXIS_Y - 100}
+  L 128 ${FIG_AXIS_Y - 96}
+  L 118 ${FIG_AXIS_Y - 106}
+  L 100 ${FIG_AXIS_Y - 100}
+  Q 150 ${FIG_AXIS_Y - 78} 195 ${FIG_AXIS_Y - 58}
+  Q 220 ${FIG_AXIS_Y - 48} 240 ${FIG_AXIS_Y - 40}
+  Z
+`;
+
+// Lower wing (mirror)
+const BIRD_WING_LOWER = `
+  M 220 ${FIG_AXIS_Y + 40}
+  L 175 ${FIG_AXIS_Y + 92}
+  L 155 ${FIG_AXIS_Y + 90}
+  L 145 ${FIG_AXIS_Y + 100}
+  L 128 ${FIG_AXIS_Y + 96}
+  L 118 ${FIG_AXIS_Y + 106}
+  L 100 ${FIG_AXIS_Y + 100}
+  Q 150 ${FIG_AXIS_Y + 78} 195 ${FIG_AXIS_Y + 58}
+  Q 220 ${FIG_AXIS_Y + 48} 240 ${FIG_AXIS_Y + 40}
+  Z
+`;
+
+// Wing primary feather separators
+const BIRD_WING_UPPER_LINES = [
+  `M 210 ${FIG_AXIS_Y - 52} L 155 ${FIG_AXIS_Y - 88}`,
+  `M 200 ${FIG_AXIS_Y - 46} L 128 ${FIG_AXIS_Y - 94}`,
+];
+const BIRD_WING_LOWER_LINES = [
+  `M 210 ${FIG_AXIS_Y + 52} L 155 ${FIG_AXIS_Y + 88}`,
+  `M 200 ${FIG_AXIS_Y + 46} L 128 ${FIG_AXIS_Y + 94}`,
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// Beak (long tapering wedge from head to shared vertex)
+const BIRD_BEAK = `
+  M 402 ${FIG_AXIS_Y - 12}
+  L ${FIG_VERTEX_X} ${FIG_AXIS_Y}
+  L 402 ${FIG_AXIS_Y + 12}
+  Z
+`;
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// Beak profile curve (matches the train nose curve, dashed guide line)
+const BIRD_BEAK_PROFILE = `
+  M 402 ${FIG_AXIS_Y - 12}
+  Q 452 ${FIG_AXIS_Y - 8} ${FIG_VERTEX_X} ${FIG_AXIS_Y}
+`;
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
+// Eye
+const BIRD_EYE = { cx: 305, cy: FIG_AXIS_Y - 16, r: 5 };
 
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
+// ── Shinkansen 500 nose (top-down, left-facing) ───────────────────────
+// Nose tip meets the beak tip at (FIG_VERTEX_X, FIG_AXIS_Y). Body extends
+// rightward off the composition.
+const TRAIN_BODY_HALF_H = 46; // half-height at full body width
+const TRAIN_BODY_START_X = 780; // where the parabolic nose meets the tube
+const TRAIN_BODY_END_X = 960; // extends past the drafting frame
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
+// Full nose+body silhouette (one path)
+const TRAIN_OUTLINE = `
+  M ${FIG_VERTEX_X} ${FIG_AXIS_Y}
+  C 570 ${FIG_AXIS_Y - 4} 640 ${FIG_AXIS_Y - 22} 700 ${FIG_AXIS_Y - 36}
+  C 740 ${FIG_AXIS_Y - 44} 770 ${FIG_AXIS_Y - 46} ${TRAIN_BODY_START_X} ${FIG_AXIS_Y - TRAIN_BODY_HALF_H}
+  L ${TRAIN_BODY_END_X} ${FIG_AXIS_Y - TRAIN_BODY_HALF_H}
+  L ${TRAIN_BODY_END_X} ${FIG_AXIS_Y + TRAIN_BODY_HALF_H}
+  L ${TRAIN_BODY_START_X} ${FIG_AXIS_Y + TRAIN_BODY_HALF_H}
+  C 770 ${FIG_AXIS_Y + 46} 740 ${FIG_AXIS_Y + 44} 700 ${FIG_AXIS_Y + 36}
+  C 640 ${FIG_AXIS_Y + 22} 570 ${FIG_AXIS_Y + 4} ${FIG_VERTEX_X} ${FIG_AXIS_Y}
+  Z
+`;
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+// Upper nose curve — this is the reference profile the beak also traces
+const TRAIN_NOSE_PROFILE = `
+  M ${FIG_VERTEX_X} ${FIG_AXIS_Y}
+  C 570 ${FIG_AXIS_Y - 4} 640 ${FIG_AXIS_Y - 22} 700 ${FIG_AXIS_Y - 36}
+  C 740 ${FIG_AXIS_Y - 44} 770 ${FIG_AXIS_Y - 46} ${TRAIN_BODY_START_X} ${FIG_AXIS_Y - TRAIN_BODY_HALF_H}
+`;
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
+// Cockpit window slit (near tip, on upper half)
+const TRAIN_COCKPIT = `
+  M 640 ${FIG_AXIS_Y - 24}
+  L 700 ${FIG_AXIS_Y - 32}
+  L 700 ${FIG_AXIS_Y - 28}
+  L 640 ${FIG_AXIS_Y - 20}
+  Z
+`;
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
+// Turquoise stripe under body — nods to kingfisher crown color
+const TRAIN_STRIPE_UPPER = `
+  M ${TRAIN_BODY_START_X} ${FIG_AXIS_Y - 4}
+  L ${TRAIN_BODY_END_X} ${FIG_AXIS_Y - 4}
+  L ${TRAIN_BODY_END_X} ${FIG_AXIS_Y + 4}
+  L ${TRAIN_BODY_START_X} ${FIG_AXIS_Y + 4}
+  Z
+`;
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// Body panel seams
+const TRAIN_SEAMS: number[] = [820, 860, 900, 940];
 
+// ── Component ─────────────────────────────────────────────────────────
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  // Master intro spring (settles bird + train)
+  const introSpring = spring({
+    frame: frame - fps * 0.2,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.9 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const titleSpring = spring({
+    frame: frame - fps * 0.5,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+
+  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const annotationsOp = interpolate(frame, [fps * 0.6, fps * 1.4], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // Shock ring pulse — one arc births every ~0.9 s
+  const pulsePeriod = fps * 1.5;
+  const RINGS = 4;
+
+  // Bird nudge — a small inbound settle from a hair to the left
+  const birdDx = interpolate(introSpring, [0, 1], [-30, 0]);
+  const trainDx = interpolate(introSpring, [0, 1], [30, 0]);
+  const birdOp = interpolate(introSpring, [0, 1], [0, 1]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* ── Top metadata band ───────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
-          top: 56,
+          top: 52,
           left: 80,
           right: 80,
           display: "flex",
@@ -225,11 +266,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: CROWN }}>2026 · 07 · 18</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* ── Drafting board + figure ────────────────────────────── */}
       <svg
         width={1080}
         height={1350}
@@ -241,12 +282,12 @@ export const PairingCard: React.FC = () => {
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={40}
+            height={40}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d={`M 40 0 L 0 0 0 40`}
               fill="none"
               stroke={GRID}
               strokeWidth={1}
@@ -256,30 +297,37 @@ export const PairingCard: React.FC = () => {
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={160}
+            height={160}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d={`M 160 0 L 0 0 0 160`}
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="50%" cy="45%" r="70%">
+            <stop offset="0%" stopColor="#122036" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <linearGradient id="body-gradient" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stopColor={WING} />
+            <stop offset="55%" stopColor={CROWN} />
+            <stop offset="100%" stopColor={WING} />
+          </linearGradient>
+
+          <linearGradient id="train-gradient" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stopColor="#E8F1F6" />
+            <stop offset="45%" stopColor="#C7D3DE" />
+            <stop offset="100%" stopColor="#96A5B4" />
+          </linearGradient>
+
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -310,14 +358,14 @@ export const PairingCard: React.FC = () => {
           fill="url(#grid-major)"
         />
 
-        {/* Inner thin border */}
+        {/* Inner border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#22304D"
           strokeWidth={1}
         />
 
@@ -330,272 +378,432 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={CROWN} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
+
+        {/* ── Figure content: local coord 0..960 × 0..640 ──────── */}
+        <g transform={`translate(${FRAME.x}, ${FRAME.y})`}>
+          {/* Symmetry axis (dashed, extends across figure) */}
           <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
+            x1={0}
+            y1={FIG_AXIS_Y}
+            x2={FIG_W}
+            y2={FIG_AXIS_Y}
+            stroke={GRID_MAJOR}
+            strokeWidth={1}
+            strokeDasharray="6 6"
+            opacity={0.8}
           />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          {/* Faint axis label — nested under bottom of figure to avoid callouts */}
+          <text
+            x={20}
+            y={FIG_H - 60}
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={3}
+            fontWeight={500}
+            opacity={annotationsOp}
+          >
+            AXIS · A—A′
           </text>
-        </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+          {/* Section label — LEFT: SPECIMEN A */}
+          <g
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={3.5}
+            fontWeight={600}
+            opacity={annotationsOp}
+          >
+            <text x={110} y={130}>
+              A · ALCEDO ATTHIS
+            </text>
+            <text x={110} y={148} fill={CROWN} letterSpacing={3}>
+              Ø beak = 40 mm
+            </text>
+          </g>
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
+          {/* Section label — RIGHT: SPECIMEN B */}
+          <g
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={3.5}
+            fontWeight={600}
+            textAnchor="end"
+            opacity={annotationsOp}
+          >
+            <text x={FIG_W - 20} y={130}>
+              B · 500 SERIES SHINKANSEN
+            </text>
+            <text x={FIG_W - 20} y={148} fill={CROWN} letterSpacing={3}>
+              Ø nose = 15 m
+            </text>
+          </g>
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+          {/* ── Bird (LEFT) — a subtle inbound settle ──────────── */}
+          <g
+            opacity={birdOp}
+            transform={`translate(${birdDx}, 0)`}
+          >
+            {/* Wings (behind body) */}
+            <path d={BIRD_WING_UPPER} fill={WING} />
+            <path d={BIRD_WING_LOWER} fill={WING} />
+            {/* Wing feather separators */}
+            <g stroke={INK} strokeWidth={1.1} fill="none" opacity={0.5}>
+              {BIRD_WING_UPPER_LINES.map((d, i) => (
+                <path key={`wu${i}`} d={d} />
+              ))}
+              {BIRD_WING_LOWER_LINES.map((d, i) => (
+                <path key={`wl${i}`} d={d} />
+              ))}
+            </g>
+            {/* Wing tip crown accents */}
+            <circle
+              cx={100}
+              cy={FIG_AXIS_Y - 100}
+              r={3.5}
+              fill={CROWN}
+              opacity={0.9}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+            <circle
+              cx={100}
+              cy={FIG_AXIS_Y + 100}
+              r={3.5}
+              fill={CROWN}
+              opacity={0.9}
             />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
+
+            {/* Body */}
+            <path d={BIRD_BODY} fill="url(#body-gradient)" />
+
+            {/* Crown (turquoise highlight on top of head) */}
+            <path d={BIRD_CROWN} fill={CROWN} opacity={0.85} />
+
+            {/* Breast slash (small orange peek near neck) */}
+            <path
+              d={`M 205 ${FIG_AXIS_Y + 20} Q 260 ${FIG_AXIS_Y + 40} 320 ${FIG_AXIS_Y + 34} Q 260 ${FIG_AXIS_Y + 32} 210 ${FIG_AXIS_Y + 26} Z`}
+              fill={BREAST}
+              opacity={0.85}
+            />
+
+            {/* Beak (filled dark wedge) */}
+            <path d={BIRD_BEAK} fill={INK} />
+            <path
+              d={BIRD_BEAK}
+              fill="none"
+              stroke={CROWN}
+              strokeWidth={1}
+              opacity={0.55}
+            />
+
+            {/* Beak specular highlight — thin line along the top edge */}
+            <path
+              d={`M 402 ${FIG_AXIS_Y - 10} L ${FIG_VERTEX_X - 2} ${FIG_AXIS_Y - 2}`}
+              stroke={CROWN}
+              strokeWidth={1.2}
+              fill="none"
+              opacity={0.7}
+            />
+
+            {/* Eye */}
+            <circle
+              cx={BIRD_EYE.cx}
+              cy={BIRD_EYE.cy}
+              r={BIRD_EYE.r + 2}
+              fill={PAPER}
+              opacity={0.9}
+            />
+            <circle
+              cx={BIRD_EYE.cx}
+              cy={BIRD_EYE.cy}
+              r={BIRD_EYE.r}
               fill={INK}
-              stroke={OAT}
+            />
+            <circle
+              cx={BIRD_EYE.cx + 1.5}
+              cy={BIRD_EYE.cy - 1.5}
+              r={1.5}
+              fill={PAPER}
+            />
+          </g>
+
+          {/* ── Train (RIGHT) — mirrored settle ────────────────── */}
+          <g
+            opacity={birdOp}
+            transform={`translate(${trainDx}, 0)`}
+          >
+            {/* Body panel seams (drawn behind so they don't overhang) */}
+            <g stroke="#D8DFE8" strokeWidth={0.8} opacity={0.9}>
+              {TRAIN_SEAMS.map((sx) => (
+                <line
+                  key={sx}
+                  x1={sx}
+                  y1={FIG_AXIS_Y - TRAIN_BODY_HALF_H + 4}
+                  x2={sx}
+                  y2={FIG_AXIS_Y + TRAIN_BODY_HALF_H - 4}
+                />
+              ))}
+            </g>
+
+            {/* Train outline fill */}
+            <path d={TRAIN_OUTLINE} fill="url(#train-gradient)" />
+
+            {/* Train outline stroke */}
+            <path
+              d={TRAIN_OUTLINE}
+              fill="none"
+              stroke={WING}
               strokeWidth={1.2}
+              opacity={0.85}
+            />
+
+            {/* Turquoise centerline stripe (nods to crown color) */}
+            <path d={TRAIN_STRIPE_UPPER} fill={CROWN} opacity={0.9} />
+
+            {/* Cockpit window slit */}
+            <path d={TRAIN_COCKPIT} fill={INK} />
+            {/* mirror below axis for symmetry (not the actual window,
+                just top-down mirror of the panel) */}
+            <path
+              d={`M 640 ${FIG_AXIS_Y + 24} L 700 ${FIG_AXIS_Y + 32} L 700 ${
+                FIG_AXIS_Y + 28
+              } L 640 ${FIG_AXIS_Y + 20} Z`}
+              fill={INK}
+              opacity={0.4}
+            />
+
+            {/* A small orange marker near the driver's window — subtle
+                nod to the kingfisher breast */}
+            <circle
+              cx={700}
+              cy={FIG_AXIS_Y - 34}
+              r={3}
+              fill={BREAST}
+              opacity={0.9}
+            />
+          </g>
+
+          {/* ── Shared profile guide (dashed) — argues the pairing ─ */}
+          <path
+            d={BIRD_BEAK_PROFILE}
+            fill="none"
+            stroke={PAPER}
+            strokeWidth={1.4}
+            strokeDasharray="4 5"
+            opacity={0.75 * annotationsOp}
+          />
+          <path
+            d={TRAIN_NOSE_PROFILE}
+            fill="none"
+            stroke={PAPER}
+            strokeWidth={1.4}
+            strokeDasharray="4 5"
+            opacity={0.75 * annotationsOp}
+          />
+          {/* Mirror profile lines below the axis for symmetry */}
+          <path
+            d={`M 402 ${FIG_AXIS_Y + 12} Q 452 ${FIG_AXIS_Y + 8} ${FIG_VERTEX_X} ${FIG_AXIS_Y}`}
+            fill="none"
+            stroke={PAPER}
+            strokeWidth={1.4}
+            strokeDasharray="4 5"
+            opacity={0.75 * annotationsOp}
+          />
+          <path
+            d={`M ${FIG_VERTEX_X} ${FIG_AXIS_Y} C 570 ${FIG_AXIS_Y + 4} 640 ${FIG_AXIS_Y + 22} 700 ${FIG_AXIS_Y + 36} C 740 ${FIG_AXIS_Y + 44} 770 ${FIG_AXIS_Y + 46} ${TRAIN_BODY_START_X} ${FIG_AXIS_Y + TRAIN_BODY_HALF_H}`}
+            fill="none"
+            stroke={PAPER}
+            strokeWidth={1.4}
+            strokeDasharray="4 5"
+            opacity={0.75 * annotationsOp}
+          />
+
+          {/* Shared vertex marker: dashed circle + crosshair + label */}
+          <g opacity={annotationsOp}>
+            <circle
+              cx={FIG_VERTEX_X}
+              cy={FIG_AXIS_Y}
+              r={26}
+              fill="none"
+              stroke={PAPER}
+              strokeWidth={1.2}
+              strokeDasharray="2 4"
+              opacity={0.85}
+            />
+            <circle
+              cx={FIG_VERTEX_X}
+              cy={FIG_AXIS_Y}
+              r={3}
+              fill={PAPER}
+            />
+            <line
+              x1={FIG_VERTEX_X - 34}
+              y1={FIG_AXIS_Y}
+              x2={FIG_VERTEX_X - 30}
+              y2={FIG_AXIS_Y}
+              stroke={PAPER}
+              strokeWidth={1.2}
+            />
+            <line
+              x1={FIG_VERTEX_X + 30}
+              y1={FIG_AXIS_Y}
+              x2={FIG_VERTEX_X + 34}
+              y2={FIG_AXIS_Y}
+              stroke={PAPER}
+              strokeWidth={1.2}
+            />
+            {/* Leader down-left into calm space below the beak */}
+            <line
+              x1={FIG_VERTEX_X - 18}
+              y1={FIG_AXIS_Y + 18}
+              x2={FIG_VERTEX_X - 90}
+              y2={FIG_AXIS_Y + 108}
+              stroke={PAPER}
+              strokeWidth={1}
+              opacity={0.75}
+            />
+            <line
+              x1={FIG_VERTEX_X - 90}
+              y1={FIG_AXIS_Y + 108}
+              x2={FIG_VERTEX_X - 216}
+              y2={FIG_AXIS_Y + 108}
+              stroke={PAPER}
+              strokeWidth={1}
+              opacity={0.75}
             />
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
+              x={FIG_VERTEX_X - 96}
+              y={FIG_AXIS_Y + 102}
+              textAnchor="end"
+              fill={PAPER}
               fontFamily={inter}
               fontSize={11}
               fontWeight={600}
-              letterSpacing={3.5}
+              letterSpacing={3}
             >
-              TOKYO
+              SHARED PROFILE VERTEX
+            </text>
+          </g>
+
+          {/* ── Shock arcs pulsing outward from vertex, damped ──── */}
+          {Array.from({ length: RINGS }).map((_, i) => {
+            const phase = (frame + i * (pulsePeriod / RINGS)) % pulsePeriod;
+            const t = phase / pulsePeriod;
+            const eased = 1 - Math.pow(1 - t, 2);
+            const r = 30 + eased * 96;
+            const damp = Math.pow(1 - t, 1.4);
+            const op = damp * 0.85 * annotationsOp;
+            return (
+              <circle
+                key={i}
+                cx={FIG_VERTEX_X}
+                cy={FIG_AXIS_Y}
+                r={r}
+                fill="none"
+                stroke={CROWN}
+                strokeWidth={1.8}
+                opacity={op}
+                filter="url(#soft-glow)"
+              />
+            );
+          })}
+
+          {/* Airflow arrows — three tiered streams entering from left */}
+          <g
+            stroke={DIM}
+            strokeWidth={1.2}
+            fill={DIM}
+            opacity={0.55 * annotationsOp}
+          >
+            {[190, 220, 250].map((y0, i) => {
+              const x0 = 20;
+              const x1 = 70;
+              return (
+                <g key={i}>
+                  <line x1={x0} y1={y0} x2={x1} y2={y0} />
+                  <polygon
+                    points={`${x1 - 6},${y0 - 4} ${x1},${y0} ${x1 - 6},${y0 + 4}`}
+                  />
+                </g>
+              );
+            })}
+            <text
+              x={20}
+              y={172}
+              fill={DIM}
+              fontFamily={inter}
+              fontSize={9}
+              letterSpacing={3}
+              fontWeight={600}
+            >
+              FLOW · v
+            </text>
+          </g>
+
+          {/* Density / medium interface callout — bottom label */}
+          <g opacity={annotationsOp}>
+            <line
+              x1={FIG_VERTEX_X - 240}
+              y1={FIG_AXIS_Y + 158}
+              x2={FIG_VERTEX_X + 240}
+              y2={FIG_AXIS_Y + 158}
+              stroke={DIM}
+              strokeWidth={0.8}
+              opacity={0.6}
+            />
+            <text
+              x={FIG_VERTEX_X}
+              y={FIG_AXIS_Y + 178}
+              textAnchor="middle"
+              fill={DIM}
+              fontFamily={inter}
+              fontSize={11}
+              letterSpacing={3.5}
+              fontWeight={500}
+            >
+              Δρ ≈ 800× · MEDIUM INTERFACE
+            </text>
+          </g>
+
+          {/* Caption strip inside the figure — bottom */}
+          <g
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={3}
+            fontWeight={500}
+            opacity={annotationsOp}
+          >
+            <text x={20} y={FIG_H - 20} fill={GRAY}>
+              FIG. 1 · TOP-DOWN PROFILE STUDY
+            </text>
+            <text
+              x={FIG_W - 20}
+              y={FIG_H - 20}
+              textAnchor="end"
+              fill={CROWN}
+              opacity={0.9}
+            >
+              — BOOM DAMPED —
             </text>
           </g>
         </g>
-
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
-        </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup (bottom third) ──────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 810,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,7 +814,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CROWN,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -617,7 +825,7 @@ export const PairingCard: React.FC = () => {
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Bullet-Train Designer
           </span>
         </div>
 
@@ -632,9 +840,11 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The bird
           <br />
-          city planner.
+          that hushed
+          <br />
+          a train.
         </div>
 
         <div
@@ -649,17 +859,18 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          To kill the tunnel boom of the 500&nbsp;Series Shinkansen at
+          300&nbsp;km/h, JR-West engineer Eiji Nakatsu reshaped its
+          15&nbsp;m nose after the beak of the{" "}
+          <span style={{ color: CROWN, fontWeight: 600 }}>
+            common kingfisher
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          — a bird that pierces the ~800× density jump from air into
+          water almost without a splash. Boom gone. Power −15%.
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ─────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -677,9 +888,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Nakatsu · JR-West · 500 Series · 1997</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: BREAST }}>●</span> Alcedo atthis
         </span>
       </div>
     </AbsoluteFill>
