@@ -50,186 +50,256 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief. Deinoxanthin (D. radiodurans
+// carotenoid salmon) against aged parchment and iron-gall ink.
+const INK = "#12100C";
+const INK_DEEP = "#0A0906";
+const PARCHMENT = "#EBD9B0";
+const PARCHMENT_HI = "#F3E4BE";
+const PARCHMENT_LO = "#C7B285";
+const VELLUM = "#C89B5B";
+const SALMON = "#E86C6C";
+const CARMINE = "#8A1F26";
+const MUTE = "#9C8A6B";
+const FRACTURE_GLOW = "#F5AA8A";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Layout (1080 × 1350 portrait) ─────────────────────────────────────────
+// Top metadata band  : y  56 ..  86
+// Leaf (framed art)  : y 130 .. 830  (h 700, w 900)
+// Caption strip      : y 852
+// Type lockup        : y 908
+// Footer             : y 1290
+
+const LEAF = { x: 90, y: 130, w: 900, h: 700 };
+
+// Fracture path (LEAF-local coordinates). Jagged tear across the page,
+// hinged around y ≈ 380. Endpoints extend past the leaf so the tear
+// cleanly separates the sheet edge-to-edge.
+type Pt = [number, number];
+const FRACTURE_PTS: Pt[] = [
+  [-60, 358],
+  [50, 375],
+  [130, 340],
+  [210, 380],
+  [295, 348],
+  [370, 400],
+  [455, 372],
+  [530, 415],
+  [605, 388],
+  [680, 428],
+  [755, 396],
+  [830, 434],
+  [960, 410],
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+// Densely sampled fracture curve (Catmull-Rom-ish smoothing), used both
+// for the visible tear and to build the clip paths for each half.
+const denseFracture = (samples = 220): Pt[] => {
+  const pts = FRACTURE_PTS;
+  const out: Pt[] = [];
+  for (let i = 0; i < samples; i++) {
+    const t = i / (samples - 1);
+    const seg = t * (pts.length - 1);
+    const s = Math.floor(seg);
+    const f = seg - s;
+    const p0 = pts[Math.max(0, s - 1)];
+    const p1 = pts[s];
+    const p2 = pts[Math.min(pts.length - 1, s + 1)];
+    const p3 = pts[Math.min(pts.length - 1, s + 2)];
+    // Catmull-Rom → cubic Hermite
+    const t2 = f * f;
+    const t3 = t2 * f;
+    const cx =
+      0.5 *
+      (2 * p1[0] +
+        (-p0[0] + p2[0]) * f +
+        (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+        (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+    const cy =
+      0.5 *
+      (2 * p1[1] +
+        (-p0[1] + p2[1]) * f +
+        (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+        (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+    out.push([cx, cy]);
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return out;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+const polylinePath = (pts: Pt[]): string => {
+  if (pts.length === 0) return "";
+  let d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+  for (let i = 1; i < pts.length; i++) {
+    d += ` L ${pts[i][0].toFixed(2)} ${pts[i][1].toFixed(2)}`;
+  }
+  return d;
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+const DENSE = denseFracture(220);
+
+// Deterministic hash for stable colony scatter.
+const hash01 = (i: number, salt: number): number => {
+  let h = (i * 2654435761 + salt * 40503) >>> 0;
+  h ^= h >>> 15;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
 };
+
+// Text lines to render as the manuscript body (iron-gall Latin filler).
+const MANUSCRIPT_LINES: string[] = [
+  "In principio erat verbum, et verbum",
+  "erat apud Deum, et Deus erat verbum.",
+  "Hoc erat in principio apud Deum.",
+  "Omnia per ipsum facta sunt: et sine",
+  "ipso factum est nihil, quod factum",
+  "est. In ipso vita erat, et vita erat",
+  "lux hominum: et lux in tenebris",
+  "lucet, et tenebrae eam non compre-",
+  "henderunt. Fuit homo missus a Deo,",
+  "cui nomen erat Ioannes. Hic venit",
+  "in testimonium ut testimonium",
+  "perhiberet de lumine, ut omnes",
+  "crederent per illum. Non erat ille",
+  "lux, sed ut testimonium perhiberet",
+  "de lumine. Erat lux vera, quae",
+];
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Master reassembly progress (0..1), spring-eased. Slow so the mid-
+  // motion holds long enough to be the hero frame.
+  const reassemble = spring({
+    frame: frame - fps * 0.3,
+    fps,
+    config: { damping: 42, mass: 2.4, stiffness: 45 },
+  });
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 0.35,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
-    easing: Easing.out(Easing.cubic),
+  const hookOpacity = interpolate(
+    frame,
+    [fps * 0.9, fps * 1.6],
+    [0, 1],
+    {
+      easing: Easing.out(Easing.cubic),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
+
+  const metaOpacity = interpolate(frame, [0, fps * 0.5], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  // Halves drift apart, then close as reassemble → 1.
+  const gap = interpolate(reassemble, [0, 1], [22, 0]);
+  const rot = interpolate(reassemble, [0, 1], [1.2, 0]);
+
+  // Colony bloom fades in during middle of reassembly.
+  const bloomProgress = spring({
+    frame: frame - fps * 0.6,
+    fps,
+    config: { damping: 50, mass: 1.8, stiffness: 40 },
+  });
+  const bloomFade = interpolate(reassemble, [0.82, 1.0], [1, 0.7], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Ambient breathing on the healed seam after closure.
+  const loopPhase = (frame % (fps * 4)) / (fps * 4);
+  const sealBreath = 0.5 + 0.5 * Math.sin(loopPhase * Math.PI * 2);
+
+  const fadeIn = interpolate(frame, [0, fps * 0.4], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  // Colony scatter along the fracture.
+  const colonyDots = React.useMemo(() => {
+    const N = 170;
+    const seeds: {
+      x: number;
+      y: number;
+      r: number;
+      delay: number;
+      fill: string;
+    }[] = [];
+    for (let i = 0; i < N; i++) {
+      const along = i / (N - 1);
+      const idx = Math.floor(along * (DENSE.length - 1));
+      const base = DENSE[idx];
+      const r1 = hash01(i, 7);
+      const r2 = hash01(i, 13);
+      const r3 = hash01(i, 29);
+      const r4 = hash01(i, 41);
+      const r5 = hash01(i, 53);
+      const spread = 18;
+      const dx = (r1 - 0.5) * spread * 1.6;
+      const dy = (r2 - 0.5) * spread * 1.15;
+      const radius = 1.6 + r3 * 3.6;
+      const delay = 0.05 + along * 0.5 + r4 * 0.1;
+      const isDeep = r5 < 0.28;
+      seeds.push({
+        x: base[0] + dx,
+        y: base[1] + dy,
+        r: radius,
+        delay,
+        fill: isDeep ? CARMINE : SALMON,
+      });
+    }
+    return seeds;
+  }, []);
+
+  // Build clip paths for the two halves from the dense polyline.
+  const topClipPath = React.useMemo(() => {
+    const rev = [...DENSE].reverse();
+    const first = DENSE[0];
+    const last = DENSE[DENSE.length - 1];
+    return (
+      `M -60 -60 L ${LEAF.w + 60} -60 ` +
+      `L ${LEAF.w + 60} ${last[1].toFixed(2)} ` +
+      rev
+        .map((p) => `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`)
+        .join(" ") +
+      ` L -60 ${first[1].toFixed(2)} Z`
+    );
+  }, []);
+
+  const bottomClipPath = React.useMemo(() => {
+    const first = DENSE[0];
+    const last = DENSE[DENSE.length - 1];
+    return (
+      `M -60 ${first[1].toFixed(2)} ` +
+      DENSE
+        .map((p) => `L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`)
+        .join(" ") +
+      ` L ${LEAF.w + 60} ${last[1].toFixed(2)} ` +
+      `L ${LEAF.w + 60} ${LEAF.h + 60} L -60 ${LEAF.h + 60} Z`
+    );
+  }, []);
+
+  const fracturePathD = polylinePath(DENSE);
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill
+      style={{
+        backgroundColor: INK_DEEP,
+        fontFamily: inter,
+        opacity: fadeIn,
+      }}
+    >
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
-      <div
-        style={{
-          position: "absolute",
-          top: 56,
-          left: 80,
-          right: 80,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          color: GRAY,
-          fontFamily: inter,
-          fontSize: 13,
-          letterSpacing: 4.5,
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
-      </div>
-
-      {/* Drafting frame + map */}
+      {/* ── The restoration table SVG (art region only) ──────────────── */}
       <svg
         width={1080}
         height={1350}
@@ -237,365 +307,261 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
+          {/* Parchment surface */}
+          <linearGradient id="parchment" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={PARCHMENT_HI} />
+            <stop offset="55%" stopColor={PARCHMENT} />
+            <stop offset="100%" stopColor={PARCHMENT_LO} />
+          </linearGradient>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Leaf vignette */}
+          <radialGradient id="leaf-vignette" cx="50%" cy="45%" r="72%">
+            <stop offset="0%" stopColor="#000" stopOpacity={0} />
+            <stop offset="70%" stopColor="#000" stopOpacity={0} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0.32} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* Foxing spot */}
+          <radialGradient id="fox-spot" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#8A5A2C" stopOpacity={0.38} />
+            <stop offset="100%" stopColor="#8A5A2C" stopOpacity={0} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          {/* Salmon colony halo */}
+          <radialGradient id="colony-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={SALMON} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={SALMON} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Fracture illumination — light peeking from under the tear */}
+          <radialGradient id="fracture-glow-rg" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={FRACTURE_GLOW} stopOpacity={0.85} />
+            <stop offset="100%" stopColor={FRACTURE_GLOW} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Warm ambient behind leaf */}
+          <radialGradient id="table-warm" cx="50%" cy="42%" r="65%">
+            <stop offset="0%" stopColor="#1E170F" stopOpacity={1} />
+            <stop offset="100%" stopColor={INK_DEEP} stopOpacity={1} />
+          </radialGradient>
+
+          {/* Clip paths — top and bottom halves of the torn leaf */}
+          <clipPath id="clip-top" clipPathUnits="userSpaceOnUse">
+            <path d={topClipPath} />
+          </clipPath>
+          <clipPath id="clip-bottom" clipPathUnits="userSpaceOnUse">
+            <path d={bottomClipPath} />
+          </clipPath>
+
+          {/* Leaf drop shadow */}
+          <filter
+            id="leaf-shadow"
+            x="-10%"
+            y="-10%"
+            width="120%"
+            height="130%"
+          >
+            <feGaussianBlur in="SourceAlpha" stdDeviation="10" />
+            <feOffset dx="0" dy="16" result="off" />
+            <feComponentTransfer>
+              <feFuncA type="linear" slope="0.6" />
+            </feComponentTransfer>
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Backdrop */}
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+          x={LEAF.x - 60}
+          y={LEAF.y - 60}
+          width={LEAF.w + 120}
+          height={LEAF.h + 120}
+          fill="url(#table-warm)"
         />
 
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
-          strokeWidth={1}
-        />
-
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
-          </g>
-        ))}
-
-        {/* N marker */}
+        {/* Leaf group */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
+          transform={`translate(${LEAF.x}, ${LEAF.y})`}
+          filter="url(#leaf-shadow)"
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+          {/* Warm glow under the tear (drawn first so both halves overlap it) */}
+          <g opacity={interpolate(reassemble, [0, 0.9], [1, 0])}>
+            {DENSE.filter((_, i) => i % 8 === 0).map((p, i) => (
+              <circle
+                key={`fg-${i}`}
+                cx={p[0]}
+                cy={p[1]}
+                r={gap * 1.6 + 8}
+                fill="url(#fracture-glow-rg)"
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+            ))}
+          </g>
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
+          {/* ── TOP HALF ─────────────────────────────────────────── */}
+          <g
+            transform={`translate(0, ${-gap}) rotate(${-rot} ${LEAF.w / 2} ${
+              DENSE[0][1]
+            })`}
+          >
+            <g clipPath="url(#clip-top)">
+              <LeafFace
+                w={LEAF.w}
+                h={LEAF.h}
+                showHead
+                lines={MANUSCRIPT_LINES.slice(0, 7)}
+                lineOffset={0}
+              />
+              {/* Torn edge — dark line following the fracture */}
+              <path
+                d={fracturePathD}
+                stroke={INK}
+                strokeWidth={1.1}
+                fill="none"
+                opacity={0.4}
+              />
+            </g>
+          </g>
+
+          {/* ── BOTTOM HALF ──────────────────────────────────────── */}
+          <g
+            transform={`translate(0, ${gap}) rotate(${rot} ${LEAF.w / 2} ${
+              DENSE[0][1]
+            })`}
+          >
+            <g clipPath="url(#clip-bottom)">
+              <LeafFace
+                w={LEAF.w}
+                h={LEAF.h}
+                showFoot
+                lines={MANUSCRIPT_LINES.slice(7)}
+                lineOffset={7}
+              />
+              {/* Torn edge */}
+              <path
+                d={fracturePathD}
+                stroke={INK}
+                strokeWidth={1.1}
+                fill="none"
+                opacity={0.4}
+              />
+            </g>
+          </g>
+
+          {/* Colony bloom along fracture (unaffected by half transforms) */}
+          <g>
+            {colonyDots.map((d, i) => {
+              const local = Math.max(
+                0,
+                Math.min(1, (bloomProgress - d.delay) * 2.4),
               );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
+              const grow = local * bloomFade;
+              if (grow <= 0.01) return null;
               return (
-                <g opacity={fadeIn}>
+                <g key={i} opacity={Math.min(1, grow)}>
                   <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+                    cx={d.x}
+                    cy={d.y}
+                    r={d.r * 3.4}
+                    fill="url(#colony-glow)"
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
+                  <circle cx={d.x} cy={d.y} r={d.r} fill={d.fill} />
                 </g>
               );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
+            })}
           </g>
+
+          {/* Healed seam glimmer — after reassemble ≈ 1 */}
+          <g
+            opacity={interpolate(
+              reassemble,
+              [0.85, 1.0],
+              [0, 0.5 + sealBreath * 0.3],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+            )}
+          >
+            <path
+              d={fracturePathD}
+              stroke={SALMON}
+              strokeWidth={2}
+              fill="none"
+              strokeLinecap="round"
+              opacity={0.85}
+            />
+            <path
+              d={fracturePathD}
+              stroke={FRACTURE_GLOW}
+              strokeWidth={0.8}
+              fill="none"
+              strokeLinecap="round"
+            />
+          </g>
+
+          {/* Leaf edge vignette on top */}
+          <rect
+            x={0}
+            y={0}
+            width={LEAF.w}
+            height={LEAF.h}
+            fill="url(#leaf-vignette)"
+            pointerEvents="none"
+          />
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip below the leaf */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          transform={`translate(${LEAF.x}, ${LEAF.y + LEAF.h + 22})`}
+          fill={MUTE}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
+          opacity={metaOpacity}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · SHATTERED GENOME REASSEMBLED VIA ESDSA · ≈3 H</text>
           <text
-            x={FRAME.w}
+            x={LEAF.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={SALMON}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            COLONY BLOOM = DEINOXANTHIN
           </text>
         </g>
       </svg>
+
+      {/* ── Top metadata band (HTML, above the SVG) ───────────────────── */}
+      <div
+        style={{
+          position: "absolute",
+          top: 62,
+          left: 90,
+          right: 90,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          color: MUTE,
+          fontFamily: inter,
+          fontSize: 12,
+          letterSpacing: 5,
+          textTransform: "uppercase",
+          fontWeight: 500,
+          opacity: metaOpacity,
+        }}
+      >
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: SALMON }}>2026 · 07 · 19</span>
+      </div>
 
       {/* ── Type lockup ────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
-          left: 80,
-          right: 80,
-          top: 905,
+          left: 90,
+          right: 90,
+          top: 908,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,56 +572,58 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: SALMON,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 16,
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+          Role <span style={{ color: MUTE, margin: "0 4px" }}>/</span>
+          <span style={{ color: PARCHMENT, letterSpacing: 5 }}>
+            Manuscript Restorer
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: PARCHMENT,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 72,
             lineHeight: 0.96,
-            letterSpacing: -1.4,
+            letterSpacing: -1.2,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The archivist
           <br />
-          city planner.
+          of its own genome.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 26,
+            color: "#D5C89F",
             fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
+            fontSize: 17,
+            lineHeight: 1.42,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          A dose of{" "}
+          <span style={{ color: SALMON, fontWeight: 600 }}>~5,000 Gy</span>{" "}
+          shatters the genome of{" "}
+          <span style={{ color: SALMON, fontWeight: 600 }}>
+            Deinococcus radiodurans
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          into hundreds of double-strand fragments — which it stitches back
+          into a whole chromosome in about three hours via extended
+          synthesis-dependent strand annealing.
         </div>
       </div>
 
@@ -663,25 +631,176 @@ export const PairingCard: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          left: 80,
-          right: 80,
-          bottom: 50,
+          left: 90,
+          right: 90,
+          bottom: 40,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: MUTE,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
           textTransform: "uppercase",
           fontWeight: 500,
+          opacity: metaOpacity,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Zahradka et al. · Nature 443 (2006) 569–573</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: SALMON }}>●</span> Colony = ESDSA overlap
         </span>
       </div>
     </AbsoluteFill>
+  );
+};
+
+// ── Leaf face — parchment + iron-gall body text ───────────────────────────
+const LeafFace: React.FC<{
+  w: number;
+  h: number;
+  lines: string[];
+  lineOffset: number;
+  showHead?: boolean;
+  showFoot?: boolean;
+}> = ({ w, h, lines, lineOffset, showHead, showFoot }) => {
+  const marginX = 74;
+  const marginY = 88;
+  const lineH = 40;
+  const bodyFontSize = 22;
+
+  return (
+    <g>
+      {/* Parchment */}
+      <rect x={0} y={0} width={w} height={h} fill="url(#parchment)" rx={2} />
+
+      {/* Foxing */}
+      {[
+        [120, 90, 34],
+        [720, 170, 42],
+        [640, 620, 30],
+        [180, 560, 38],
+        [500, 420, 24],
+        [820, 320, 28],
+        [420, 640, 30],
+      ].map(([x, y, r], i) => (
+        <circle
+          key={i}
+          cx={x as number}
+          cy={y as number}
+          r={r as number}
+          fill="url(#fox-spot)"
+        />
+      ))}
+
+      {/* Gilt margin rules */}
+      <rect
+        x={marginX - 22}
+        y={marginY - 40}
+        width={w - (marginX - 22) * 2}
+        height={h - (marginY - 40) * 2 + 60}
+        fill="none"
+        stroke={VELLUM}
+        strokeWidth={0.7}
+        opacity={0.55}
+      />
+      <rect
+        x={marginX - 14}
+        y={marginY - 32}
+        width={w - (marginX - 14) * 2}
+        height={h - (marginY - 32) * 2 + 44}
+        fill="none"
+        stroke={VELLUM}
+        strokeWidth={0.35}
+        opacity={0.35}
+      />
+
+      {/* Head marker */}
+      {showHead && (
+        <>
+          <text
+            x={marginX}
+            y={marginY - 32}
+            fontFamily={inter}
+            fontSize={10.5}
+            fontWeight={600}
+            letterSpacing={4}
+            fill={MUTE}
+          >
+            FOL. XVII · v
+          </text>
+          {/* Illuminated drop-cap "I" */}
+          <g transform={`translate(${marginX}, ${marginY - 6})`}>
+            <rect
+              x={0}
+              y={0}
+              width={52}
+              height={52}
+              fill={CARMINE}
+              opacity={0.92}
+              rx={2}
+            />
+            <rect
+              x={2}
+              y={2}
+              width={48}
+              height={48}
+              fill="none"
+              stroke={VELLUM}
+              strokeWidth={0.8}
+              opacity={0.7}
+              rx={1}
+            />
+            <text
+              x={26}
+              y={40}
+              textAnchor="middle"
+              fontFamily={playfair}
+              fontStyle="italic"
+              fontWeight={500}
+              fontSize={42}
+              fill={PARCHMENT_HI}
+            >
+              I
+            </text>
+          </g>
+        </>
+      )}
+
+      {/* Iron-gall body text */}
+      {lines.map((line, i) => {
+        const y = marginY + (lineOffset + i) * lineH + 20;
+        const indent = showHead && i === 0 ? 70 : 0;
+        return (
+          <text
+            key={i}
+            x={marginX + indent}
+            y={y}
+            fontFamily={playfair}
+            fontSize={bodyFontSize}
+            fill={INK}
+            opacity={0.9}
+          >
+            {line}
+          </text>
+        );
+      })}
+
+      {/* Foot marker */}
+      {showFoot && (
+        <text
+          x={w / 2}
+          y={h - marginY + 34}
+          textAnchor="middle"
+          fontFamily={inter}
+          fontSize={10.5}
+          letterSpacing={4}
+          fontWeight={600}
+          fill={MUTE}
+        >
+          · XVII ·
+        </text>
+      )}
+    </g>
   );
 };
