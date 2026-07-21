@@ -50,168 +50,189 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
+// ── Palette from the concept's visual brief ─────────────────────────
+const INK = "#07070A";
+const INK_2 = "#0B0B10";
+const GLASS_DEEP = "#141319";
+const GRAPHITE = "#2A2F3B";
+const CLINICAL = "#E9EEF3";
+const MAHOGANY = "#7A2E1F";
 const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Blade geometry ──────────────────────────────────────────────────
+// The blade is a hand-knapped, leaf-shaped obsidian blade — a bifacial
+// tool with slightly faceted sides. It lies at a strong diagonal across
+// the stage, tapering to a fine point at the bottom-right of the map.
+//
+// Map is exactly STAGE-sized (scale = 1). Blade tip is well inside the
+// stage bounds so it never crosses the type lockup below.
+const MAP_W = 960;
+const MAP_H = 820;
+
+// Cutting edge (right side of the blade, top → tip). Slightly convex.
+const EDGE_POINTS: [number, number][] = [
+  [270, 60], // butt / top
+  [355, 130],
+  [455, 205],
+  [560, 300],
+  [665, 415],
+  [745, 530],
+  [800, 640],
+  [830, 730],
+  [830, 770], // tip
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
+// Spine (left side of the blade, tip → top). Nearly straight, faceted.
+const SPINE_POINTS: [number, number][] = [
+  [830, 770], // tip
+  [790, 720],
+  [720, 610],
+  [630, 490],
+  [540, 380],
+  [455, 285],
+  [370, 195],
+  [290, 110],
+  [270, 60], // back to butt
 ];
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+const bladePath = (): string => {
+  const all = [...EDGE_POINTS, ...SPINE_POINTS.slice(1)];
+  const [first, ...rest] = all;
+  return (
+    `M ${first[0]} ${first[1]} ` +
+    rest.map((p) => `L ${p[0]} ${p[1]}`).join(" ") +
+    " Z"
+  );
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+const cuttingEdgePath = (): string =>
+  "M " + EDGE_POINTS.map(([x, y]) => `${x} ${y}`).join(" L ");
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const spinePath = (): string =>
+  "M " + SPINE_POINTS.map(([x, y]) => `${x} ${y}`).join(" L ");
+
+// Sample a point along the cutting edge polyline at fraction u ∈ [0,1].
+const edgeAt = (u: number): { x: number; y: number; tx: number; ty: number } => {
+  const segs: number[] = [];
+  let total = 0;
+  for (let i = 0; i < EDGE_POINTS.length - 1; i++) {
+    const [ax, ay] = EDGE_POINTS[i];
+    const [bx, by] = EDGE_POINTS[i + 1];
+    const L = Math.hypot(bx - ax, by - ay);
+    segs.push(L);
+    total += L;
   }
-  return ((h >>> 0) % 1000) / 1000;
+  let target = Math.max(0, Math.min(1, u)) * total;
+  for (let i = 0; i < segs.length; i++) {
+    if (target <= segs[i]) {
+      const [ax, ay] = EDGE_POINTS[i];
+      const [bx, by] = EDGE_POINTS[i + 1];
+      const f = segs[i] === 0 ? 0 : target / segs[i];
+      const dx = bx - ax;
+      const dy = by - ay;
+      const L = Math.hypot(dx, dy) || 1;
+      return { x: ax + dx * f, y: ay + dy * f, tx: dx / L, ty: dy / L };
+    }
+    target -= segs[i];
+  }
+  const [bx, by] = EDGE_POINTS[EDGE_POINTS.length - 1];
+  return { x: bx, y: by, tx: 0, ty: 1 };
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
+// Conchoidal ripples — concentric fracture arcs radiating from a
+// Hertzian cone near the butt end of the blade.
+const RIPPLES = Array.from({ length: 11 }, (_, i) => ({
+  cx: 260,
+  cy: 80,
+  r: 90 + i * 78,
+  op: 0.05 + i * 0.007,
+}));
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// Flake scars — subtle chevron ridges suggesting knapped facets across
+// the blade face.
+const FLAKE_SCARS: [number, number, number, number][] = [
+  [345, 170, 385, 300],
+  [430, 240, 470, 380],
+  [520, 320, 560, 460],
+  [600, 400, 640, 540],
+  [680, 490, 715, 620],
+  [755, 590, 780, 700],
+];
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
+  // ── Timing (a calm ~5s beat) ──────────────────────────────────────
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 0.3,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const roleTagOpacity = interpolate(frame, [0, fps * 0.6], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  const bladeReveal = spring({
+    frame: frame - fps * 0.2,
+    fps,
+    config: { damping: 200, mass: 1.2, stiffness: 60 },
+  });
+
+  const calloutSpring = spring({
+    frame: frame - fps * 1.6,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+
+  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Specular sweep progress — travels from butt to tip, loops.
+  // Bias toward the middle so the still (frame 90) shows a visible sweep.
+  const sweepDur = fps * 5;
+  const sweepU = (frame % sweepDur) / sweepDur;
+  const sweepEased = 0.5 - 0.5 * Math.cos(sweepU * Math.PI * 2); // smooth in/out
+  const sweep = edgeAt(0.15 + sweepEased * 0.7);
+
+  // ── Poster layout ─────────────────────────────────────────────────
+  // 0..110    top metadata band
+  // 120..940  blade stage
+  // 970..     type lockup
+  // 1280..    footer
+  const STAGE = { x: 60, y: 120, w: MAP_W, h: MAP_H };
+  const scale = 1;
+
+  // Callout inspects the very tip of the cutting edge.
+  const tip = EDGE_POINTS[EDGE_POINTS.length - 1];
+  const tipScreen = {
+    x: STAGE.x + tip[0] * scale,
+    y: STAGE.y + tip[1] * scale,
+  };
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
+      {/* subtle vignette wash */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(120% 90% at 30% 20%, #0F0F16 0%, #07070A 60%, #050508 100%)",
+        }}
+      />
+
       {/* Top metadata band */}
       <div
         style={{
           position: "absolute",
-          top: 56,
+          top: 52,
           left: 80,
           right: 80,
           display: "flex",
@@ -225,11 +246,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: CLINICAL }}>2026 · 07 · 21</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Stage SVG — the blade */}
       <svg
         width={1080}
         height={1350}
@@ -237,354 +258,412 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
+          {/* Deep glass body gradient — cool graphite core, near-black edges */}
+          <linearGradient id="glassBody" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#101018" />
+            <stop offset="45%" stopColor={GRAPHITE} />
+            <stop offset="100%" stopColor="#050508" />
+          </linearGradient>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
+          {/* Mahogany streak — real coloration in some flows */}
+          <linearGradient id="mahogany" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={MAHOGANY} stopOpacity={0} />
+            <stop offset="45%" stopColor={MAHOGANY} stopOpacity={0.55} />
+            <stop offset="55%" stopColor={MAHOGANY} stopOpacity={0.6} />
+            <stop offset="100%" stopColor={MAHOGANY} stopOpacity={0} />
+          </linearGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
+          {/* Specular sweep — a soft warm-white bar */}
+          <linearGradient id="specular" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={CLINICAL} stopOpacity={0} />
+            <stop offset="50%" stopColor="#FFFFFF" stopOpacity={0.9} />
+            <stop offset="100%" stopColor={CLINICAL} stopOpacity={0} />
+          </linearGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          {/* Edge glow */}
+          <filter id="edgeGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3.5" result="b" />
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode in="b" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          {/* Blade clip so ripples/streaks stay inside the shape */}
+          <clipPath id="bladeClip">
+            <path d={bladePath()} />
+          </clipPath>
+
+          {/* Instrument-tray radial background */}
+          <radialGradient id="tray" cx="30%" cy="35%" r="80%">
+            <stop offset="0%" stopColor="#101018" />
+            <stop offset="100%" stopColor={INK} />
+          </radialGradient>
         </defs>
 
-        {/* Drafting board */}
+        {/* Stage backdrop */}
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+          x={STAGE.x}
+          y={STAGE.y}
+          width={STAGE.w}
+          height={STAGE.h}
+          fill="url(#tray)"
         />
 
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
-          strokeWidth={1}
-        />
-
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+        {/* Faint architectural corner registration marks */}
+        {[
+          [STAGE.x + 40, STAGE.y + 40],
+          [STAGE.x + STAGE.w - 40, STAGE.y + 40],
+          [STAGE.x + 40, STAGE.y + STAGE.h - 40],
+          [STAGE.x + STAGE.w - 40, STAGE.y + STAGE.h - 40],
+        ].map(([cx, cy], i) => (
+          <g key={`reg-${i}`} stroke="#1A1E28" strokeWidth={1} fill="none">
+            <circle cx={cx} cy={cy} r={4} />
+            <line x1={cx - 8} y1={cy} x2={cx + 8} y2={cy} />
+            <line x1={cx} y1={cy - 8} x2={cx} y2={cy + 8} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Stage border (very subtle inner frame) */}
+        <rect
+          x={STAGE.x + 0.5}
+          y={STAGE.y + 0.5}
+          width={STAGE.w - 1}
+          height={STAGE.h - 1}
+          fill="none"
+          stroke="#151821"
+          strokeWidth={1}
+        />
+
+        {/* Corner tick marks — mahogany accent */}
+        {(
+          [
+            [STAGE.x, STAGE.y, 1, 1],
+            [STAGE.x + STAGE.w, STAGE.y, -1, 1],
+            [STAGE.x, STAGE.y + STAGE.h, 1, -1],
+            [STAGE.x + STAGE.w, STAGE.y + STAGE.h, -1, -1],
+          ] as const
+        ).map(([cx, cy, sx, sy], i) => (
+          <g key={i} stroke={MAHOGANY} strokeWidth={1.5} fill="none" opacity={0.9}>
+            <line x1={cx} y1={cy} x2={cx + sx * 22} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 22} />
+          </g>
+        ))}
+
+        {/* Blade content — map coords are 1:1 with stage */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
+          transform={`translate(${STAGE.x}, ${STAGE.y})`}
+          opacity={bladeReveal}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
+          {/* Cast shadow beneath the blade (soft, follows the diagonal) */}
+          <ellipse
+            cx={560}
+            cy={790}
+            rx={520}
+            ry={16}
+            fill="#000"
+            opacity={0.55}
           />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
+          {/* Blade body */}
+          <path d={bladePath()} fill="url(#glassBody)" />
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
+          {/* Body detail — clipped to blade */}
+          <g clipPath="url(#bladeClip)">
+            {/* Base deep-glass wash (darkens body) */}
+            <rect
+              x={0}
+              y={0}
+              width={MAP_W}
+              height={MAP_H}
+              fill={GLASS_DEEP}
+              opacity={0.35}
+            />
+
+            {/* Conchoidal ripples — concentric fracture arcs */}
+            {RIPPLES.map((r, i) => (
+              <circle
+                key={`rip-${i}`}
+                cx={r.cx}
+                cy={r.cy}
+                r={r.r}
+                stroke={CLINICAL}
+                strokeOpacity={r.op}
+                strokeWidth={1.1}
                 fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+            ))}
+
+            {/* Flake scars — thin chevron ridges suggesting knapped facets */}
+            {FLAKE_SCARS.map(([x1, y1, x2, y2], i) => (
+              <g key={`fs-${i}`}>
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={CLINICAL}
+                  strokeOpacity={0.08}
+                  strokeWidth={1}
                 />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+                <line
+                  x1={x1 + 6}
+                  y1={y1 - 4}
+                  x2={x2 - 6}
+                  y2={y2 + 4}
+                  stroke={"#000"}
+                  strokeOpacity={0.35}
+                  strokeWidth={1}
                 />
               </g>
-            );
-          })}
+            ))}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
+            {/* Mahogany streak — real coloration in some flows */}
+            <rect
+              x={-200}
+              y={330}
+              width={1400}
+              height={70}
+              fill="url(#mahogany)"
+              transform="rotate(38 480 380)"
+              opacity={0.75}
+            />
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
+            {/* Specular sweep — a light gleam moving DOWN the blade,
+                perpendicular to the local edge tangent */}
+            <g
+              transform={`translate(${sweep.x}, ${sweep.y}) rotate(${
+                (Math.atan2(sweep.ty, sweep.tx) * 180) / Math.PI + 90
+              })`}
+              opacity={0.9}
+            >
+              <rect
+                x={-320}
+                y={-80}
+                width={640}
+                height={120}
+                fill="url(#specular)"
+                opacity={0.55}
+                rx={4}
+              />
+              <rect
+                x={-380}
+                y={-12}
+                width={760}
+                height={6}
+                fill="#FFFFFF"
+                opacity={0.55}
+              />
+            </g>
+          </g>
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
+          {/* Central spine — a faint bifacial ridge line from butt to tip */}
+          <line
+            x1={270}
+            y1={60}
+            x2={830}
+            y2={770}
+            stroke={CLINICAL}
+            strokeOpacity={0.08}
+            strokeWidth={1}
+          />
+
+          {/* Cutting edge — luminous hairline */}
+          <path
+            d={cuttingEdgePath()}
+            fill="none"
+            stroke={CLINICAL}
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            filter="url(#edgeGlow)"
+          />
+          <path
+            d={cuttingEdgePath()}
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth={1.1}
+            strokeLinecap="round"
+            opacity={0.95}
+          />
+
+          {/* Spine — cool graphite line */}
+          <path
+            d={spinePath()}
+            fill="none"
+            stroke="#1B1F29"
+            strokeWidth={1.4}
+          />
+        </g>
+
+        {/* ── Callout: magnified tip inspection ─────────────────── */}
+        {(() => {
+          // Positioned in the upper-right of the stage, above the blade tip.
+          const panelX = STAGE.x + 570;
+          const panelY = STAGE.y + 40;
+          const panelW = 380;
+          const panelH = 210;
+          const opa = calloutSpring;
+          if (opa <= 0.001) return null;
+
+          // Compare wedges — same base width, drastically different tip radii.
+          const wedgeCx = panelX + 90;
+          const obsY = panelY + 78;
+          const steelY = panelY + 160;
+          const baseW = 120;
+
+          return (
+            <g opacity={opa}>
+              {/* Leader — from tip up to the panel */}
+              <line
+                x1={tipScreen.x}
+                y1={tipScreen.y}
+                x2={panelX + 40}
+                y2={panelY + panelH}
+                stroke={CLINICAL}
+                strokeWidth={1}
+                strokeDasharray="4 4"
+                opacity={0.4}
+              />
+              <circle
+                cx={tipScreen.x}
+                cy={tipScreen.y}
+                r={5}
+                fill="none"
+                stroke={CLINICAL}
+                strokeWidth={1.2}
+                opacity={0.7}
+              />
+
+              {/* Panel */}
+              <rect
+                x={panelX}
+                y={panelY}
+                width={panelW}
+                height={panelH}
+                fill={INK_2}
+                stroke={CLINICAL}
+                strokeOpacity={0.28}
+                strokeWidth={1}
+              />
+
+              {/* Panel label */}
               <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
+                x={panelX + 16}
+                y={panelY + 26}
+                fill={CLINICAL}
+                fontFamily={inter}
+                fontSize={11}
+                letterSpacing={3.5}
+                fontWeight={600}
+              >
+                FIG. 1 · EDGE TIP RADIUS
+              </text>
+              <line
+                x1={panelX + 16}
+                y1={panelY + 38}
+                x2={panelX + panelW - 16}
+                y2={panelY + 38}
+                stroke={CLINICAL}
+                strokeOpacity={0.15}
+                strokeWidth={1}
+              />
+
+              {/* Obsidian wedge — tapers to a needle point */}
+              <polygon
+                points={`${wedgeCx - baseW / 2},${obsY + 18} ${
+                  wedgeCx + baseW / 2
+                },${obsY + 18} ${wedgeCx + 0.4},${obsY - 12} ${
+                  wedgeCx - 0.4
+                },${obsY - 12}`}
+                fill="#0A0A0F"
+                stroke={CLINICAL}
+                strokeOpacity={0.9}
+                strokeWidth={0.8}
+              />
+              {/* obsidian labels */}
+              <text
+                x={panelX + panelW - 16}
+                y={obsY - 8}
+                textAnchor="end"
+                fill={CLINICAL}
+                fontFamily={inter}
+                fontSize={11}
+                letterSpacing={3}
+                fontWeight={600}
+              >
+                OBSIDIAN
+              </text>
+              <text
+                x={panelX + panelW - 16}
+                y={obsY + 14}
+                textAnchor="end"
+                fill={MAHOGANY}
+                fontFamily={playfair}
+                fontStyle="italic"
+                fontSize={20}
+                fontWeight={500}
+              >
+                ~3 nm
+              </text>
+
+              {/* Steel wedge — much blunter */}
+              <polygon
+                points={`${wedgeCx - baseW / 2},${steelY + 18} ${
+                  wedgeCx + baseW / 2
+                },${steelY + 18} ${wedgeCx + 8},${steelY - 4} ${
+                  wedgeCx - 8
+                },${steelY - 4}`}
+                fill={GRAPHITE}
+                stroke={GRAY}
+                strokeOpacity={0.55}
+                strokeWidth={0.8}
+              />
+              {/* steel labels */}
+              <text
+                x={panelX + panelW - 16}
+                y={steelY - 4}
+                textAnchor="end"
                 fill={GRAY}
                 fontFamily={inter}
                 fontSize={11}
+                letterSpacing={3}
                 fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
               >
-                {l.text}
+                STEEL SCALPEL
               </text>
-            );
-          })}
+              <text
+                x={panelX + panelW - 16}
+                y={steelY + 18}
+                textAnchor="end"
+                fill={GRAY}
+                fontFamily={playfair}
+                fontStyle="italic"
+                fontSize={20}
+                fontWeight={500}
+              >
+                ~300 nm
+              </text>
+            </g>
+          );
+        })()}
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip below the stage */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
+          transform={`translate(${STAGE.x}, ${STAGE.y + STAGE.h + 14})`}
           fill={GRAY}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 2 · CONCHOIDAL FRACTURE, VOLCANIC GLASS</text>
           <text
-            x={FRAME.w}
+            x={STAGE.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={CLINICAL}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            USED IN OPHTHALMIC SURGERY
           </text>
         </g>
       </svg>
@@ -595,7 +674,7 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 990,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,19 +685,18 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CLINICAL,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
             marginBottom: 18,
             fontWeight: 600,
+            opacity: roleTagOpacity,
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>Surgeon</span>
         </div>
 
         <div
@@ -626,36 +704,36 @@ export const PairingCard: React.FC = () => {
             color: "#F4F4F6",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
+            fontSize: 78,
+            lineHeight: 0.98,
+            letterSpacing: -1.2,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The glass
           <br />
-          city planner.
+          scalpel.
         </div>
 
         <div
           style={{
-            marginTop: 30,
+            marginTop: 24,
             color: "#C8CAD0",
             fontFamily: inter,
-            fontSize: 19,
+            fontSize: 17,
             lineHeight: 1.4,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          A freshly fractured{" "}
+          <span style={{ color: CLINICAL, fontWeight: 600 }}>obsidian</span>{" "}
+          edge tapers to a tip radius near{" "}
+          <span style={{ color: MAHOGANY, fontWeight: 600 }}>3 nanometres</span>
+          {" "}— about a hundred times finer than a surgical-steel scalpel — and
+          the blades have been used in real ophthalmic and reconstructive
+          surgery for their unusually clean cuts.
         </div>
       </div>
 
@@ -677,11 +755,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Buck · West. J. Med. 136 (1982) · Disa et al. · Plast. Reconstr. Surg. (1993)</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: MAHOGANY }}>●</span> Volcanic glass · Rhyolitic
         </span>
       </div>
+
+      {/* silence unused var warning in strict tsconfigs */}
+      <span style={{ display: "none" }}>{durationInFrames}</span>
     </AbsoluteFill>
   );
 };
