@@ -50,158 +50,112 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// ── Palette (from concept brief) ────────────────────────────────────────
+const INK = "#0A0908";
+const PARCHMENT = "#F1E4C2";
+const PARCHMENT_DEEP = "#E5D3A2";
+const HOT = "#E64B2C";
+const AMBER = "#F5B841";
+const ELYTRON = "#8C5B3F";
+const ELYTRON_DARK = "#4A2B18";
+const STEEL = "#5F6773";
+const INK_LINE = "#20160E";
+const INK_SOFT = "#5A4126";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Layout ──────────────────────────────────────────────────────────────
+const CANVAS_W = 1080;
+const CANVAS_H = 1350;
+const FRAME = { x: 60, y: 130, w: 960, h: 711 };
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// Beetle sits centered horizontally in the frame; the nozzle at (540, 560).
+// Body is proportioned ~2.4 : 1 length : width, closer to real Brachinus.
+const BEETLE_CX = 540;
+const NOZZLE_Y = 560;
+const PLUME_END_Y = 820;
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// ── Small helpers ───────────────────────────────────────────────────────
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - clamp01(t), 3);
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Entry sequence timing ─────────────────────────────────────────────
+  const beetleFade = spring({
+    frame,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+    durationInFrames: 22,
+  });
+  const cutawayFade = interpolate(frame, [fps * 0.6, fps * 1.2], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+  const reservoirCharge = interpolate(frame, [fps * 0.9, fps * 1.6], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+  const combustionCharge = interpolate(frame, [fps * 1.3, fps * 1.9], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+  const ignitionFlash = Math.max(
+    0,
+    Math.sin(
+      Math.max(
+        0,
+        interpolate(frame, [fps * 1.7, fps * 2.1], [0, Math.PI], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        }),
+      ),
+    ),
+  );
+  const plumeIntro = interpolate(frame, [fps * 1.9, fps * 2.5], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const labelsFade = interpolate(frame, [fps * 1.5, fps * 2.2], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
 
   const titleSpring = spring({
     frame: frame - fps * 0.4,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
-
   const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // ── Pulse-jet plume rings (rapid, staggered) ──────────────────────────
+  // Each pulse is emitted at t = i * PULSE_INTERVAL frames and lives for LIFE frames.
+  // Visualised rate ≈ 10 pulses/sec (real animal: ~500 Hz; caption states the true value).
+  const PULSE_INTERVAL = 3;
+  const LIFE = 26;
+  const activePulses: Array<{ life: number; index: number }> = [];
+  if (plumeIntro > 0) {
+    const start = Math.max(0, frame - fps * 1.9);
+    const first = Math.max(0, Math.floor((start - LIFE) / PULSE_INTERVAL));
+    const last = Math.floor(start / PULSE_INTERVAL);
+    for (let i = first; i <= last; i++) {
+      const emitFrame = i * PULSE_INTERVAL;
+      const age = start - emitFrame;
+      if (age >= 0 && age <= LIFE) {
+        activePulses.push({ life: age / LIFE, index: i });
+      }
+    }
+  }
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -217,7 +171,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: STEEL,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,103 +179,120 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: HOT }}>2026 · 07 · 26</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Main SVG canvas */}
       <svg
-        width={1080}
-        height={1350}
-        viewBox="0 0 1080 1350"
+        width={CANVAS_W}
+        height={CANVAS_H}
+        viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
+          {/* Parchment vignette */}
+          <radialGradient id="paper" cx="45%" cy="35%" r="80%">
+            <stop offset="0%" stopColor={PARCHMENT} stopOpacity={1} />
+            <stop offset="70%" stopColor={PARCHMENT} stopOpacity={1} />
+            <stop offset="100%" stopColor={PARCHMENT_DEEP} stopOpacity={1} />
+          </radialGradient>
+
+          {/* Faint drafting rule */}
           <pattern
-            id="grid"
+            id="rule"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={48}
+            height={48}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d="M 48 0 L 0 0 0 48"
               fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
+              stroke={PARCHMENT_DEEP}
+              strokeOpacity={0.55}
+              strokeWidth={0.8}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Reservoir amber glow */}
+          <radialGradient id="reservoir-fill" cx="50%" cy="45%" r="60%">
+            <stop offset="0%" stopColor="#FFE1A2" stopOpacity={0.95} />
+            <stop offset="60%" stopColor={AMBER} stopOpacity={0.85} />
+            <stop offset="100%" stopColor="#B67A18" stopOpacity={0.65} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* Combustion chamber hot fill */}
+          <radialGradient id="chamber-fill" cx="50%" cy="45%" r="60%">
+            <stop offset="0%" stopColor="#FFEBB8" stopOpacity={1} />
+            <stop offset="50%" stopColor={AMBER} stopOpacity={1} />
+            <stop offset="100%" stopColor={HOT} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          {/* Plume core */}
+          <radialGradient id="plume-core" cx="50%" cy="0%" r="90%">
+            <stop offset="0%" stopColor="#FFF3D8" stopOpacity={0.95} />
+            <stop offset="18%" stopColor="#FFDC7A" stopOpacity={0.85} />
+            <stop offset="45%" stopColor={HOT} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={HOT} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Plume envelope shading */}
+          <linearGradient id="plume-envelope" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={HOT} stopOpacity={0.85} />
+            <stop offset="45%" stopColor={HOT} stopOpacity={0.42} />
+            <stop offset="100%" stopColor={AMBER} stopOpacity={0.02} />
+          </linearGradient>
+
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="b" />
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode in="b" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          <filter
+            id="ignition-glow"
+            x="-40%"
+            y="-40%"
+            width="180%"
+            height="180%"
+          >
+            <feGaussianBlur stdDeviation="10" />
+          </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Parchment */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#paper)"
         />
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+          fill="url(#rule)"
         />
 
-        {/* Inner thin border */}
+        {/* Inner drafting border */}
         <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
+          x={FRAME.x + 14}
+          y={FRAME.y + 14}
+          width={FRAME.w - 28}
+          height={FRAME.h - 28}
           fill="none"
-          stroke="#2B313C"
+          stroke={INK_SOFT}
+          strokeOpacity={0.35}
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner tick marks */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,266 +301,723 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={HOT} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Patent-sheet heading strip */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 34}, ${FRAME.y + 38})`}
+          fill={INK_SOFT}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
           letterSpacing={3}
+          fontWeight={600}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text>FIG. 1 · BOMBARDIER BEETLE — DEFENSIVE REACTOR</text>
         </g>
-
-        {/* Scale bar */}
         <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + FRAME.w - 34}, ${FRAME.y + 38})`}
+          fill={INK_SOFT}
           fontFamily={inter}
-          fontSize={10}
+          fontSize={11}
           letterSpacing={3}
-          fontWeight={500}
+          fontWeight={600}
+          textAnchor="end"
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
+          <text>SHEET 003 / 365</text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
+        {/* Reference axis running down the centreline */}
+        <line
+          x1={BEETLE_CX}
+          y1={FRAME.y + 68}
+          x2={BEETLE_CX}
+          y2={FRAME.y + FRAME.h - 38}
+          stroke={INK_SOFT}
+          strokeOpacity={0.18}
+          strokeWidth={1}
+          strokeDasharray="2 6"
+        />
+
+        {/* ── BEETLE (dorsal view, elongated Brachinus proportions) ── */}
+        {(() => {
+          const HEAD_TOP = 200;
+          const HEAD_BOT = 240;
+          const PRONO_TOP = HEAD_BOT - 2;
+          const PRONO_BOT = 296;
+          const ELY_TOP = PRONO_BOT - 4;
+          const ELY_BOT = 548;
+          const ELY_MAX = 62; // half-width at max girth
+          const HEAD_HALF = 22;
+          const PRONO_HALF_TOP = 30;
+          const PRONO_HALF_BOT = 58;
+
+          // Elytra path — widens near top, tapers gently to a point at ELY_BOT
+          const leftEly = `M ${BEETLE_CX} ${ELY_TOP}
+            L ${BEETLE_CX - PRONO_HALF_BOT + 6} ${ELY_TOP + 6}
+            Q ${BEETLE_CX - ELY_MAX - 4} ${ELY_TOP + 44} ${BEETLE_CX - ELY_MAX} ${ELY_TOP + 100}
+            Q ${BEETLE_CX - ELY_MAX + 4} ${ELY_TOP + 180} ${BEETLE_CX - ELY_MAX + 20} ${ELY_TOP + 220}
+            Q ${BEETLE_CX - 18} ${ELY_BOT - 4} ${BEETLE_CX} ${ELY_BOT} Z`;
+          const rightEly = `M ${BEETLE_CX} ${ELY_TOP}
+            L ${BEETLE_CX + PRONO_HALF_BOT - 6} ${ELY_TOP + 6}
+            Q ${BEETLE_CX + ELY_MAX + 4} ${ELY_TOP + 44} ${BEETLE_CX + ELY_MAX} ${ELY_TOP + 100}
+            Q ${BEETLE_CX + ELY_MAX - 4} ${ELY_TOP + 180} ${BEETLE_CX + ELY_MAX - 20} ${ELY_TOP + 220}
+            Q ${BEETLE_CX + 18} ${ELY_BOT - 4} ${BEETLE_CX} ${ELY_BOT} Z`;
+          const rimPath = `M ${BEETLE_CX} ${ELY_TOP}
+            L ${BEETLE_CX - PRONO_HALF_BOT + 6} ${ELY_TOP + 6}
+            Q ${BEETLE_CX - ELY_MAX - 4} ${ELY_TOP + 44} ${BEETLE_CX - ELY_MAX} ${ELY_TOP + 100}
+            Q ${BEETLE_CX - ELY_MAX + 4} ${ELY_TOP + 180} ${BEETLE_CX - ELY_MAX + 20} ${ELY_TOP + 220}
+            Q ${BEETLE_CX - 18} ${ELY_BOT - 4} ${BEETLE_CX} ${ELY_BOT}
+            Q ${BEETLE_CX + 18} ${ELY_BOT - 4} ${BEETLE_CX + ELY_MAX - 20} ${ELY_TOP + 220}
+            Q ${BEETLE_CX + ELY_MAX - 4} ${ELY_TOP + 180} ${BEETLE_CX + ELY_MAX} ${ELY_TOP + 100}
+            Q ${BEETLE_CX + ELY_MAX + 4} ${ELY_TOP + 44} ${BEETLE_CX + PRONO_HALF_BOT - 6} ${ELY_TOP + 6} Z`;
+
+          return (
+            <g opacity={beetleFade}>
+              {/* Antennae — curve outward, staying comfortably below header */}
               <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
+                d={`M ${BEETLE_CX - HEAD_HALF + 4} ${HEAD_TOP + 2} Q ${BEETLE_CX - 52} ${HEAD_TOP - 14} ${BEETLE_CX - 96} ${HEAD_TOP - 26}`}
+                stroke={INK_LINE}
+                strokeWidth={2}
                 fill="none"
                 strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+              <path
+                d={`M ${BEETLE_CX + HEAD_HALF - 4} ${HEAD_TOP + 2} Q ${BEETLE_CX + 52} ${HEAD_TOP - 14} ${BEETLE_CX + 96} ${HEAD_TOP - 26}`}
+                stroke={INK_LINE}
+                strokeWidth={2}
+                fill="none"
+                strokeLinecap="round"
+              />
+              <circle
+                cx={BEETLE_CX - 96}
+                cy={HEAD_TOP - 26}
+                r={2.4}
+                fill={INK_LINE}
+              />
+              <circle
+                cx={BEETLE_CX + 96}
+                cy={HEAD_TOP - 26}
+                r={2.4}
+                fill={INK_LINE}
+              />
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+              {/* Head */}
+              <path
+                d={`M ${BEETLE_CX - HEAD_HALF} ${HEAD_TOP + 8}
+                    Q ${BEETLE_CX - HEAD_HALF - 2} ${HEAD_TOP - 10} ${BEETLE_CX} ${HEAD_TOP - 14}
+                    Q ${BEETLE_CX + HEAD_HALF + 2} ${HEAD_TOP - 10} ${BEETLE_CX + HEAD_HALF} ${HEAD_TOP + 8}
+                    Q ${BEETLE_CX + HEAD_HALF - 2} ${HEAD_BOT - 4} ${BEETLE_CX} ${HEAD_BOT}
+                    Q ${BEETLE_CX - HEAD_HALF + 2} ${HEAD_BOT - 4} ${BEETLE_CX - HEAD_HALF} ${HEAD_TOP + 8} Z`}
+                fill={INK_LINE}
+              />
+              {/* Mandibles */}
+              <path
+                d={`M ${BEETLE_CX - 10} ${HEAD_TOP - 12} L ${BEETLE_CX - 14} ${HEAD_TOP - 22} L ${BEETLE_CX - 4} ${HEAD_TOP - 14} Z`}
+                fill={INK_LINE}
+              />
+              <path
+                d={`M ${BEETLE_CX + 10} ${HEAD_TOP - 12} L ${BEETLE_CX + 14} ${HEAD_TOP - 22} L ${BEETLE_CX + 4} ${HEAD_TOP - 14} Z`}
+                fill={INK_LINE}
+              />
+              {/* Eyes */}
+              <circle
+                cx={BEETLE_CX - 13}
+                cy={HEAD_TOP + 4}
+                r={2.4}
+                fill={PARCHMENT}
+              />
+              <circle
+                cx={BEETLE_CX + 13}
+                cy={HEAD_TOP + 4}
+                r={2.4}
+                fill={PARCHMENT}
+              />
+
+              {/* Pronotum — heart-shape, widens rearward */}
+              <path
+                d={`M ${BEETLE_CX - PRONO_HALF_TOP} ${PRONO_TOP + 2}
+                    Q ${BEETLE_CX - PRONO_HALF_TOP - 2} ${PRONO_TOP - 4} ${BEETLE_CX} ${PRONO_TOP - 4}
+                    Q ${BEETLE_CX + PRONO_HALF_TOP + 2} ${PRONO_TOP - 4} ${BEETLE_CX + PRONO_HALF_TOP} ${PRONO_TOP + 2}
+                    Q ${BEETLE_CX + PRONO_HALF_BOT + 6} ${PRONO_BOT - 18} ${BEETLE_CX + PRONO_HALF_BOT} ${PRONO_BOT}
+                    Q ${BEETLE_CX} ${PRONO_BOT + 6} ${BEETLE_CX - PRONO_HALF_BOT} ${PRONO_BOT}
+                    Q ${BEETLE_CX - PRONO_HALF_BOT - 6} ${PRONO_BOT - 18} ${BEETLE_CX - PRONO_HALF_TOP} ${PRONO_TOP + 2} Z`}
+                fill={INK_LINE}
+              />
+              <line
+                x1={BEETLE_CX}
+                y1={PRONO_TOP}
+                x2={BEETLE_CX}
+                y2={PRONO_BOT}
+                stroke={ELYTRON_DARK}
+                strokeOpacity={0.55}
+                strokeWidth={1}
+              />
+
+              {/* Elytra */}
+              <path d={leftEly} fill={ELYTRON} />
+              <path d={rightEly} fill={ELYTRON} />
+
+              {/* Elytron edge — sharp brown rim */}
+              <path
+                d={rimPath}
+                fill="none"
+                stroke={ELYTRON_DARK}
+                strokeWidth={2}
+              />
+
+              {/* Longitudinal ridges — parallel striae typical of Carabidae */}
+              {[-1, 1].map((s) =>
+                [10, 22, 34, 46].map((off, i) => (
+                  <path
+                    key={`ridge-${s}-${i}`}
+                    d={`M ${BEETLE_CX + s * (off + 4)} ${ELY_TOP + 20}
+                        Q ${BEETLE_CX + s * (off + 6)} ${ELY_TOP + 130} ${BEETLE_CX + s * (off * 0.35)} ${ELY_BOT - 18}`}
+                    stroke={ELYTRON_DARK}
+                    strokeOpacity={0.55}
+                    strokeWidth={0.9}
+                    fill="none"
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
+                )),
+              )}
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
+              {/* Central seam */}
+              <line
+                x1={BEETLE_CX}
+                y1={ELY_TOP}
+                x2={BEETLE_CX}
+                y2={ELY_BOT}
+                stroke={ELYTRON_DARK}
+                strokeWidth={1.5}
+              />
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
+              {/* Abdomen tip — swivel turret + nozzle */}
+              <path
+                d={`M ${BEETLE_CX - 14} ${ELY_BOT - 4}
+                    Q ${BEETLE_CX - 16} ${NOZZLE_Y - 2} ${BEETLE_CX - 8} ${NOZZLE_Y + 2}
+                    L ${BEETLE_CX + 8} ${NOZZLE_Y + 2}
+                    Q ${BEETLE_CX + 16} ${NOZZLE_Y - 2} ${BEETLE_CX + 14} ${ELY_BOT - 4} Z`}
+                fill={INK_LINE}
+              />
+              {/* Nozzle rim (metal collar) */}
+              <rect
+                x={BEETLE_CX - 8}
+                y={NOZZLE_Y + 2}
+                width={16}
+                height={5}
+                rx={1.5}
+                fill={ELYTRON_DARK}
+              />
+
+              {/* Legs (6, drawn LAST so they sit on top of body) */}
+              <g
+                stroke={INK_LINE}
+                strokeWidth={2.4}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                {l.text}
-              </text>
-            );
-          })}
+                {/* Prothoracic */}
+                <path
+                  d={`M ${BEETLE_CX - 26} ${PRONO_TOP + 12} L ${BEETLE_CX - 78} ${PRONO_TOP - 6} L ${BEETLE_CX - 110} ${PRONO_TOP - 26}`}
+                />
+                <path
+                  d={`M ${BEETLE_CX + 26} ${PRONO_TOP + 12} L ${BEETLE_CX + 78} ${PRONO_TOP - 6} L ${BEETLE_CX + 110} ${PRONO_TOP - 26}`}
+                />
+                {/* Mesothoracic */}
+                <path
+                  d={`M ${BEETLE_CX - 30} ${PRONO_BOT - 4} L ${BEETLE_CX - 92} ${PRONO_BOT + 12} L ${BEETLE_CX - 128} ${PRONO_BOT + 36}`}
+                />
+                <path
+                  d={`M ${BEETLE_CX + 30} ${PRONO_BOT - 4} L ${BEETLE_CX + 92} ${PRONO_BOT + 12} L ${BEETLE_CX + 128} ${PRONO_BOT + 36}`}
+                />
+                {/* Metathoracic — long rear legs */}
+                <path
+                  d={`M ${BEETLE_CX - ELY_MAX + 8} ${ELY_TOP + 60} L ${BEETLE_CX - 116} ${ELY_TOP + 96} L ${BEETLE_CX - 152} ${ELY_TOP + 138}`}
+                />
+                <path
+                  d={`M ${BEETLE_CX + ELY_MAX - 8} ${ELY_TOP + 60} L ${BEETLE_CX + 116} ${ELY_TOP + 96} L ${BEETLE_CX + 152} ${ELY_TOP + 138}`}
+                />
+                {/* Tarsal tips — small "feet" markers */}
+                {(
+                  [
+                    [-110, PRONO_TOP - 26],
+                    [110, PRONO_TOP - 26],
+                    [-128, PRONO_BOT + 36],
+                    [128, PRONO_BOT + 36],
+                    [-152, ELY_TOP + 138],
+                    [152, ELY_TOP + 138],
+                  ] as const
+                ).map(([dx, y], i) => (
+                  <circle
+                    key={`tarsus-${i}`}
+                    cx={BEETLE_CX + dx}
+                    cy={y}
+                    r={2.6}
+                    fill={INK_LINE}
+                  />
+                ))}
+              </g>
+            </g>
+          );
+        })()}
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
+        {/* ── CUTAWAY OVERLAY (chambers visible through elytra) ─── */}
+        {(() => {
+          const RES_CY = 380;
+          const RES_RX = 44;
+          const RES_RY = 62;
+          const VALVE_Y1 = RES_CY + RES_RY - 2;
+          const VALVE_Y2 = 484;
+          const CHAM_X = BEETLE_CX - 32;
+          const CHAM_Y = 484;
+          const CHAM_W = 64;
+          const CHAM_H = 48;
+
+          return (
+            <g opacity={cutawayFade}>
+              {/* Reservoir (upper chamber) — amber */}
+              <ellipse
+                cx={BEETLE_CX}
+                cy={RES_CY}
+                rx={RES_RX}
+                ry={RES_RY}
+                fill="url(#reservoir-fill)"
+                opacity={reservoirCharge * 0.9}
+              />
+              <ellipse
+                cx={BEETLE_CX}
+                cy={RES_CY}
+                rx={RES_RX}
+                ry={RES_RY}
+                fill="none"
+                stroke={HOT}
+                strokeWidth={1.4}
+                strokeDasharray="4 3"
+              />
+              {/* Reservoir contents indicated as small bubbles / droplets */}
+              {[
+                [-20, -32, 3.4],
+                [8, -22, 2.4],
+                [-8, -8, 2.6],
+                [22, -4, 2.2],
+                [-24, 12, 3],
+                [10, 18, 2.4],
+                [-4, 32, 2.2],
+                [22, 34, 2],
+              ].map(([dx, dy, r], i) => (
+                <circle
+                  key={`b-${i}`}
+                  cx={BEETLE_CX + dx}
+                  cy={RES_CY + dy}
+                  r={r}
+                  fill="#FFE7B6"
+                  opacity={0.75 * reservoirCharge}
+                />
+              ))}
+
+              {/* Feed valve between chambers */}
+              <line
+                x1={BEETLE_CX}
+                y1={VALVE_Y1}
+                x2={BEETLE_CX}
+                y2={VALVE_Y2}
+                stroke={HOT}
+                strokeWidth={1.4}
+                strokeDasharray="2 2"
+                opacity={reservoirCharge}
+              />
+              <path
+                d={`M ${BEETLE_CX - 7} ${VALVE_Y1 + 3} L ${BEETLE_CX + 7} ${VALVE_Y1 + 3} L ${BEETLE_CX} ${VALVE_Y1 + 13} Z`}
+                fill={HOT}
+                opacity={reservoirCharge}
+              />
+
+              {/* Combustion chamber — near the tip, glowing hot */}
+              <rect
+                x={CHAM_X}
+                y={CHAM_Y}
+                width={CHAM_W}
+                height={CHAM_H}
+                rx={9}
+                fill="url(#chamber-fill)"
+                opacity={combustionCharge}
+              />
+              <rect
+                x={CHAM_X}
+                y={CHAM_Y}
+                width={CHAM_W}
+                height={CHAM_H}
+                rx={9}
+                fill="none"
+                stroke={INK_LINE}
+                strokeWidth={1.4}
+                strokeDasharray="3 2"
+              />
+              {/* Thick-walled hint — double stroke */}
+              <rect
+                x={CHAM_X - 3}
+                y={CHAM_Y - 3}
+                width={CHAM_W + 6}
+                height={CHAM_H + 6}
+                rx={11}
+                fill="none"
+                stroke={INK_LINE}
+                strokeOpacity={0.35}
+                strokeWidth={1}
+                strokeDasharray="1.5 3"
+              />
+              {/* Ignition flash */}
+              {ignitionFlash > 0.02 && (
+                <rect
+                  x={CHAM_X}
+                  y={CHAM_Y}
+                  width={CHAM_W}
+                  height={CHAM_H}
+                  rx={9}
+                  fill="#FFF6D8"
+                  opacity={ignitionFlash * 0.9}
+                  filter="url(#ignition-glow)"
+                />
+              )}
+            </g>
+          );
+        })()}
+
+        {/* ── PLUME (downward pulse-jet) ───────────────────────── */}
+        {(() => {
+          const PLUME_TOP = NOZZLE_Y + 8;
+          const PLUME_SPAN = PLUME_END_Y - PLUME_TOP;
+          const HALF_WIDTH = 148;
+          return (
+            <g opacity={plumeIntro}>
+              {/* Soft outer envelope cone */}
+              <path
+                d={`M ${BEETLE_CX - 6} ${PLUME_TOP}
+                    L ${BEETLE_CX - HALF_WIDTH} ${PLUME_END_Y}
+                    L ${BEETLE_CX + HALF_WIDTH} ${PLUME_END_Y}
+                    L ${BEETLE_CX + 6} ${PLUME_TOP} Z`}
+                fill="url(#plume-envelope)"
+              />
+
+              {/* Central jet — a bright vertical spear that dissipates */}
+              <path
+                d={`M ${BEETLE_CX - 3} ${PLUME_TOP}
+                    L ${BEETLE_CX - 34} ${PLUME_END_Y}
+                    L ${BEETLE_CX + 34} ${PLUME_END_Y}
+                    L ${BEETLE_CX + 3} ${PLUME_TOP} Z`}
+                fill="url(#plume-core)"
+                filter="url(#soft-glow)"
+              />
+
+              {/* Pulse rings — expanding half-ellipses travelling down */}
+              {activePulses.map(({ life, index }) => {
+                const t = life;
+                const cy = PLUME_TOP + t * PLUME_SPAN;
+                const spread = t;
+                const rx = 6 + spread * (HALF_WIDTH - 4);
+                const ry = 2.5 + spread * 16;
+                const opacity = (1 - t) * 0.9;
+                const stroke = index % 3 === 0 ? "#FFEDBE" : HOT;
+                return (
+                  <ellipse
+                    key={`pulse-${index}`}
+                    cx={BEETLE_CX}
+                    cy={cy}
+                    rx={rx}
+                    ry={ry}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={2.2 * (1 - t) + 0.7}
+                    opacity={opacity}
+                  />
+                );
+              })}
+
+              {/* Ejected droplets scattered along the plume edges */}
+              {activePulses.slice(-14).map(({ life, index }) => {
+                const t = life;
+                const cy = PLUME_TOP + t * PLUME_SPAN;
+                const rx = 8 + t * (HALF_WIDTH - 4);
+                const side = index % 2 === 0 ? -1 : 1;
+                const jitter = ((index * 37) % 22) - 11;
+                return (
+                  <circle
+                    key={`drop-${index}`}
+                    cx={BEETLE_CX + side * (rx * 0.78) + jitter * 0.4}
+                    cy={cy + (index % 5) - 2}
+                    r={2 + (1 - t) * 3}
+                    fill={index % 3 === 0 ? "#FFEDBE" : HOT}
+                    opacity={(1 - t) * 0.9}
+                  />
+                );
+              })}
+
+              {/* Nozzle glow — hottest point */}
+              <ellipse
+                cx={BEETLE_CX}
+                cy={PLUME_TOP + 2}
+                rx={12}
+                ry={5}
+                fill="#FFF8DC"
+              />
+            </g>
+          );
+        })()}
+
+        {/* ── LABELS / LEADER LINES ────────────────────────────── */}
+        <g
+          opacity={labelsFade}
+          fontFamily={inter}
+          fontSize={10.5}
+          fontWeight={600}
+          letterSpacing={2.4}
+          fill={INK_LINE}
+        >
+          {/* PRONOTUM (left) */}
+          <g>
             <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
+              x1={FRAME.x + 60}
+              y1={272}
+              x2={BEETLE_CX - 50}
+              y2={272}
+              stroke={INK_SOFT}
+              strokeWidth={1}
+            />
+            <circle
+              cx={BEETLE_CX - 50}
+              cy={272}
+              r={2}
+              fill={INK_SOFT}
+            />
+            <text x={FRAME.x + 60} y={266} textAnchor="start">
+              PRONOTUM
+            </text>
+          </g>
+
+          {/* ELYTRA (right, upper) */}
+          <g>
+            <line
+              x1={FRAME.x + FRAME.w - 60}
+              y1={320}
+              x2={BEETLE_CX + 58}
+              y2={320}
+              stroke={INK_SOFT}
+              strokeWidth={1}
+            />
+            <circle cx={BEETLE_CX + 58} cy={320} r={2} fill={INK_SOFT} />
+            <text
+              x={FRAME.x + FRAME.w - 60}
+              y={314}
+              textAnchor="end"
+            >
+              ELYTRON (CUTAWAY)
+            </text>
+          </g>
+
+          {/* RESERVOIR — left mid */}
+          <g>
+            <line
+              x1={FRAME.x + 60}
+              y1={392}
+              x2={BEETLE_CX - 48}
+              y2={382}
+              stroke={HOT}
               strokeWidth={1.2}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
+            <circle
+              cx={BEETLE_CX - 48}
+              cy={382}
+              r={2.6}
+              fill={HOT}
             />
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
+              x={FRAME.x + 60}
+              y={374}
+              fill={HOT}
+              textAnchor="start"
+              fontWeight={700}
             >
-              TOKYO
+              RESERVOIR
+            </text>
+            <text
+              x={FRAME.x + 60}
+              y={390}
+              fill={INK_SOFT}
+              textAnchor="start"
+              fontWeight={500}
+              fontSize={10}
+              letterSpacing={1.6}
+            >
+              HYDROQUINONE + H₂O₂
+            </text>
+          </g>
+
+          {/* COMBUSTION CHAMBER — right, at chamber level */}
+          <g>
+            <line
+              x1={FRAME.x + FRAME.w - 60}
+              y1={500}
+              x2={BEETLE_CX + 34}
+              y2={508}
+              stroke={HOT}
+              strokeWidth={1.2}
+            />
+            <circle
+              cx={BEETLE_CX + 34}
+              cy={508}
+              r={2.6}
+              fill={HOT}
+            />
+            <text
+              x={FRAME.x + FRAME.w - 60}
+              y={484}
+              fill={HOT}
+              textAnchor="end"
+              fontWeight={700}
+            >
+              COMBUSTION CHAMBER
+            </text>
+            <text
+              x={FRAME.x + FRAME.w - 60}
+              y={500}
+              fill={INK_SOFT}
+              textAnchor="end"
+              fontWeight={500}
+              fontSize={10}
+              letterSpacing={1.6}
+            >
+              CATALASE + PEROXIDASE
+            </text>
+          </g>
+
+          {/* SWIVEL NOZZLE — left, at nozzle level */}
+          <g>
+            <line
+              x1={FRAME.x + 60}
+              y1={NOZZLE_Y + 6}
+              x2={BEETLE_CX - 14}
+              y2={NOZZLE_Y + 6}
+              stroke={INK_SOFT}
+              strokeWidth={1}
+            />
+            <circle
+              cx={BEETLE_CX - 14}
+              cy={NOZZLE_Y + 6}
+              r={2}
+              fill={INK_SOFT}
+            />
+            <text x={FRAME.x + 60} y={NOZZLE_Y + 1} textAnchor="start">
+              SWIVEL NOZZLE
+            </text>
+          </g>
+
+          {/* PLUME TEMPERATURE — right, into the plume */}
+          <g>
+            <line
+              x1={FRAME.x + FRAME.w - 60}
+              y1={654}
+              x2={BEETLE_CX + 84}
+              y2={664}
+              stroke={HOT}
+              strokeWidth={1.2}
+            />
+            <circle
+              cx={BEETLE_CX + 84}
+              cy={664}
+              r={2.6}
+              fill={HOT}
+            />
+            <text
+              x={FRAME.x + FRAME.w - 60}
+              y={638}
+              fill={HOT}
+              textAnchor="end"
+              fontWeight={700}
+              fontSize={13}
+              letterSpacing={3}
+            >
+              T ≈ 100 °C
+            </text>
+            <text
+              x={FRAME.x + FRAME.w - 60}
+              y={654}
+              fill={INK_SOFT}
+              textAnchor="end"
+              fontWeight={500}
+              fontSize={10}
+              letterSpacing={1.6}
+            >
+              BENZOQUINONE SPRAY
+            </text>
+          </g>
+
+          {/* PULSE RATE — left, lower plume */}
+          <g>
+            <line
+              x1={FRAME.x + 60}
+              y1={758}
+              x2={BEETLE_CX - 74}
+              y2={758}
+              stroke={HOT}
+              strokeWidth={1.2}
+            />
+            <circle
+              cx={BEETLE_CX - 74}
+              cy={758}
+              r={2.6}
+              fill={HOT}
+            />
+            <text
+              x={FRAME.x + 60}
+              y={742}
+              fill={HOT}
+              textAnchor="start"
+              fontWeight={700}
+              fontSize={13}
+              letterSpacing={3}
+            >
+              ~500 Hz
+            </text>
+            <text
+              x={FRAME.x + 60}
+              y={758}
+              fill={INK_SOFT}
+              textAnchor="start"
+              fontWeight={500}
+              fontSize={10}
+              letterSpacing={1.6}
+            >
+              PULSE-JET DISCHARGE
             </text>
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip just below the parchment */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={STEEL}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · TWO-CHAMBER REACTOR OF BRACHINUS SPP.</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={HOT}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            BOILING EJECT · ~500 PULSES / SECOND
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -606,7 +1034,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: HOT,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,9 +1043,9 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
+          Role <span style={{ color: STEEL, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Chemical Engineer
           </span>
         </div>
 
@@ -632,9 +1060,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The pulsejet
           <br />
-          city planner.
+          chemist.
         </div>
 
         <div
@@ -649,13 +1077,11 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          The bombardier beetle (
+          <span style={{ color: HOT, fontWeight: 600 }}>Brachinus</span>) dumps
+          hydroquinone and hydrogen peroxide from a reservoir into a
+          chitin-walled combustion chamber, where catalase and peroxidase fire
+          a boiling ~100 °C benzoquinone spray in pulses at roughly 500 Hz.
         </div>
       </div>
 
@@ -669,7 +1095,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: STEEL,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +1103,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Dean, Aneshansley, Edgerton &amp; Eisner · Science 248 (1990) 1219–1221</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: HOT }}>●</span> Two-chamber pulse-jet
         </span>
       </div>
     </AbsoluteFill>
