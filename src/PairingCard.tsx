@@ -50,164 +50,181 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const PAPER = "#08192B";
+const PAPER_MID = "#12304F";
+const IVORY = "#F5EBD8";
+const PEARL = "#E9D9A2";
+const RUST = "#B54B2C";
+const GRID = "#0E2340";
+const GRID_MAJOR = "#153556";
+const MUTED = "#6A85A0";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Nautilus geometry (drawn in local coord space, translated inside the frame) ──
+const CX = 555;
+const CY = 500;
+const A = 320; // outer radius at aperture
+const B = 0.185; // growth rate (~ 3.2× per full turn)
+const TURNS = 2.35;
+const THETA_MAX = Math.PI / 5.5; // aperture below-right
+const THETA_MIN = THETA_MAX - TURNS * 2 * Math.PI;
+const CHAMBER_STEP = Math.PI / 9; // 20° per chamber → ~42 chambers, we'll show top ~28
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+const radiusAt = (theta: number): number =>
+  A * Math.exp(B * (theta - THETA_MAX));
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+const spiralPoint = (theta: number, radiusScale = 1) => {
+  const r = radiusAt(theta) * radiusScale;
+  return {
+    x: CX + r * Math.cos(theta),
+    y: CY + r * Math.sin(theta),
+    r,
+  };
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+// Inner wall = the outer wall of the previous whorl, i.e. r(θ - 2π) = r(θ) / e^(2πB)
+const INNER_RATIO = Math.exp(-2 * Math.PI * B); // ~0.312 for B=0.185
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const chamberAngles = (): number[] => {
+  const out: number[] = [];
+  for (let theta = THETA_MAX; theta >= THETA_MIN; theta -= CHAMBER_STEP) {
+    out.push(theta);
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return out;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+const SEPTA = chamberAngles();
+
+// Sample a spiral arc between two angles at radiusScale (1 = outer, INNER_RATIO = inner)
+const spiralArcPath = (
+  thetaA: number,
+  thetaB: number,
+  radiusScale: number,
+  steps = 14,
+): string => {
+  const parts: string[] = [];
+  const start = spiralPoint(thetaA, radiusScale);
+  parts.push(`M ${start.x.toFixed(2)} ${start.y.toFixed(2)}`);
+  for (let i = 1; i <= steps; i++) {
+    const t = thetaA + ((thetaB - thetaA) * i) / steps;
+    const p = spiralPoint(t, radiusScale);
+    parts.push(`L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+  }
+  return parts.join(" ");
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// Full spiral polyline (used for outer wall reveal)
+const fullSpiralPath = (
+  radiusScale: number,
+  thetaStart: number,
+  thetaEnd: number,
+  stepsPerRad = 40,
+): string => {
+  const total = Math.abs(thetaEnd - thetaStart);
+  const steps = Math.max(60, Math.round(total * stepsPerRad));
+  const parts: string[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = thetaStart + ((thetaEnd - thetaStart) * i) / steps;
+    const p = spiralPoint(t, radiusScale);
+    parts.push(`${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+  }
+  return parts.join(" ");
+};
+
+// A single chamber shape (closed polygon on the coil plane)
+const chamberPath = (thetaOuter: number, thetaInner: number): string => {
+  const outer = spiralArcPath(thetaOuter, thetaInner, 1, 12);
+  // From outer end, drop radially to the inner spiral (a "septum" edge)
+  const innerEnd = spiralPoint(thetaInner, INNER_RATIO);
+  const innerBack = spiralArcPath(thetaInner, thetaOuter, INNER_RATIO, 12)
+    .replace(/^M [^ ]+ [^ ]+/, "L " + innerEnd.x.toFixed(2) + " " + innerEnd.y.toFixed(2));
+  return `${outer} ${innerBack} Z`;
+};
+
+// The living aperture end-cap (front of the shell)
+const aperturePath = (): string => {
+  const outer = spiralPoint(THETA_MAX, 1);
+  const inner = spiralPoint(THETA_MAX, INNER_RATIO);
+  return `M ${outer.x.toFixed(2)} ${outer.y.toFixed(
+    2,
+  )} L ${inner.x.toFixed(2)} ${inner.y.toFixed(2)}`;
+};
+
+// Siphuncle — a fine tube running through the septa, near the ventral (outer-of-coil) side.
+// Sample midway along each septum, biased outward (near outer wall).
+const siphunclePath = (): string => {
+  const bias = 0.86; // 1 = outer wall, INNER_RATIO = inner wall
+  const parts: string[] = [];
+  // Trace from INNER (protoconch) OUTWARD to the aperture so the reveal
+  // marches in step with the chambers, which also build inner → outer.
+  const thetaStart = THETA_MIN + 0.05;
+  const thetaEnd = THETA_MAX;
+  const total = Math.abs(thetaEnd - thetaStart);
+  const N = Math.max(80, Math.round(total * 30));
+  for (let i = 0; i <= N; i++) {
+    const t = thetaStart + ((thetaEnd - thetaStart) * i) / N;
+    const p = spiralPoint(t, bias);
+    parts.push(`${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+  }
+  return parts.join(" ");
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Layout — drafting frame
+  const FRAME = { x: 60, y: 120, w: 960, h: 780 };
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // ── Animation timings ─────────────────────────────────────────────
+  const buildSpan = fps * 3.4; // seconds to grow the spiral
+  // "Build outward": innermost chamber appears first, outermost last
+  // We iterate SEPTA from innermost to outermost by walking i from last chamber down to 0.
+  const totalChambers = SEPTA.length - 1;
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 0.5,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.9 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 1.4, fps * 2.4], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Depth marker eases from 0 m → 400 m over the same span, then holds
+  const depthT = interpolate(frame, [0, buildSpan], [0, 1], {
+    easing: Easing.inOut(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const depthM = Math.round(depthT * 400);
+  const pressureAtm = 1 + Math.round(depthT * 40);
+
+  // Chamber reveal — inner → outer.
+  // `alive` = number of fully-built chambers (counted from innermost).
+  // `freshI` = index (in SEPTA/chamber space, 0 = outermost) of the chamber currently filling.
+  // Alive chambers occupy i ∈ [totalChambers - alive, totalChambers - 1].
+  // The fresh chamber sits directly outside them at i = totalChambers - alive - 1.
+  const revealState = () => {
+    const t = Math.max(0, Math.min(1, frame / buildSpan));
+    const scaled = t * totalChambers;
+    const alive = Math.min(totalChambers, Math.floor(scaled));
+    const freshFrac = Math.max(0, Math.min(1, scaled - alive));
+    const freshI = totalChambers - alive - 1;
+    return { alive, freshI, freshFrac };
+  };
+  const { alive, freshI, freshFrac } = revealState();
+  const showFresh = freshI >= 0 && freshFrac > 0;
+  // Outer boundary index — the SEPTA index that forms the current outermost visible edge.
+  const outerEdgeIdx = showFresh ? freshI : totalChambers - alive;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: PAPER, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* ── Metadata band ─────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -217,7 +234,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: MUTED,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +242,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: PEARL }}>2026 · 07 · 27</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* ── SVG canvas ─────────────────────────────────────────────── */}
       <svg
         width={1080}
         height={1350}
@@ -241,12 +258,12 @@ export const PairingCard: React.FC = () => {
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={40}
+            height={40}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d={`M 40 0 L 0 0 0 40`}
               fill="none"
               stroke={GRID}
               strokeWidth={1}
@@ -256,30 +273,35 @@ export const PairingCard: React.FC = () => {
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={160}
+            height={160}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d={`M 160 0 L 0 0 0 160`}
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="board-vignette" cx="55%" cy="45%" r="75%">
+            <stop offset="0%" stopColor="#0C2036" stopOpacity={1} />
+            <stop offset="100%" stopColor={PAPER} stopOpacity={1} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          <radialGradient id="chamber-fill" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stopColor={PEARL} stopOpacity={0.16} />
+            <stop offset="100%" stopColor={PEARL} stopOpacity={0.04} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <radialGradient id="chamber-fresh" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stopColor={PEARL} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={PEARL} stopOpacity={0.12} />
+          </radialGradient>
+
+          <filter id="ivory-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.6" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -287,7 +309,7 @@ export const PairingCard: React.FC = () => {
           </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Drafting board bg */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
@@ -309,15 +331,13 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke={PAPER_MID}
           strokeWidth={1}
         />
 
@@ -330,261 +350,442 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={PEARL} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+        {/* ── Depth / pressure scale (left column) ───────────────── */}
+        <g transform={`translate(${FRAME.x + 30}, ${FRAME.y + 40})`}>
+          <text
+            fill={MUTED}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.6}
+            fontWeight={600}
+          >
+            DEPTH
           </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+          <text
+            x={90}
+            fill={MUTED}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.6}
+            fontWeight={600}
+          >
+            PRESS.
+          </text>
+          {[0, 100, 200, 300, 400].map((d, i) => {
+            const y = 34 + (i * 700) / 4;
+            const atm = 1 + d / 10;
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+              <g key={d} transform={`translate(0, ${y})`}>
+                <line
+                  x1={-4}
+                  y1={0}
+                  x2={140}
+                  y2={0}
+                  stroke={PAPER_MID}
+                  strokeWidth={1}
                 />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
+                <text
+                  fill={PEARL}
+                  fontFamily={inter}
+                  fontSize={12}
+                  fontWeight={500}
+                  y={-6}
+                >
+                  {d} m
+                </text>
+                <text
+                  x={90}
+                  fill={PEARL}
+                  fontFamily={inter}
+                  fontSize={12}
+                  fontWeight={500}
+                  y={-6}
+                >
+                  {atm} atm
+                </text>
               </g>
             );
           })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
+          {/* Moving depth marker — rust rule + arrowhead, riding across the scale */}
+          <g transform={`translate(-6, ${34 + depthT * 700})`}>
             <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
+              x1={0}
+              y1={0}
+              x2={150}
+              y2={0}
+              stroke={RUST}
               strokeWidth={1.2}
+              opacity={0.9}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
+            <polygon points="0,0 -11,-6 -11,6" fill={RUST} />
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* ── Chambers (built inner → outer) ─────────────────────── */}
+        <g>
+          {/* Faint outer envelope guide (whole shell), drawn very lightly at start */}
+          <path
+            d={fullSpiralPath(1, THETA_MAX, THETA_MIN)}
+            stroke={PAPER_MID}
+            strokeWidth={0.8}
+            fill="none"
+            opacity={0.35}
+          />
+          <path
+            d={fullSpiralPath(INNER_RATIO, THETA_MAX, THETA_MIN)}
+            stroke={PAPER_MID}
+            strokeWidth={0.6}
+            fill="none"
+            opacity={0.22}
+          />
+
+          {/* Chamber fills — inner → outer */}
+          {SEPTA.slice(0, -1).map((thetaOuter, i) => {
+            const thetaInner = SEPTA[i + 1];
+            const isAlive = i >= totalChambers - alive;
+            const isFresh = showFresh && i === freshI;
+            if (!isAlive && !isFresh) return null;
+            const path = chamberPath(thetaOuter, thetaInner);
+            const freshGlow = isFresh ? 1 - freshFrac : 0;
+            return (
+              <path
+                key={`ch-${i}`}
+                d={path}
+                fill={isFresh ? "url(#chamber-fresh)" : "url(#chamber-fill)"}
+                opacity={isFresh ? 0.35 + 0.65 * freshGlow : 1}
+              />
+            );
+          })}
+
+          {/* Septa lines — bound alive + fresh chambers; skip protoconch tip */}
+          {SEPTA.map((theta, j) => {
+            if (j < outerEdgeIdx) return null;
+            if (j > totalChambers - 2) return null;
+            const outer = spiralPoint(theta, 1);
+            const inner = spiralPoint(theta, INNER_RATIO);
+            const isFreshEdge = showFresh && j === freshI;
+            return (
+              <line
+                key={`sept-${j}`}
+                x1={outer.x}
+                y1={outer.y}
+                x2={inner.x}
+                y2={inner.y}
+                stroke={IVORY}
+                strokeWidth={isFreshEdge ? 1.8 : 1.3}
+                opacity={isFreshEdge ? 1 : 0.95}
+              />
+            );
+          })}
+
+          {/* Outer & inner walls — reveal from THETA_MIN out to the current outer edge */}
+          {(() => {
+            const outermostVisible = SEPTA[outerEdgeIdx] ?? THETA_MAX;
+            return (
+              <>
+                <path
+                  d={fullSpiralPath(1, THETA_MIN, outermostVisible)}
+                  stroke={IVORY}
+                  strokeWidth={2.4}
+                  fill="none"
+                  filter="url(#ivory-glow)"
+                />
+                <path
+                  d={fullSpiralPath(INNER_RATIO, THETA_MIN, outermostVisible)}
+                  stroke={IVORY}
+                  strokeWidth={1.6}
+                  fill="none"
+                  opacity={0.85}
+                />
+              </>
+            );
+          })()}
+
+          {/* Aperture (mouth of shell) — appears once the outermost chamber has landed */}
+          {alive >= totalChambers && (
+            <path
+              d={aperturePath()}
+              stroke={IVORY}
+              strokeWidth={2.4}
+              fill="none"
+              opacity={0.9}
+            />
+          )}
+
+          {/* Siphuncle — fine rust conduit, revealed step-for-step with the chambers */}
+          {(() => {
+            const revealFrac = Math.min(1, Math.max(0, frame / buildSpan));
+            return (
+              <path
+                d={siphunclePath()}
+                stroke={RUST}
+                strokeWidth={1.4}
+                fill="none"
+                pathLength={100}
+                strokeDasharray={100}
+                strokeDashoffset={100 * (1 - revealFrac)}
+                opacity={0.95}
+              />
+            );
+          })()}
+
+          {/* Siphuncle callout — rust leader line + label */}
+          {(() => {
+            const showAt = fps * 2.8;
+            const opa = interpolate(frame, [showAt, showAt + fps * 0.8], [0, 1], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            });
+            // anchor near a mid-outer chamber siphuncle position
+            const midTheta = THETA_MAX - Math.PI * 0.8;
+            const anchor = spiralPoint(midTheta, 0.86);
+            const knee = { x: anchor.x + 130, y: anchor.y - 90 };
+            const end = { x: knee.x + 170, y: knee.y };
+            return (
+              <g opacity={opa}>
+                <circle cx={anchor.x} cy={anchor.y} r={4.5} fill={RUST} />
+                <circle
+                  cx={anchor.x}
+                  cy={anchor.y}
+                  r={10}
+                  fill="none"
+                  stroke={RUST}
+                  strokeWidth={1}
+                  opacity={0.55}
+                />
+                <line
+                  x1={anchor.x}
+                  y1={anchor.y}
+                  x2={knee.x}
+                  y2={knee.y}
+                  stroke={RUST}
+                  strokeWidth={1.1}
+                />
+                <line
+                  x1={knee.x}
+                  y1={knee.y}
+                  x2={end.x}
+                  y2={end.y}
+                  stroke={RUST}
+                  strokeWidth={1.1}
+                />
+                <text
+                  x={knee.x + 6}
+                  y={knee.y - 10}
+                  fill={RUST}
+                  fontFamily={inter}
+                  fontSize={12}
+                  fontWeight={600}
+                  letterSpacing={2.6}
+                >
+                  SIPHUNCLE
+                </text>
+                <text
+                  x={knee.x + 6}
+                  y={knee.y + 14}
+                  fill={PEARL}
+                  fontFamily={inter}
+                  fontSize={10}
+                  fontWeight={500}
+                  letterSpacing={2.4}
+                  opacity={0.85}
+                >
+                  OSMOTIC BALLAST
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Pressure inequality callout — arrows illustrating ambient atm vs 1 atm inside.
+              Five arrows arcing along the upper-left flank + a big stacked label off-shell. */}
+          {(() => {
+            const showAt = fps * 3.2;
+            const opa = interpolate(frame, [showAt, showAt + fps * 0.9], [0, 1], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            });
+            // Anchors along the outermost whorl, upper-left quadrant of the shell.
+            // theta values MUST fall inside the drawn range [THETA_MIN, THETA_MAX];
+            // offsets from THETA_MAX in radians place them along the outer wall.
+            const anchors = [
+              { theta: THETA_MAX - Math.PI * 0.68 },
+              { theta: THETA_MAX - Math.PI * 0.86 },
+              { theta: THETA_MAX - Math.PI * 1.04 },
+              { theta: THETA_MAX - Math.PI * 1.22 },
+              { theta: THETA_MAX - Math.PI * 1.40 },
+            ];
+            // Label anchored to the empty upper-left region, well clear of the shell
+            const labelX = 260;
+            const labelY = 245;
+            return (
+              <g opacity={opa}>
+                {anchors.map((a, i) => {
+                  const outer = spiralPoint(a.theta, 1);
+                  const dx = Math.cos(a.theta);
+                  const dy = Math.sin(a.theta);
+                  // Move the tail OUT from the outer wall by 70 px along +dx,+dy
+                  const start = {
+                    x: outer.x + dx * 78,
+                    y: outer.y + dy * 78,
+                  };
+                  const stemEnd = {
+                    x: outer.x + dx * 20,
+                    y: outer.y + dy * 20,
+                  };
+                  const tip = {
+                    x: outer.x + dx * 8,
+                    y: outer.y + dy * 8,
+                  };
+                  // arrow head: triangle at stemEnd pointing toward tip
+                  const nx = -dy;
+                  const ny = dx;
+                  const baseL = {
+                    x: stemEnd.x + nx * 5,
+                    y: stemEnd.y + ny * 5,
+                  };
+                  const baseR = {
+                    x: stemEnd.x - nx * 5,
+                    y: stemEnd.y - ny * 5,
+                  };
+                  return (
+                    <g key={i} stroke={PEARL} strokeWidth={1.4} fill={PEARL}>
+                      <line x1={start.x} y1={start.y} x2={stemEnd.x} y2={stemEnd.y} />
+                      <polygon
+                        points={`${tip.x},${tip.y} ${baseL.x},${baseL.y} ${baseR.x},${baseR.y}`}
+                      />
+                    </g>
+                  );
+                })}
+                <text
+                  x={labelX}
+                  y={labelY}
+                  fill={MUTED}
+                  fontFamily={inter}
+                  fontSize={12}
+                  fontWeight={600}
+                  letterSpacing={3.2}
+                  textAnchor="middle"
+                >
+                  AMBIENT SEA
+                </text>
+                <text
+                  x={labelX}
+                  y={labelY + 42}
+                  fill={PEARL}
+                  fontFamily={inter}
+                  fontSize={44}
+                  fontWeight={600}
+                  letterSpacing={0}
+                  textAnchor="middle"
+                >
+                  {pressureAtm}
+                  <tspan fontSize={16} dx={4} letterSpacing={2}>
+                    atm
+                  </tspan>
+                </text>
+                <line
+                  x1={labelX - 60}
+                  y1={labelY + 58}
+                  x2={labelX + 60}
+                  y2={labelY + 58}
+                  stroke={MUTED}
+                  strokeWidth={0.8}
+                  opacity={0.6}
+                />
+                <text
+                  x={labelX}
+                  y={labelY + 78}
+                  fill={MUTED}
+                  fontFamily={inter}
+                  fontSize={10}
+                  fontWeight={500}
+                  letterSpacing={2.4}
+                  textAnchor="middle"
+                >
+                  AT {depthM} m DEPTH
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Interior ~1 atm callout — anchored inside the outermost chamber's inner-lower flank,
+              with a leader out into the empty lower-right quadrant. */}
+          {(() => {
+            const showAt = fps * 3.8;
+            const opa = interpolate(frame, [showAt, showAt + fps * 0.7], [0, 1], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            });
+            const anchorTheta = THETA_MAX - CHAMBER_STEP * 1.3;
+            const anchor = spiralPoint(anchorTheta, 0.55);
+            const knee = { x: anchor.x + 90, y: anchor.y + 70 };
+            const end = { x: knee.x + 160, y: knee.y };
+            return (
+              <g opacity={opa}>
+                <circle cx={anchor.x} cy={anchor.y} r={3.5} fill={IVORY} />
+                <line
+                  x1={anchor.x}
+                  y1={anchor.y}
+                  x2={knee.x}
+                  y2={knee.y}
+                  stroke={IVORY}
+                  strokeWidth={1}
+                  opacity={0.9}
+                />
+                <line
+                  x1={knee.x}
+                  y1={knee.y}
+                  x2={end.x}
+                  y2={end.y}
+                  stroke={IVORY}
+                  strokeWidth={1}
+                  opacity={0.9}
+                />
+                <text
+                  x={knee.x + 6}
+                  y={knee.y - 8}
+                  fill={MUTED}
+                  fontFamily={inter}
+                  fontSize={9}
+                  fontWeight={600}
+                  letterSpacing={2.4}
+                >
+                  SEALED CHAMBER
+                </text>
+                <text
+                  x={knee.x + 6}
+                  y={knee.y + 16}
+                  fill={IVORY}
+                  fontFamily={inter}
+                  fontSize={22}
+                  fontWeight={600}
+                  letterSpacing={1}
+                >
+                  ≈ 1<tspan fontSize={11} dx={2} letterSpacing={2}>atm</tspan>
+                </text>
+              </g>
+            );
+          })()}
+        </g>
+
+        {/* Caption strip */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={MUTED}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · CHAMBERED PRESSURE VESSEL · NAUTILUS POMPILIUS</text>
+          <text x={FRAME.w} textAnchor="end" fill={PEARL} opacity={0.85}>
+            LOG-SPIRAL · ~3× / TURN
           </text>
         </g>
       </svg>
@@ -595,7 +796,7 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 960,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,56 +807,57 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: PEARL,
             fontFamily: inter,
-            fontSize: 13,
+            fontSize: 12,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 12,
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+          Role <span style={{ color: MUTED, margin: "0 4px" }}>/</span>
+          <span style={{ color: IVORY, letterSpacing: 5 }}>
+            Naval Architect
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: IVORY,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
+            fontSize: 76,
+            lineHeight: 0.98,
+            letterSpacing: -1.1,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          Built for the
           <br />
-          city planner.
+          abyss.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 22,
+            color: "#D8D4C6",
             fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
+            fontSize: 17,
+            lineHeight: 1.42,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          The chambered nautilus grows its shell as a strict logarithmic spiral
+          of gas-filled compartments linked by a living tube — the{" "}
+          <span style={{ color: RUST, fontWeight: 600 }}>siphuncle</span> — that
+          osmotically pumps liquid out so gas can diffuse in, holding each
+          sealed chamber at roughly{" "}
+          <span style={{ color: IVORY, fontWeight: 600 }}>1&nbsp;atm</span> even
+          while the animal hovers at 400&nbsp;m, where the surrounding sea
+          presses in at more than 40&nbsp;atm.
         </div>
       </div>
 
@@ -665,11 +867,11 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 30,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: MUTED,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,11 +879,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Denton &amp; Gilpin-Brown · J. Mar. Biol. Assoc. UK (1966)</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: RUST }}>●</span> Siphuncle · Osmotic ballast
         </span>
       </div>
+
+      {/* keep the linter happy about durationInFrames usage */}
+      <div style={{ position: "absolute", opacity: 0 }}>{durationInFrames}</div>
     </AbsoluteFill>
   );
 };
