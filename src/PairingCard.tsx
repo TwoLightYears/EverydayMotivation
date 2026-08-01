@@ -50,158 +50,154 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0B0D18";
+const PURPLE = "#7A3DB0";
+const MAGENTA = "#E64EA6";
+const CYAN = "#2FC5D9";
+const GOLD = "#F0C24A";
+const GRAY = "#C7D0DE";
+const GRAY_DIM = "#6E7789";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Isometric hopper crystal ─────────────────────────────────────────
+// We render N nested terraces as an axonometric stepped pyramid.
+// Each terrace is a rhombus (the "top" of that step) drawn in
+// isometric projection. Successively smaller & higher terraces stack
+// on top, creating the ziggurat/cathedral silhouette.
+//
+// Coordinate space for the crystal: 800 × 800 (we translate into place).
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+const CX = 400;
+const CY = 480; // apex sits above this baseline
+const ISO_A = 30 * (Math.PI / 180); // isometric angle
+const TILT_X = Math.cos(ISO_A);
+const TILT_Y = Math.sin(ISO_A);
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+const TERRACES = 9;
+const BASE_HALF_W = 290; // half-width of outer rhombus edge
+const TERRACE_STEP_H = 24; // vertical rise per terrace
+const TERRACE_SHRINK = 27; // horizontal shrink per terrace (per axis)
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+type Rhombus = {
+  top: [number, number];
+  right: [number, number];
+  bottom: [number, number];
+  left: [number, number];
+  centerY: number;
+  index: number; // 0 = outermost, TERRACES-1 = apex
+  halfW: number;
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+const terraceAt = (i: number): Rhombus => {
+  const halfW = BASE_HALF_W - i * TERRACE_SHRINK;
+  const yOffset = -i * TERRACE_STEP_H;
+  const cy = CY + yOffset;
+  return {
+    top: [CX, cy - halfW * TILT_Y],
+    right: [CX + halfW * TILT_X, cy],
+    bottom: [CX, cy + halfW * TILT_Y],
+    left: [CX - halfW * TILT_X, cy],
+    centerY: cy,
+    index: i,
+    halfW,
+  };
+};
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const rhombusPath = (r: Rhombus): string =>
+  `M ${r.top[0]} ${r.top[1]} L ${r.right[0]} ${r.right[1]} L ${r.bottom[0]} ${r.bottom[1]} L ${r.left[0]} ${r.left[1]} Z`;
+
+// Left face of the "riser" between terrace i (above) and i+1 (below).
+// The riser is a vertical wall from the outer rhombus down to the lower
+// outer rhombus. We split it into two visible walls: left-front and
+// right-front (the two faces facing the viewer).
+const leftRiserPath = (rHi: Rhombus, rLo: Rhombus): string => {
+  // Left-front wall: from top-left edge of upper terrace down to
+  // the corresponding edge on the lower terrace.
+  // Upper: left → bottom vertices; Lower: left → bottom vertices.
+  return `M ${rHi.left[0]} ${rHi.left[1]} L ${rHi.bottom[0]} ${rHi.bottom[1]} L ${rLo.bottom[0]} ${rLo.bottom[1]} L ${rLo.left[0]} ${rLo.left[1]} Z`;
+};
+const rightRiserPath = (rHi: Rhombus, rLo: Rhombus): string => {
+  return `M ${rHi.right[0]} ${rHi.right[1]} L ${rHi.bottom[0]} ${rHi.bottom[1]} L ${rLo.bottom[0]} ${rLo.bottom[1]} L ${rLo.right[0]} ${rLo.right[1]} Z`;
+};
+
+// Thin-film interference gradient: sample from purple → magenta → cyan → gold
+// as a function of a normalized parameter (0..1). Used to color each terrace
+// according to a slow-moving shimmer parameter.
+const shimmerColor = (phase: number) => {
+  // phase in [0, 1)
+  const stops = [
+    { p: 0.0, c: [122, 61, 176] }, // purple
+    { p: 0.28, c: [230, 78, 166] }, // magenta
+    { p: 0.55, c: [47, 197, 217] }, // cyan
+    { p: 0.78, c: [240, 194, 74] }, // gold
+    { p: 1.0, c: [122, 61, 176] }, // wrap
+  ];
+  const x = ((phase % 1) + 1) % 1;
+  let a = stops[0];
+  let b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (x >= stops[i].p && x <= stops[i + 1].p) {
+      a = stops[i];
+      b = stops[i + 1];
+      break;
+    }
   }
-  return ((h >>> 0) % 1000) / 1000;
+  const t = (x - a.p) / (b.p - a.p);
+  const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * t);
+  const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * t);
+  const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * t);
+  return `rgb(${r}, ${g}, ${bl})`;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// Darker/lighter tint for the riser walls
+const darkenHex = (rgbStr: string, mult: number) => {
+  const m = rgbStr.match(/\d+/g);
+  if (!m) return rgbStr;
+  const r = Math.round(parseInt(m[0]) * mult);
+  const g = Math.round(parseInt(m[1]) * mult);
+  const b = Math.round(parseInt(m[2]) * mult);
+  return `rgb(${Math.min(255, r)}, ${Math.min(255, g)}, ${Math.min(255, b)})`;
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // 5-second loop
+  const loopSecs = 5;
+  const loopFrames = fps * loopSecs;
+  const loopT = (frame % loopFrames) / loopFrames;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Terrace materialization: apex first, cascading down
+  const growStart = fps * 0.3;
+  const growPer = fps * 0.08;
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 1.2,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
-    easing: Easing.out(Easing.cubic),
-    extrapolateLeft: "clamp",
+  const hookOpacity = interpolate(
+    frame,
+    [fps * 1.8, fps * 2.6],
+    [0, 1],
+    {
+      easing: Easing.out(Easing.cubic),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
+
+  const bandOpacity = interpolate(frame, [0, fps * 0.5], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Global iridescence sweep: slow, continuous
+  const shimmerBase = loopT; // 0..1
+
+  // Build terraces (draw outermost first so upper terraces overlay)
+  const terraces = Array.from({ length: TERRACES }, (_, i) => terraceAt(i));
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -217,19 +213,20 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: GRAY_DIM,
           fontFamily: inter,
-          fontSize: 13,
-          letterSpacing: 4.5,
+          fontSize: 12,
+          letterSpacing: 3.6,
           textTransform: "uppercase",
           fontWeight: 500,
+          opacity: bandOpacity,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: MAGENTA }}>2026 · 08 · 01</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* SVG — architectural plate */}
       <svg
         width={1080}
         height={1350}
@@ -237,49 +234,21 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Radial ambient behind the crystal */}
+          <radialGradient id="ambient" cx="50%" cy="45%" r="55%">
+            <stop offset="0%" stopColor="#1A1D2E" stopOpacity={1} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
+          {/* Highlight gradient for the top face of each terrace */}
+          <linearGradient id="topFaceHi" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.28} />
+            <stop offset="60%" stopColor="#FFFFFF" stopOpacity={0.04} />
+            <stop offset="100%" stopColor="#000000" stopOpacity={0.18} />
+          </linearGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -287,304 +256,489 @@ export const PairingCard: React.FC = () => {
           </filter>
         </defs>
 
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
+        {/* Ambient wash centered on the crystal */}
+        <circle cx={540} cy={520} r={520} fill="url(#ambient)" />
 
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
+        {/* Faint measurement plane — a single horizontal reference line */}
+        <line
+          x1={80}
+          y1={730}
+          x2={1000}
+          y2={730}
+          stroke="#1D2233"
           strokeWidth={1}
         />
 
         {/* Corner crop marks */}
         {(
           [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
+            [60, 130, 1, 1],
+            [1020, 130, -1, 1],
+            [60, 830, 1, -1],
+            [1020, 830, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={GRAY_DIM} strokeWidth={1.1} fill="none">
+            <line x1={cx} y1={cy} x2={cx + sx * 22} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 22} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+        {/* Plate label */}
+        <text
+          x={80}
+          y={122}
+          fill={GRAY_DIM}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
-          letterSpacing={3}
+          fontWeight={600}
+          letterSpacing={3.4}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+          PLATE III · HOPPER CRYSTAL, AXONOMETRIC
+        </text>
+        <text
+          x={1000}
+          y={122}
+          textAnchor="end"
+          fill={GRAY_DIM}
           fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
+          fontSize={11}
+          fontWeight={600}
+          letterSpacing={3.4}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
+          BISMUTH · Bi · Z = 83
+        </text>
+
+        {/* The crystal — translate to canvas center */}
+        <g transform={`translate(140, 40)`}>
+          {/* Reverse draw: draw outer risers first, then inner terraces on top */}
+          {terraces.map((r, i) => {
+            const alive = interpolate(
+              frame,
+              [growStart + (TERRACES - 1 - i) * growPer, growStart + (TERRACES - 1 - i) * growPer + fps * 0.5],
+              [0, 1],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+            );
+            if (alive <= 0) return null;
+
+            // Per-terrace shimmer phase — higher terraces slightly out of phase
+            const phase = shimmerBase + i * 0.08;
+            const top = shimmerColor(phase);
+            const riserL = darkenHex(top, 0.72);
+            const riserR = darkenHex(top, 0.55);
+
+            // Vertical shift for the "grow-up" cascade
+            const rise = interpolate(alive, [0, 1], [14, 0]);
+
+            // Below current terrace (for riser drop)
+            const below = i > 0 ? terraces[i - 1] : null;
+
+            return (
+              <g key={`terrace-${i}`} opacity={alive} transform={`translate(0, ${rise})`}>
+                {/* Risers between this terrace's outer edge and the one below */}
+                {below && (
+                  <>
+                    <path
+                      d={leftRiserPath(r, below)}
+                      fill={riserL}
+                      opacity={0.95}
+                    />
+                    <path
+                      d={rightRiserPath(r, below)}
+                      fill={riserR}
+                      opacity={0.95}
+                    />
+                    {/* Riser inner edge lines for architectural crispness */}
+                    <line
+                      x1={r.left[0]}
+                      y1={r.left[1]}
+                      x2={below.left[0]}
+                      y2={below.left[1]}
+                      stroke="rgba(0,0,0,0.35)"
+                      strokeWidth={0.75}
+                    />
+                    <line
+                      x1={r.bottom[0]}
+                      y1={r.bottom[1]}
+                      x2={below.bottom[0]}
+                      y2={below.bottom[1]}
+                      stroke="rgba(0,0,0,0.35)"
+                      strokeWidth={0.75}
+                    />
+                    <line
+                      x1={r.right[0]}
+                      y1={r.right[1]}
+                      x2={below.right[0]}
+                      y2={below.right[1]}
+                      stroke="rgba(0,0,0,0.35)"
+                      strokeWidth={0.75}
+                    />
+                  </>
+                )}
+                {/* Top face of the terrace */}
+                <path d={rhombusPath(r)} fill={top} />
+                {/* Top-face lighting overlay */}
+                <path d={rhombusPath(r)} fill="url(#topFaceHi)" />
+                {/* Sunken hopper hint — inner darker rhombus (rim + recess).
+                    Painted AFTER the lighting overlay so it stays legible.
+                    Skip apex (too tiny) and outermost (would clash with base). */}
+                {i > 0 && i < TERRACES - 1 && (() => {
+                  const rimFrac = 0.62;
+                  const inner: Rhombus = {
+                    top: [CX, r.centerY - r.halfW * rimFrac * TILT_Y],
+                    right: [CX + r.halfW * rimFrac * TILT_X, r.centerY],
+                    bottom: [CX, r.centerY + r.halfW * rimFrac * TILT_Y],
+                    left: [CX - r.halfW * rimFrac * TILT_X, r.centerY],
+                    centerY: r.centerY,
+                    index: r.index,
+                    halfW: r.halfW * rimFrac,
+                  };
+                  return (
+                    <>
+                      <path
+                        d={rhombusPath(inner)}
+                        fill="rgba(0,0,0,0.32)"
+                        stroke="rgba(0,0,0,0.55)"
+                        strokeWidth={0.7}
+                      />
+                    </>
+                  );
+                })()}
+                {/* Crisp top edge */}
+                <path
+                  d={rhombusPath(r)}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.28)"
+                  strokeWidth={0.9}
+                />
+              </g>
+            );
+          })}
+
+          {/* Apex spark */}
+          {frame > growStart + fps * 0.9 && (() => {
+            const apex = terraces[TERRACES - 1];
+            const sparkOp = interpolate(
+              frame,
+              [growStart + fps * 0.9, growStart + fps * 1.4],
+              [0, 1],
+              { extrapolateRight: "clamp" },
+            );
+            const pulse = 0.5 + 0.5 * Math.sin((loopT * Math.PI * 2));
+            return (
+              <g opacity={sparkOp} filter="url(#softGlow)">
+                <circle
+                  cx={apex.top[0]}
+                  cy={apex.top[1]}
+                  r={34 + pulse * 8}
+                  fill={GOLD}
+                  opacity={0.22}
+                />
+                <circle
+                  cx={apex.top[0]}
+                  cy={apex.top[1]}
+                  r={18 + pulse * 4}
+                  fill={MAGENTA}
+                  opacity={0.35}
+                />
+                <circle
+                  cx={apex.top[0]}
+                  cy={apex.top[1]}
+                  r={6 + pulse * 1.5}
+                  fill="#FFFFFF"
+                  opacity={0.95}
+                />
+              </g>
+            );
+          })()}
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+        {/* ── Architectural annotations ─────────────────────────────── */}
+        {/* Dimension line: left-side height ladder */}
+        {(() => {
+          const outer = terraceAt(0);
+          const apex = terraceAt(TERRACES - 1);
+          // In screen-space: crystal is translated by (140, 40)
+          const xShift = 140;
+          const yShift = 40;
+          const xLine = 100;
+          const yTop = apex.top[1] + yShift;
+          const yBot = outer.left[1] + yShift;
+          const annOpacity = interpolate(
+            frame,
+            [fps * 2.0, fps * 2.8],
+            [0, 0.9],
+            { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+          );
+          return (
+            <g opacity={annOpacity} stroke={GRAY_DIM} fill={GRAY_DIM}>
+              <line x1={xLine} y1={yTop} x2={xLine} y2={yBot} strokeWidth={1} />
+              <line x1={xLine - 6} y1={yTop} x2={xLine + 6} y2={yTop} strokeWidth={1} />
+              <line x1={xLine - 6} y1={yBot} x2={xLine + 6} y2={yBot} strokeWidth={1} />
+              {/* Terrace tick marks */}
+              {terraces.map((r, i) => (
+                <line
+                  key={`tick-${i}`}
+                  x1={xLine - 4}
+                  y1={r.top[1] + yShift}
+                  x2={xLine + 4}
+                  y2={r.top[1] + yShift}
+                  strokeWidth={0.75}
                 />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
+              ))}
+              {/* Rotated axis label — placed to the left of the line, centered vertically */}
               <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
                 fontFamily={inter}
                 fontSize={11}
+                fontWeight={600}
+                letterSpacing={3.6}
+                stroke="none"
+                fill={GRAY_DIM}
+                textAnchor="middle"
+                transform={`translate(${xLine - 22}, ${(yTop + yBot) / 2}) rotate(-90)`}
+              >
+                GROWTH VECTOR
+              </text>
+              {/* Small label above the top arrow */}
+              <text
+                x={xLine + 12}
+                y={yTop - 8}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={500}
+                letterSpacing={2.6}
+                stroke="none"
+                fill={GRAY_DIM}
+              >
+                APEX
+              </text>
+              {/* Small label below the bottom arrow */}
+              <text
+                x={xLine + 12}
+                y={yBot + 16}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={500}
+                letterSpacing={2.6}
+                stroke="none"
+                fill={GRAY_DIM}
+              >
+                BASE · 9 TERRACES
+              </text>
+            </g>
+          );
+        })()}
+
+        {/* Mechanism callout: EDGES grow faster than FACES (upper-right of crystal) */}
+        {(() => {
+          const annOpacity = interpolate(
+            frame,
+            [fps * 2.2, fps * 3.0],
+            [0, 0.95],
+            { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+          );
+          const boxX = 760;
+          const boxY = 180;
+          const boxW = 200;
+          // Small icon: a rhombus with arrows at the corners (fast) and slower arrows on the faces
+          return (
+            <g opacity={annOpacity}>
+              {/* Label */}
+              <text
+                x={boxX}
+                y={boxY}
+                fill={CYAN}
+                fontFamily={inter}
+                fontSize={11}
+                fontWeight={600}
+                letterSpacing={3.4}
+              >
+                GROWTH FRONT
+              </text>
+              {/* Mini rhombus diagram */}
+              {(() => {
+                const cx = boxX + 100;
+                const cy = boxY + 76;
+                const hw = 62;
+                const iso = 30 * (Math.PI / 180);
+                const tx = Math.cos(iso);
+                const ty = Math.sin(iso);
+                const pts = {
+                  top: [cx, cy - hw * ty] as const,
+                  right: [cx + hw * tx, cy] as const,
+                  bottom: [cx, cy + hw * ty] as const,
+                  left: [cx - hw * tx, cy] as const,
+                };
+                return (
+                  <>
+                    <path
+                      d={`M ${pts.top[0]} ${pts.top[1]} L ${pts.right[0]} ${pts.right[1]} L ${pts.bottom[0]} ${pts.bottom[1]} L ${pts.left[0]} ${pts.left[1]} Z`}
+                      fill="none"
+                      stroke={GRAY_DIM}
+                      strokeWidth={1}
+                      strokeDasharray="2 3"
+                    />
+                    {/* Fast-growing corner arrows (long, cyan) */}
+                    {[pts.top, pts.right, pts.bottom, pts.left].map((p, k) => {
+                      const [px, py] = p;
+                      const dx = px - cx;
+                      const dy = py - cy;
+                      const L = Math.hypot(dx, dy);
+                      const ux = dx / L;
+                      const uy = dy / L;
+                      const tipX = px + ux * 18;
+                      const tipY = py + uy * 18;
+                      return (
+                        <g key={`corner-${k}`}>
+                          <line
+                            x1={px}
+                            y1={py}
+                            x2={tipX}
+                            y2={tipY}
+                            stroke={CYAN}
+                            strokeWidth={1.6}
+                          />
+                          {/* Arrowhead */}
+                          <polygon
+                            points={`${tipX},${tipY} ${tipX - uy * 4 - ux * 6},${tipY + ux * 4 - uy * 6} ${tipX + uy * 4 - ux * 6},${tipY - ux * 4 - uy * 6}`}
+                            fill={CYAN}
+                          />
+                        </g>
+                      );
+                    })}
+                    {/* Slow face-centre arrows (short, gray) — midpoints of each edge */}
+                    {[
+                      [(pts.top[0] + pts.right[0]) / 2, (pts.top[1] + pts.right[1]) / 2],
+                      [(pts.right[0] + pts.bottom[0]) / 2, (pts.right[1] + pts.bottom[1]) / 2],
+                      [(pts.bottom[0] + pts.left[0]) / 2, (pts.bottom[1] + pts.left[1]) / 2],
+                      [(pts.left[0] + pts.top[0]) / 2, (pts.left[1] + pts.top[1]) / 2],
+                    ].map((p, k) => {
+                      const [px, py] = p;
+                      const dx = px - cx;
+                      const dy = py - cy;
+                      const L = Math.hypot(dx, dy);
+                      const ux = dx / L;
+                      const uy = dy / L;
+                      const tipX = px + ux * 7;
+                      const tipY = py + uy * 7;
+                      return (
+                        <g key={`face-${k}`}>
+                          <line
+                            x1={px}
+                            y1={py}
+                            x2={tipX}
+                            y2={tipY}
+                            stroke={GRAY_DIM}
+                            strokeWidth={1.1}
+                          />
+                        </g>
+                      );
+                    })}
+                  </>
+                );
+              })()}
+              {/* Legend */}
+              <g>
+                <line x1={boxX} y1={boxY + 148} x2={boxX + 14} y2={boxY + 148} stroke={CYAN} strokeWidth={1.6} />
+                <text x={boxX + 22} y={boxY + 152} fill={GRAY} fontFamily={inter} fontSize={10} fontWeight={500} letterSpacing={2.4}>
+                  EDGES · FAST
+                </text>
+                <line x1={boxX} y1={boxY + 168} x2={boxX + 14} y2={boxY + 168} stroke={GRAY_DIM} strokeWidth={1.1} />
+                <text x={boxX + 22} y={boxY + 172} fill={GRAY_DIM} fontFamily={inter} fontSize={10} fontWeight={500} letterSpacing={2.4}>
+                  FACES · SLOW
+                </text>
+              </g>
+            </g>
+          );
+        })()}
+
+        {/* Leader annotation: oxide film thickness (right side, inside frame) */}
+        {(() => {
+          const outer = terraceAt(0);
+          const xShift = 140;
+          const yShift = 40;
+          const annOpacity = interpolate(
+            frame,
+            [fps * 2.4, fps * 3.2],
+            [0, 0.95],
+            { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+          );
+          // Target: right edge of the outer terrace
+          const targetX = outer.right[0] + xShift;
+          const targetY = outer.right[1] + yShift;
+          // Anchor the callout box just inside the right margin
+          const boxX = 760;
+          const boxY = targetY - 130;
+          const boxW = 200;
+          const boxH = 96;
+          return (
+            <g opacity={annOpacity}>
+              {/* Point on the crystal surface */}
+              <circle cx={targetX} cy={targetY} r={3} fill={GOLD} />
+              {/* Leader line: bent up-and-right to the box */}
+              <line
+                x1={targetX}
+                y1={targetY}
+                x2={boxX}
+                y2={boxY + boxH - 12}
+                stroke={GOLD}
+                strokeWidth={1}
+              />
+              {/* Callout box (open bracket) */}
+              <line x1={boxX} y1={boxY} x2={boxX + boxW} y2={boxY} stroke={GOLD} strokeWidth={1} />
+              <line x1={boxX} y1={boxY} x2={boxX} y2={boxY + boxH} stroke={GOLD} strokeWidth={1} />
+              <line x1={boxX} y1={boxY + boxH} x2={boxX + boxW} y2={boxY + boxH} stroke={GOLD} strokeWidth={1} />
+              {/* Text stack */}
+              <text
+                x={boxX + 12}
+                y={boxY + 20}
+                fill={GOLD}
+                fontFamily={inter}
+                fontSize={11}
+                fontWeight={600}
+                letterSpacing={3.4}
+              >
+                Bi₂O₃ FILM
+              </text>
+              <text
+                x={boxX + 12}
+                y={boxY + 50}
+                fill={GRAY}
+                fontFamily={playfair}
+                fontStyle="italic"
+                fontSize={22}
+                fontWeight={500}
+              >
+                t ≈ 30–300 nm
+              </text>
+              <text
+                x={boxX + 12}
+                y={boxY + 78}
+                fill={GRAY_DIM}
+                fontFamily={inter}
+                fontSize={10}
                 fontWeight={500}
                 letterSpacing={2.4}
-                opacity={op}
               >
-                {l.text}
+                THIN-FILM INTERFERENCE
               </text>
-            );
-          })}
+            </g>
+          );
+        })()}
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip below the plate */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          transform={`translate(80, 862)`}
+          fill={GRAY_DIM}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
+          opacity={bandOpacity}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · KINETIC SKELETAL GROWTH · Bi (l) → Bi (s)</text>
+          <text x={920} textAnchor="end" fill={MAGENTA} opacity={0.9}>
+            EDGES CRYSTALLIZE FIRST
           </text>
         </g>
       </svg>
@@ -595,7 +749,7 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 918,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,18 +760,18 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: MAGENTA,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 20,
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
+          Role <span style={{ color: GRAY_DIM, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Cathedral Architect
           </span>
         </div>
 
@@ -632,9 +786,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The mineral
           <br />
-          city planner.
+          cathedral builder.
         </div>
 
         <div
@@ -649,13 +803,12 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          Cooled slowly from its melt,{" "}
+          <span style={{ color: MAGENTA, fontWeight: 600 }}>bismuth</span>{" "}
+          crystallizes at its edges faster than its faces — a kinetic instability
+          that stacks it into terraced hopper crystals, self-assembling ziggurat
+          cathedrals whose rainbow skin is thin-film interference on a native
+          oxide layer just tens of nanometres thick.
         </div>
       </div>
 
@@ -669,19 +822,23 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: GRAY_DIM,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
           textTransform: "uppercase",
           fontWeight: 500,
+          opacity: bandOpacity,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Hopper growth · Bi₂O₃ interference · after Sunagawa</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: GOLD }}>●</span> Oxide film = Color
         </span>
       </div>
+
+      {/* Suppress unused-var lint in some setups */}
+      <span style={{ display: "none" }}>{durationInFrames}</span>
     </AbsoluteFill>
   );
 };
