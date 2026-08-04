@@ -50,186 +50,176 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0B1410";
+const INK_LIFT = "#12201A";
+const LEAF = "#1E4D34";
+const LEAF_DEEP = "#0E2A1D";
+const LEAF_EDGE = "#2C6B48";
+const LIME = "#8CB84A";
+const LIME_SOFT = "#B7D77A";
+const CRIMSON = "#B4213A";
+const CRIMSON_DEEP = "#6B0F22";
+const CRIMSON_HOT = "#D74562";
+const CREAM = "#F1E8D2";
+const MUTED = "#758A7E";
+const MUTED_2 = "#3D4E43";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Layout constants ──────────────────────────────────────────────────────
+const FRAME = { x: 60, y: 128, w: 960, h: 720 };
+const HINGE_X = 540;
+const HINGE_Y = 448;
+
+// Right-lobe outline (as if trap is fully open, absolute coordinates)
+const RIGHT_LOBE_D =
+  "M 545 258 " +
+  "C 620 252, 780 320, 800 448 " +
+  "C 780 578, 620 642, 545 638 Z";
+
+const LEFT_LOBE_D =
+  "M 535 258 " +
+  "C 460 252, 300 320, 280 448 " +
+  "C 300 578, 460 642, 535 638 Z";
+
+// Closed-pod silhouette (an ovoid seal); appears after closure.
+const CLOSED_POD_D =
+  "M 540 258 " +
+  "C 595 258, 638 340, 638 448 " +
+  "C 638 556, 595 638, 540 638 " +
+  "C 485 638, 442 556, 442 448 " +
+  "C 442 340, 485 258, 540 258 Z";
+
+// Cilia along the outer arc of the right lobe: [tip x, tip y, base x, base y]
+type Cilium = { tx: number; ty: number; bx: number; by: number };
+const CILIA_R_RAW: Array<[number, number, number, number]> = [
+  [790, 254, 745, 268],
+  [833, 298, 780, 306],
+  [860, 356, 796, 358],
+  [872, 410, 800, 402],
+  [878, 448, 802, 448],
+  [872, 486, 800, 494],
+  [860, 540, 796, 538],
+  [833, 598, 780, 590],
+  [790, 642, 745, 628],
+];
+const CILIA_R: Cilium[] = CILIA_R_RAW.map(([tx, ty, bx, by]) => ({
+  tx,
+  ty,
+  bx,
+  by,
+}));
+const CILIA_L: Cilium[] = CILIA_R_RAW.map(([tx, ty, bx, by]) => ({
+  tx: 1080 - tx,
+  ty,
+  bx: 1080 - bx,
+  by,
+}));
+
+// Trigger hairs — each: {base, tip} coords (draw stalk + head). Interior of each lobe.
+type Hair = { bx: number; by: number; tx: number; ty: number };
+const HAIRS_R: Hair[] = [
+  { bx: 640, by: 360, tx: 656, ty: 316 }, // upper (touch #1)
+  { bx: 690, by: 448, tx: 720, ty: 448 }, // middle
+  { bx: 640, by: 536, tx: 656, ty: 580 }, // lower
+];
+const HAIRS_L: Hair[] = [
+  { bx: 440, by: 360, tx: 424, ty: 316 }, // upper (touch #2)
+  { bx: 390, by: 448, tx: 360, ty: 448 }, // middle
+  { bx: 440, by: 536, tx: 424, ty: 580 }, // lower
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+const TOUCH1 = HAIRS_R[0]; // right upper hair
+const TOUCH2 = HAIRS_L[0]; // left upper hair (mirror)
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// ── Timeline gauge (biological seconds) ───────────────────────────────────
+const GAUGE = { x: 100, y: 764, w: 880, h: 34 };
+const T_MAX_S = 20; // biological window is ~20 seconds
+const t1s = 3.0; // "biological" time of touch 1 on the gauge
+const t2s = 6.0; // "biological" time of touch 2 on the gauge
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// Utility: smooth pulse envelope (grow + fade) over `dur` seconds.
+const pulseEnvelope = (frame: number, fps: number, atFrame: number, dur = 1.6) => {
+  const dt = (frame - atFrame) / fps;
+  if (dt < 0 || dt > dur) return { grow: 0, opacity: 0 };
+  const p = dt / dur;
+  const grow = 1 - Math.pow(1 - p, 3); // ease-out cubic
+  const opacity = Math.max(0, 1 - p);
+  return { grow, opacity };
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Animation beats (in frames)
+  const F_TOUCH1 = Math.round(fps * 1.0);
+  const F_TOUCH2 = Math.round(fps * 3.2);
+  const F_CLOSE = Math.round(fps * 5.0);
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Pulse envelopes
+  const pulse1 = pulseEnvelope(frame, fps, F_TOUCH1, 2.2);
+  const pulse2 = pulseEnvelope(frame, fps, F_TOUCH2, 2.2);
 
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  // Trap open→closed spring (0 = open, 1 = closed)
+  const closeSpring = spring({
+    frame: frame - F_CLOSE,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 11, stiffness: 220, mass: 0.55 },
   });
+  const closed = Math.max(0, Math.min(1, closeSpring));
+  const openness = 1 - closed;
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  // Lobe compression: horizontal scale about the hinge
+  const lobeSx = interpolate(closed, [0, 1], [1, 0.18]);
+  const openMx = interpolate(closed, [0, 1], [1, 0]); // 1=open, 0=closed
+  const seamGap = 6 * openMx; // small visible seam when open
+
+  const sec = frame / fps;
+
+  // Type springs
+  const roleTagSpring = spring({
+    frame: frame - fps * 0.15,
+    fps,
+    config: { damping: 200, mass: 0.6 },
+  });
+  const titleSpring = spring({
+    frame: frame - fps * 0.35,
+    fps,
+    config: { damping: 200, mass: 0.7 },
+  });
+  const hookOpacity = interpolate(frame, [fps * 0.85, fps * 1.55], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
-
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* Top masthead */}
       <div
         style={{
           position: "absolute",
-          top: 56,
+          top: 54,
           left: 80,
           right: 80,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: MUTED,
           fontFamily: inter,
-          fontSize: 13,
-          letterSpacing: 4.5,
+          fontSize: 12,
+          letterSpacing: 4.8,
           textTransform: "uppercase",
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: LIME }}>2026 · 08 · 04</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Sheet + illustration */}
       <svg
         width={1080}
         height={1350}
@@ -237,91 +227,79 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Interior gradient of the trap */}
+          <radialGradient id="interiorR" cx="30%" cy="45%" r="90%">
+            <stop offset="0%" stopColor={CRIMSON_HOT} stopOpacity={1} />
+            <stop offset="55%" stopColor={CRIMSON} stopOpacity={1} />
+            <stop offset="100%" stopColor={CRIMSON_DEEP} stopOpacity={1} />
+          </radialGradient>
+          <radialGradient id="interiorL" cx="70%" cy="45%" r="90%">
+            <stop offset="0%" stopColor={CRIMSON_HOT} stopOpacity={1} />
+            <stop offset="55%" stopColor={CRIMSON} stopOpacity={1} />
+            <stop offset="100%" stopColor={CRIMSON_DEEP} stopOpacity={1} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* Sheet vignette */}
+          <radialGradient id="sheet-vignette" cx="50%" cy="42%" r="72%">
+            <stop offset="0%" stopColor={INK_LIFT} stopOpacity={1} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          {/* Subtle glow filter */}
+          <filter id="soft-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          <filter id="strong-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="6" />
+          </filter>
+
+          {/* Grid pattern for the sheet */}
+          <pattern
+            id="dot-grid"
+            x={FRAME.x}
+            y={FRAME.y}
+            width={40}
+            height={40}
+            patternUnits="userSpaceOnUse"
+          >
+            <circle cx={20} cy={20} r={0.9} fill={MUTED_2} />
+          </pattern>
         </defs>
 
-        {/* Drafting board */}
+        {/* Sheet background */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#sheet-vignette)"
         />
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+          fill="url(#dot-grid)"
+          opacity={0.5}
         />
 
-        {/* Inner thin border */}
+        {/* Thin sheet border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#213028"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner registration marks */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,300 +308,656 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={`corner-${i}`} stroke={LIME} strokeWidth={1.4} fill="none">
+            <line x1={cx} y1={cy} x2={cx + sx * 28} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 28} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Species tag — top-left of the sheet */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 34})`}
+          fill={MUTED}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
           letterSpacing={3}
+          fontWeight={600}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <text>
+            <tspan fill={LIME}>SPEC.</tspan>
+            <tspan dx={12} fill={CREAM}>
+              Dionaea muscipula
+            </tspan>
+          </text>
+          <text y={22} fontSize={10} letterSpacing={2.6} fontWeight={500}>
+            SNAP-TRAP LEAF · APEX VIEW
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+        {/* Figure label — bottom-left inside sheet */}
+        <g
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + FRAME.h - 30})`}
+          fill={MUTED}
+          fontFamily={inter}
+          fontSize={10.5}
+          letterSpacing={2.8}
+          fontWeight={600}
+        >
+          <text>FIG. 1 · TWO-FACTOR TRIP MECHANISM</text>
+        </g>
+
+        {/* ── Timeline gauge — 20-second decay window ─────────────────── */}
+        <g>
+          {/* Label above the bar */}
+          <text
+            x={GAUGE.x}
+            y={GAUGE.y - 20}
+            fill={MUTED}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={3.6}
+            fontWeight={600}
+          >
+            <tspan fill={LIME}>Δt WINDOW</tspan>
+            <tspan dx={12} fill={MUTED}>
+              20 SEC · TWO TOUCHES REQUIRED
+            </tspan>
+          </text>
+          {/* Legend on right side of gauge label row */}
+          <text
+            x={GAUGE.x + GAUGE.w}
+            y={GAUGE.y - 20}
+            textAnchor="end"
+            fill={MUTED}
+            fontFamily={inter}
+            fontSize={10.5}
+            letterSpacing={2.6}
+            fontWeight={600}
+          >
+            <tspan fill={LIME}>01 REGISTER</tspan>
+            <tspan dx={14} fill={MUTED}>
+              →
+            </tspan>
+            <tspan dx={14} fill={CRIMSON_HOT}>
+              02 FIRE
+            </tspan>
+          </text>
+
+          {/* Base bar */}
+          <rect
+            x={GAUGE.x}
+            y={GAUGE.y + 16}
+            width={GAUGE.w}
+            height={2}
+            fill={MUTED_2}
+          />
+
+          {/* Tick marks 0 / 5 / 10 / 15 / 20 */}
+          {[0, 5, 10, 15, 20].map((s) => {
+            const tx = GAUGE.x + (s / T_MAX_S) * GAUGE.w;
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
+              <g key={`tick-${s}`}>
+                <line
+                  x1={tx}
+                  y1={GAUGE.y + 12}
+                  x2={tx}
+                  y2={GAUGE.y + 22}
+                  stroke={MUTED}
+                  strokeWidth={1}
+                />
+                <text
+                  x={tx}
+                  y={GAUGE.y + 34}
+                  textAnchor="middle"
+                  fill={MUTED}
+                  fontFamily={inter}
+                  fontSize={9.5}
+                  letterSpacing={2}
+                  fontWeight={500}
+                >
+                  {s}s
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Highlighted region between the two touches */}
+          {(() => {
+            const x1 = GAUGE.x + (t1s / T_MAX_S) * GAUGE.w;
+            const x2 = GAUGE.x + (t2s / T_MAX_S) * GAUGE.w;
+            const revealed = pulse1.opacity > 0 || pulse1.grow > 0.4 || sec > 1.0;
+            const secondRevealed = sec > 3.2;
+            const w = secondRevealed
+              ? x2 - x1
+              : revealed
+                ? Math.min(x2 - x1, Math.max(0, ((sec - 1.0) / (3.2 - 1.0)) * (x2 - x1)))
+                : 0;
+            return (
+              <rect
+                x={x1}
+                y={GAUGE.y + 14}
+                width={w}
+                height={6}
+                fill={CRIMSON}
+                opacity={0.85}
+              />
+            );
+          })()}
+
+          {/* Touch 1 marker on gauge */}
+          {sec > 1.0 && (() => {
+            const tx = GAUGE.x + (t1s / T_MAX_S) * GAUGE.w;
+            return (
+              <g>
+                <circle cx={tx} cy={GAUGE.y + 17} r={7} fill={INK} stroke={LIME} strokeWidth={2} />
+                <circle cx={tx} cy={GAUGE.y + 17} r={3} fill={LIME} />
+                <text
+                  x={tx}
+                  y={GAUGE.y - 4}
+                  textAnchor="middle"
+                  fill={LIME}
+                  fontFamily={inter}
+                  fontSize={10}
+                  letterSpacing={2.8}
+                  fontWeight={700}
+                >
+                  01
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Touch 2 marker on gauge */}
+          {sec > 3.2 && (() => {
+            const tx = GAUGE.x + (t2s / T_MAX_S) * GAUGE.w;
+            return (
+              <g>
+                <circle
+                  cx={tx}
+                  cy={GAUGE.y + 17}
+                  r={7}
+                  fill={INK}
+                  stroke={CRIMSON_HOT}
+                  strokeWidth={2}
+                />
+                <circle cx={tx} cy={GAUGE.y + 17} r={3} fill={CRIMSON_HOT} />
+                <text
+                  x={tx}
+                  y={GAUGE.y - 4}
+                  textAnchor="middle"
+                  fill={CRIMSON_HOT}
+                  fontFamily={inter}
+                  fontSize={10}
+                  letterSpacing={2.8}
+                  fontWeight={700}
+                >
+                  02
+                </text>
+              </g>
+            );
+          })()}
+        </g>
+
+        {/* ── Right-side stat block ────────────────────────────────── */}
+        <g transform={`translate(870, 200)`}>
+          <text
+            fill={LIME}
+            fontFamily={inter}
+            fontSize={10.5}
+            letterSpacing={3.4}
+            fontWeight={700}
+          >
+            PROTOCOL
+          </text>
+          <text
+            y={38}
+            fill={CREAM}
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontSize={44}
+            fontWeight={500}
+            letterSpacing={-0.5}
+          >
+            02
+          </text>
+          <text
+            y={64}
+            fill={MUTED}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.4}
+            fontWeight={600}
+          >
+            ACTION POTENTIALS
+          </text>
+          <line x1={0} y1={82} x2={100} y2={82} stroke={MUTED_2} strokeWidth={1} />
+          <text
+            y={104}
+            fill={CREAM}
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontSize={26}
+            fontWeight={500}
+            letterSpacing={-0.4}
+          >
+            ≤ 20 s
+          </text>
+          <text
+            y={126}
+            fill={MUTED}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.4}
+            fontWeight={600}
+          >
+            DECAY WINDOW
+          </text>
+          <line x1={0} y1={144} x2={100} y2={144} stroke={MUTED_2} strokeWidth={1} />
+          <text
+            y={166}
+            fill={CREAM}
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontSize={26}
+            fontWeight={500}
+            letterSpacing={-0.4}
+          >
+            ≈ 100 ms
+          </text>
+          <text
+            y={188}
+            fill={MUTED}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.4}
+            fontWeight={600}
+          >
+            SNAP CLOSURE
+          </text>
+        </g>
+
+        {/* ── The trap ────────────────────────────────────────────────── */}
+        {/* Cast shadow beneath the trap */}
+        <ellipse
+          cx={HINGE_X}
+          cy={670}
+          rx={230 * (0.6 + 0.4 * openness)}
+          ry={12}
+          fill="#000"
+          opacity={0.55}
+          filter="url(#strong-glow)"
+        />
+
+        {/* CLOSED pod state (only visible after closure) */}
+        <g opacity={1 - openness}>
+          <path d={CLOSED_POD_D} fill={LEAF} stroke={LEAF_EDGE} strokeWidth={2} />
+          {/* Central seam */}
+          <line
+            x1={442}
+            y1={448}
+            x2={638}
+            y2={448}
+            stroke={LEAF_DEEP}
+            strokeWidth={2.5}
+          />
+          {/* Interlaced cilia along the seam */}
+          {Array.from({ length: 11 }).map((_, i) => {
+            const t = i / 10;
+            const cx = 452 + t * 176;
+            const up = i % 2 === 0;
+            return (
+              <line
+                key={`cilium-seam-${i}`}
+                x1={cx}
+                y1={448}
+                x2={cx}
+                y2={448 + (up ? -18 : 18)}
+                stroke={CREAM}
+                strokeWidth={2}
                 strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
+          {/* Small caption */}
+          <text
+            x={HINGE_X}
+            y={720}
+            textAnchor="middle"
+            fill={LIME}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={4}
+            fontWeight={700}
+          >
+            AUTH · PASS · ≈100 ms
+          </text>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+        {/* OPEN trap state */}
+        <g opacity={openness}>
+          {/* RIGHT lobe */}
+          <g
+            transform={`translate(${HINGE_X + seamGap} 0) scale(${lobeSx} 1) translate(${-HINGE_X} 0)`}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
+            {/* Cilia (behind the lobe body so tips peek out) */}
+            {CILIA_R.map((c, i) => (
+              <line
+                key={`ciR-${i}`}
+                x1={c.bx}
+                y1={c.by}
+                x2={c.tx}
+                y2={c.ty}
+                stroke={CREAM}
+                strokeWidth={2.2}
+                strokeLinecap="round"
+              />
+            ))}
+            {/* Interior fill */}
+            <path d={RIGHT_LOBE_D} fill="url(#interiorR)" />
+            {/* Radiating veins (subtle organic texture) */}
+            <g stroke={CRIMSON_DEEP} strokeWidth={1.1} fill="none" opacity={0.75}>
+              <path d="M 545 300 Q 640 320 760 385" />
+              <path d="M 545 360 Q 640 380 780 430" />
+              <path d="M 545 420 Q 660 435 785 448" />
+              <path d="M 545 478 Q 660 465 785 468" />
+              <path d="M 545 540 Q 640 520 780 470" />
+              <path d="M 545 596 Q 640 578 760 515" />
+            </g>
+            {/* Green rim */}
+            <path
+              d={RIGHT_LOBE_D}
+              fill="none"
+              stroke={LEAF_EDGE}
+              strokeWidth={4}
+            />
+            {/* Interior lime highlight along the outer inner edge */}
+            <path
+              d="M 620 275 C 700 300, 762 355, 780 448 C 762 540, 700 596, 620 620"
+              fill="none"
+              stroke={CRIMSON_HOT}
+              strokeWidth={1.5}
+              opacity={0.6}
+            />
+            {/* Trigger hairs */}
+            {HAIRS_R.map((h, i) => (
+              <g key={`hairR-${i}`}>
+                <line
+                  x1={h.bx}
+                  y1={h.by}
+                  x2={h.tx}
+                  y2={h.ty}
+                  stroke={LIME}
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                />
+                <circle cx={h.tx} cy={h.ty} r={4} fill={LIME_SOFT} stroke={LIME} strokeWidth={1} />
+                <circle cx={h.bx} cy={h.by} r={2.4} fill={CREAM} opacity={0.85} />
+              </g>
+            ))}
+          </g>
+
+          {/* LEFT lobe */}
+          <g
+            transform={`translate(${HINGE_X - seamGap} 0) scale(${lobeSx} 1) translate(${-HINGE_X} 0)`}
+          >
+            {/* Cilia */}
+            {CILIA_L.map((c, i) => (
+              <line
+                key={`ciL-${i}`}
+                x1={c.bx}
+                y1={c.by}
+                x2={c.tx}
+                y2={c.ty}
+                stroke={CREAM}
+                strokeWidth={2.2}
+                strokeLinecap="round"
+              />
+            ))}
+            {/* Interior fill */}
+            <path d={LEFT_LOBE_D} fill="url(#interiorL)" />
+            {/* Radiating veins (mirror) */}
+            <g stroke={CRIMSON_DEEP} strokeWidth={1.1} fill="none" opacity={0.75}>
+              <path d="M 535 300 Q 440 320 320 385" />
+              <path d="M 535 360 Q 440 380 300 430" />
+              <path d="M 535 420 Q 420 435 295 448" />
+              <path d="M 535 478 Q 420 465 295 468" />
+              <path d="M 535 540 Q 440 520 300 470" />
+              <path d="M 535 596 Q 440 578 320 515" />
+            </g>
+            {/* Green rim */}
+            <path
+              d={LEFT_LOBE_D}
+              fill="none"
+              stroke={LEAF_EDGE}
+              strokeWidth={4}
+            />
+            {/* Interior highlight */}
+            <path
+              d="M 460 275 C 380 300, 318 355, 300 448 C 318 540, 380 596, 460 620"
+              fill="none"
+              stroke={CRIMSON_HOT}
+              strokeWidth={1.5}
+              opacity={0.6}
+            />
+            {/* Trigger hairs */}
+            {HAIRS_L.map((h, i) => (
+              <g key={`hairL-${i}`}>
+                <line
+                  x1={h.bx}
+                  y1={h.by}
+                  x2={h.tx}
+                  y2={h.ty}
+                  stroke={LIME}
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                />
+                <circle cx={h.tx} cy={h.ty} r={4} fill={LIME_SOFT} stroke={LIME} strokeWidth={1} />
+                <circle cx={h.bx} cy={h.by} r={2.4} fill={CREAM} opacity={0.85} />
+              </g>
+            ))}
+          </g>
+
+          {/* Hinge line (midrib) */}
+          <line
+            x1={HINGE_X}
+            y1={260}
+            x2={HINGE_X}
+            y2={636}
+            stroke={LEAF_DEEP}
+            strokeWidth={2 * openness + 0.5}
+            opacity={0.9}
+          />
+
+          {/* ── Persistent "registered" halo on touch 1 hair ─────── */}
+          {sec > 1.0 && (
+            <g opacity={Math.min(1, (sec - 1.0) * 3)}>
+              <circle
+                cx={TOUCH1.tx}
+                cy={TOUCH1.ty}
+                r={9}
+                fill="none"
+                stroke={LIME}
+                strokeWidth={1.5}
+                opacity={0.85}
+              />
+              <circle
+                cx={TOUCH1.tx}
+                cy={TOUCH1.ty}
+                r={4.5}
+                fill={LIME}
+              />
+            </g>
+          )}
+
+          {/* ── Persistent "registered" halo on touch 2 hair ─────── */}
+          {sec > 3.2 && (
+            <g opacity={Math.min(1, (sec - 3.2) * 3)}>
+              <circle
+                cx={TOUCH2.tx}
+                cy={TOUCH2.ty}
+                r={9}
+                fill="none"
+                stroke={CRIMSON_HOT}
+                strokeWidth={1.5}
+                opacity={0.9}
+              />
+              <circle
+                cx={TOUCH2.tx}
+                cy={TOUCH2.ty}
+                r={4.5}
+                fill={CRIMSON_HOT}
+              />
+            </g>
+          )}
+
+          {/* ── Pulse ring on touch 1 (right upper hair) ───────────── */}
+          {pulse1.opacity > 0 && (
+            <g>
+              <circle
+                cx={TOUCH1.tx}
+                cy={TOUCH1.ty}
+                r={12 + pulse1.grow * 88}
+                fill="none"
+                stroke={LIME}
+                strokeWidth={2.5}
+                opacity={pulse1.opacity * 0.9}
+              />
+              <circle
+                cx={TOUCH1.tx}
+                cy={TOUCH1.ty}
+                r={6 + pulse1.grow * 40}
+                fill="none"
+                stroke={LIME_SOFT}
+                strokeWidth={1.5}
+                opacity={pulse1.opacity * 0.55}
+              />
+            </g>
+          )}
+
+          {/* ── Pulse ring on touch 2 (left upper hair) ────────────── */}
+          {pulse2.opacity > 0 && (
+            <g>
+              <circle
+                cx={TOUCH2.tx}
+                cy={TOUCH2.ty}
+                r={12 + pulse2.grow * 100}
+                fill="none"
+                stroke={CRIMSON_HOT}
+                strokeWidth={3}
+                opacity={pulse2.opacity * 0.95}
+              />
+              <circle
+                cx={TOUCH2.tx}
+                cy={TOUCH2.ty}
+                r={6 + pulse2.grow * 50}
+                fill="none"
+                stroke={CRIMSON_HOT}
+                strokeWidth={1.5}
+                opacity={pulse2.opacity * 0.55}
+              />
+              <circle
+                cx={TOUCH2.tx}
+                cy={TOUCH2.ty}
+                r={30 + pulse2.grow * 10}
+                fill={CRIMSON_HOT}
+                opacity={pulse2.opacity * 0.12}
+              />
+            </g>
+          )}
+
+          {/* ── Compact number badges next to each pulse ─────────── */}
+          {sec > 1.05 && (
+            <g opacity={Math.min(1, (sec - 1.0) * 2)}>
+              <circle
+                cx={TOUCH1.tx + 22}
+                cy={TOUCH1.ty - 18}
+                r={13}
+                fill={INK}
+                stroke={LIME}
+                strokeWidth={1.5}
+              />
+              <text
+                x={TOUCH1.tx + 22}
+                y={TOUCH1.ty - 14}
+                textAnchor="middle"
+                fill={LIME}
+                fontFamily={inter}
+                fontSize={12}
+                letterSpacing={1.5}
+                fontWeight={700}
+              >
+                01
+              </text>
+            </g>
+          )}
+          {sec > 3.25 && (
+            <g opacity={Math.min(1, (sec - 3.2) * 2)}>
+              <circle
+                cx={TOUCH2.tx - 22}
+                cy={TOUCH2.ty - 18}
+                r={13}
+                fill={INK}
+                stroke={CRIMSON_HOT}
+                strokeWidth={1.5}
+              />
+              <text
+                x={TOUCH2.tx - 22}
+                y={TOUCH2.ty - 14}
+                textAnchor="middle"
+                fill={CRIMSON_HOT}
+                fontFamily={inter}
+                fontSize={12}
+                letterSpacing={1.5}
+                fontWeight={700}
+              >
+                02
+              </text>
+            </g>
+          )}
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ─────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
-          opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          top: 900,
+          opacity: roleTagSpring,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: LIME,
             fontFamily: inter,
-            fontSize: 13,
+            fontSize: 12.5,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
-            fontWeight: 600,
+            marginBottom: 22,
+            fontWeight: 700,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+          Role <span style={{ color: MUTED, margin: "0 6px" }}>/</span>
+          <span style={{ color: "#EFEFEE", letterSpacing: 5 }}>
+            Two-Factor Bouncer
           </span>
         </div>
+      </div>
 
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          top: 950,
+          opacity: titleSpring,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [14, 0])}px)`,
+        }}
+      >
         <div
           style={{
-            color: "#F4F4F6",
+            color: "#F4F4F0",
             fontFamily: playfair,
             fontWeight: 500,
             fontSize: 84,
@@ -632,31 +966,33 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The two-touch
           <br />
-          city planner.
+          door policy.
         </div>
+      </div>
 
-        <div
-          style={{
-            marginTop: 30,
-            color: "#C8CAD0",
-            fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
-            fontWeight: 400,
-            maxWidth: 880,
-            opacity: hookOpacity,
-          }}
-        >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
-        </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          top: 1152,
+          color: "#CAD3CB",
+          fontFamily: inter,
+          fontSize: 19,
+          lineHeight: 1.42,
+          fontWeight: 400,
+          maxWidth: 900,
+          opacity: hookOpacity,
+        }}
+      >
+        The trap won't close on the first touch. A second bump of a{" "}
+        <span style={{ color: LIME, fontWeight: 600 }}>trigger hair</span> must
+        arrive within about{" "}
+        <span style={{ color: CRIMSON_HOT, fontWeight: 600 }}>20 seconds</span>{" "}
+        — long enough for the Ca²⁺ pulse from the first to still be decaying —
+        and only then does the leaf snap shut in ~100 ms.
       </div>
 
       {/* Footer */}
@@ -665,11 +1001,11 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 40,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: MUTED,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +1013,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Böhm et al. · Current Biology 26 (2016) 286–295</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: LIME }}>●</span> Trigger hair
+          <span style={{ margin: "0 10px", color: MUTED_2 }}>·</span>
+          <span style={{ color: CRIMSON_HOT }}>●</span> Ca²⁺ threshold
         </span>
       </div>
     </AbsoluteFill>
