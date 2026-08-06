@@ -50,164 +50,226 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const SKY_DEEP = "#0F1520";
+const SKY_MID = "#161F30";
+const SLATE = "#334760";
+const SLATE_LIGHT = "#4B6180";
+const BUFF = "#E9CDA6";
+const ORANGE = "#D96A1E";
+const CREAM = "#F0EBE1";
+const CREAM_DIM = "#B7B2A7";
+const GRID = "#1B2233";
+const GRID_MAJOR = "#233049";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Falcon anatomy (side profile, local coords) ──────────────────────────
+// Side view of a peregrine locked into its stoop, drawn head-right, tail-
+// left, back-up. One (near) wing is visible, clamped tight and swept back
+// past the body. Local origin sits at the center of the body cavity; the
+// bird occupies roughly x ∈ [-210, 265], y ∈ [-70, 45].
+
+// Compact side-profile silhouette. Head at right, tail at upper-left. The
+// wing is not drawn as a separate shape — it's implied by shading and
+// feather-line hints on the body — because in a hard stoop the wings clamp
+// flush against the flanks and effectively vanish into the body outline.
+const FALCON_BODY_PATH =
+  // Beak base / head crown
+  "M 252 -4 " +
+  "C 248 -16 240 -24 226 -30 " + // upper mandible → forehead
+  "C 210 -34 190 -36 168 -34 " + // crown → nape
+  "C 138 -32 106 -28 76 -22 " + // shoulder bulge
+  "C 46 -16 18 -12 -10 -10 " + // upper back tapering
+  "C -50 -6 -90 -4 -128 -2 " + // tail top
+  "L -160 0 " + // tail tip upper
+  "L -156 6 " + // tail tip lower
+  "C -110 10 -60 14 -10 18 " + // tail bottom back to belly
+  "C 40 22 90 26 130 26 " + // belly bulge
+  "C 168 26 198 22 218 14 " + // breast curve
+  "C 232 8 242 2 250 -2 " + // chin
+  "Z";
+
+// Folded-wing crescent overlaid on the body — a darker slate patch that
+// mimics the barred coverts. Kept subtle and confined to the upper half.
+const FALCON_WING_PATH =
+  "M 100 -22 " +
+  "C 70 -18 40 -16 10 -14 " +
+  "C -20 -12 -60 -10 -100 -8 " +
+  "L -130 -4 " +
+  "C -100 -4 -60 -6 -20 -8 " +
+  "C 20 -10 60 -14 100 -18 " +
+  "Z";
+
+// A dark "hood" over the crown down to eye level, laid on top of the body.
+const FALCON_HOOD_PATH =
+  "M 186 -35 " +
+  "C 210 -34 232 -28 246 -18 " +
+  "C 250 -12 248 -4 240 -1 " +
+  "C 220 -6 200 -8 184 -4 " +
+  "C 174 -14 174 -26 186 -35 " +
+  "Z";
+
+// Beak — small hooked triangle projecting from the face.
+const FALCON_BEAK_PATH = "M 246 -2 L 262 3 L 246 8 Z";
+
+// Cere (fleshy base above beak).
+const FALCON_CERE_PATH =
+  "M 232 -6 L 250 -3 L 248 8 L 230 8 Z";
+
+// Malar stripe — dark cheek band dropping below the eye.
+const FALCON_MALAR_PATH =
+  "M 216 0 L 208 22 L 220 24 L 228 2 Z";
+
+// Cheek buff patch — light warm patch between malar and hood.
+const FALCON_CHEEK_PATH =
+  "M 228 -2 C 236 -4 244 0 244 6 C 240 12 232 12 226 8 Z";
+
+// Eye and nostril (local frame).
+const FALCON_EYE = { x: 218, y: -6, r: 3.4 };
+const FALCON_NOSTRIL = { x: 236, y: -1 };
+
+// Streamlines — thin flow lines wrapping past the bird. Local coords, so
+// they translate/rotate with the falcon. Head is at ~x=280, tail at ~x=-230.
+const STREAMLINES: {
+  d: string;
+  opacity: number;
+  chevron: { x: number; y: number };
+}[] = [
+  {
+    d: "M 290 -100 C 200 -96 20 -92 -260 -96",
+    opacity: 0.55,
+    chevron: { x: -260, y: -96 },
+  },
+  {
+    d: "M 285 -70 C 200 -70 40 -70 -270 -74",
+    opacity: 0.7,
+    chevron: { x: -270, y: -74 },
+  },
+  {
+    d: "M 292 68 C 200 72 40 74 -270 76",
+    opacity: 0.7,
+    chevron: { x: -270, y: 76 },
+  },
+  {
+    d: "M 288 96 C 200 100 40 104 -260 106",
+    opacity: 0.55,
+    chevron: { x: -260, y: 106 },
+  },
+  {
+    d: "M 282 124 C 200 128 40 130 -240 134",
+    opacity: 0.4,
+    chevron: { x: -240, y: 134 },
+  },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+const FRAME = { x: 60, y: 130, w: 960, h: 720 };
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// Falcon canvas → page mapping. The falcon path is drawn in a 700×340 local
+// box (roughly), centered inside the frame with a rotation.
+const FALCON_CENTER = { x: FRAME.x + FRAME.w / 2, y: FRAME.y + FRAME.h / 2 - 20 };
+const FALCON_ROT = 32; // degrees, diving lower-right
+const FALCON_SCALE = 1.15;
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
+// Altitude ticks (left edge inside frame).
+const ALT_MARKS = [
+  { y: 0.05, label: "12 KM" },
+  { y: 0.2, label: "10" },
+  { y: 0.35, label: "8" },
+  { y: 0.5, label: "6" },
+  { y: 0.65, label: "4" },
+  { y: 0.8, label: "2" },
+  { y: 0.95, label: "0" },
 ];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Motion timeline ────────────────────────────────────────────────
+  // 0.0 s  frame enters
+  // 0.2 s  falcon plunges into position (spring)
+  // 0.6 s  streamlines etch in one after another
+  // 1.4 s  HUD ticks + reticle fade in
+  // 1.6 s  speed readout counts up 0 → 389
+  // 2.4 s  callout leader draws
+  // 3.0 s  title lockup springs in
+  // 3.6 s  hook paragraph fades in
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const falconDrop = spring({
+    frame: frame - fps * 0.15,
+    fps,
+    config: { damping: 22, mass: 1.1, stiffness: 90 },
+  });
+  const falconY = interpolate(falconDrop, [0, 1], [-260, 0]);
+  const falconOpacity = interpolate(frame, [0, fps * 0.2], [0, 1], {
+    extrapolateRight: "clamp",
+  });
+
+  const streamlineT = (i: number) => {
+    const start = fps * (0.6 + i * 0.08);
+    return interpolate(frame, [start, start + fps * 0.5], [0, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: Easing.out(Easing.cubic),
+    });
+  };
+
+  const hudFade = interpolate(frame, [fps * 1.4, fps * 2.0], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
+  const speedT = interpolate(frame, [fps * 1.6, fps * 2.8], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+  const speed = Math.round(speedT * 389);
+  const mach = (speedT * 0.317).toFixed(2);
+
+  const calloutT = interpolate(frame, [fps * 2.4, fps * 3.2], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 3.0,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
-    easing: Easing.out(Easing.cubic),
+  const hookOpacity = interpolate(frame, [fps * 3.6, fps * 4.4], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // ── Falcon transform composition ──────────────────────────────────
+  const falconTransform = `translate(${FALCON_CENTER.x}, ${
+    FALCON_CENTER.y + falconY
+  }) rotate(${FALCON_ROT}) scale(${FALCON_SCALE})`;
+
+  // Transform a local (falcon-frame) point into page-space, matching the
+  // same translate+rotate+scale we apply to the falcon SVG group.
+  const localToWorld = (lx: number, ly: number) => {
+    const rad = (FALCON_ROT * Math.PI) / 180;
+    const rx = lx * Math.cos(rad) - ly * Math.sin(rad);
+    const ry = lx * Math.sin(rad) + ly * Math.cos(rad);
+    return {
+      x: FALCON_CENTER.x + rx * FALCON_SCALE,
+      y: FALCON_CENTER.y + falconY + ry * FALCON_SCALE,
+    };
+  };
+
+  const nostrilWorld = localToWorld(FALCON_NOSTRIL.x, FALCON_NOSTRIL.y);
+  const headWorld = localToWorld(FALCON_EYE.x, FALCON_EYE.y);
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: SKY_DEEP, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* ── Top metadata band ─────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -217,7 +279,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: CREAM_DIM,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +287,10 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: ORANGE }}>2026 · 08 · 06</span>
       </div>
 
-      {/* Drafting frame + map */}
       <svg
         width={1080}
         height={1350}
@@ -237,63 +298,63 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SKY_DEEP} />
+            <stop offset="55%" stopColor={SKY_MID} />
+            <stop offset="100%" stopColor="#1E2437" />
+          </linearGradient>
+          <linearGradient id="horizon" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1E2437" stopOpacity="0" />
+            <stop offset="50%" stopColor={BUFF} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={ORANGE} stopOpacity="0.10" />
+          </linearGradient>
           <pattern
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={40}
+            height={40}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d="M 40 0 L 0 0 0 40"
               fill="none"
               stroke={GRID}
-              strokeWidth={1}
+              strokeWidth={0.8}
             />
           </pattern>
           <pattern
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={160}
+            height={160}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d="M 160 0 L 0 0 0 160"
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* HUD frame background */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#sky)"
+        />
+        {/* Warm dawn horizon glow inside frame */}
+        <rect
+          x={FRAME.x}
+          y={FRAME.y + FRAME.h * 0.55}
+          width={FRAME.w}
+          height={FRAME.h * 0.45}
+          fill="url(#horizon)"
         />
         <rect
           x={FRAME.x}
@@ -309,19 +370,18 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
+        {/* Frame border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#2A344A"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner brackets */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,272 +390,464 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={ORANGE} strokeWidth={1.5} fill="none">
+            <line x1={cx} y1={cy} x2={cx + sx * 30} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 30} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
+        {/* Horizon tick line inside frame */}
+        <g opacity={hudFade}>
           <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
+            x1={FRAME.x + 24}
+            y1={FRAME.y + FRAME.h * 0.72}
+            x2={FRAME.x + FRAME.w - 24}
+            y2={FRAME.y + FRAME.h * 0.72}
+            stroke={CREAM}
+            strokeWidth={0.7}
+            strokeDasharray="6 6"
+            opacity={0.35}
           />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <text
+            x={FRAME.x + FRAME.w - 30}
+            y={FRAME.y + FRAME.h * 0.72 - 8}
+            textAnchor="end"
+            fill={CREAM_DIM}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={500}
+            letterSpacing={3}
+          >
+            HORIZON
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+        {/* Altitude ruler (left) */}
+        <g opacity={hudFade}>
+          <line
+            x1={FRAME.x + 30}
+            y1={FRAME.y + 40}
+            x2={FRAME.x + 30}
+            y2={FRAME.y + FRAME.h - 40}
+            stroke={CREAM_DIM}
+            strokeWidth={0.8}
+          />
+          {ALT_MARKS.map((m, i) => {
+            const y = FRAME.y + 40 + (FRAME.h - 80) * m.y;
+            const long = i % 2 === 0;
+            return (
+              <g key={i}>
+                <line
+                  x1={FRAME.x + 30}
+                  y1={y}
+                  x2={FRAME.x + 30 + (long ? 14 : 8)}
+                  y2={y}
+                  stroke={CREAM_DIM}
+                  strokeWidth={0.8}
+                />
+                {long && (
+                  <text
+                    x={FRAME.x + 52}
+                    y={y + 3.5}
+                    fill={CREAM_DIM}
+                    fontFamily={inter}
+                    fontSize={10}
+                    letterSpacing={2}
+                    fontWeight={500}
+                  >
+                    {m.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+          <text
+            x={FRAME.x + 30}
+            y={FRAME.y + 28}
+            fill={CREAM}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            ALT
+          </text>
+        </g>
+
+        {/* Airspeed strip (top-right of frame) */}
+        <g opacity={hudFade}>
+          <rect
+            x={FRAME.x + FRAME.w - 210}
+            y={FRAME.y + 22}
+            width={186}
+            height={70}
+            fill="none"
+            stroke={CREAM_DIM}
+            strokeWidth={0.8}
+          />
+          <text
+            x={FRAME.x + FRAME.w - 200}
+            y={FRAME.y + 42}
+            fill={CREAM_DIM}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            AIRSPEED
+          </text>
+          <text
+            x={FRAME.x + FRAME.w - 30}
+            y={FRAME.y + 72}
+            textAnchor="end"
+            fill={CREAM}
+            fontFamily={inter}
+            fontSize={30}
+            fontWeight={600}
+            letterSpacing={1}
+          >
+            {speed}
+            <tspan
+              dx={6}
+              fill={CREAM_DIM}
+              fontSize={12}
+              fontWeight={500}
+              letterSpacing={3}
+            >
+              KM/H
+            </tspan>
+          </text>
+          <text
+            x={FRAME.x + FRAME.w - 30}
+            y={FRAME.y + 87}
+            textAnchor="end"
+            fill={ORANGE}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            MACH {mach}
+          </text>
+        </g>
+
+        {/* Streamlines (in falcon-local frame — wrap around the body) */}
+        <g transform={falconTransform} opacity={falconOpacity}>
+          {STREAMLINES.map((s, i) => {
+            const t = streamlineT(i);
             return (
               <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
+                key={`s-${i}`}
+                d={s.d}
+                stroke={CREAM}
+                strokeOpacity={s.opacity * t}
+                strokeWidth={1.1}
                 fill="none"
                 strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+                strokeDasharray={800}
+                strokeDashoffset={800 * (1 - t)}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+          {/* Arrow tips — chevron pointing back-left in local frame */}
+          {STREAMLINES.map((s, i) => {
+            const t = streamlineT(i);
+            if (t < 0.55) return null;
+            const { x, y } = s.chevron;
             return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
+              <path
+                key={`chev-${i}`}
+                d={`M ${x + 14} ${y - 6} L ${x} ${y} L ${x + 14} ${y + 6}`}
+                fill="none"
+                stroke={CREAM}
+                strokeOpacity={s.opacity}
+                strokeWidth={1.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             );
           })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
+          {/* Body silhouette (includes head, back, tail, belly as one path) */}
+          <path
+            d={FALCON_BODY_PATH}
+            fill={SLATE}
+            stroke={SKY_DEEP}
+            strokeWidth={1.4}
+            strokeLinejoin="round"
+          />
+          {/* Tail bar hints — thin dark verticals across the tail */}
+          {[-140, -120, -100, -80].map((x, i) => (
             <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+              key={`bar-${i}`}
+              x1={x}
+              y1={-2}
+              x2={x - 2}
+              y2={14}
+              stroke={SKY_DEEP}
+              strokeWidth={0.9}
+              opacity={0.55}
             />
+          ))}
+
+          {/* Buff breast — a warm patch across the belly */}
+          <path
+            d={
+              "M 210 8 " +
+              "C 180 22 130 27 80 27 " +
+              "C 30 27 -20 24 -60 20 " +
+              "C -30 16 20 16 80 16 " +
+              "C 130 14 180 10 210 2 Z"
+            }
+            fill={BUFF}
+            opacity={0.85}
+          />
+          {/* Very subtle belly barring */}
+          {[-30, 0, 30, 60, 90, 120, 150].map((x, i) => (
             <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+              key={`ubar-${i}`}
+              x1={x}
+              y1={16}
+              x2={x + 6}
+              y2={24}
+              stroke={SLATE}
+              strokeWidth={0.9}
+              opacity={0.5}
             />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
+          ))}
+
+          {/* Folded wing — darker slate crescent hinting at coverts */}
+          <path
+            d={FALCON_WING_PATH}
+            fill="#22303F"
+            opacity={0.9}
+          />
+          {/* Wing leading-edge crease */}
+          <path
+            d="M 100 -22 C 60 -18 0 -14 -60 -10 C -100 -8 -130 -6 -140 -4"
+            fill="none"
+            stroke={SKY_DEEP}
+            strokeWidth={1.0}
+            opacity={0.75}
+            strokeLinecap="round"
+          />
+          {/* Feather hints along wing */}
+          {[
+            [90, -20, 80, -12],
+            [60, -18, 50, -10],
+            [30, -16, 20, -8],
+            [0, -14, -10, -6],
+            [-30, -12, -40, -4],
+            [-60, -10, -70, -2],
+          ].map(([x1, y1, x2, y2], i) => (
+            <line
+              key={`fe-${i}`}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke={SKY_DEEP}
+              strokeWidth={0.8}
+              opacity={0.5}
             />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
+          ))}
+
+          {/* Cheek buff patch */}
+          <path
+            d={FALCON_CHEEK_PATH}
+            fill={BUFF}
+            opacity={0.9}
+          />
+          {/* Dark hood (crown) */}
+          <path
+            d={FALCON_HOOD_PATH}
+            fill={SKY_DEEP}
+          />
+          {/* Malar stripe */}
+          <path d={FALCON_MALAR_PATH} fill={SKY_DEEP} />
+          {/* Cere */}
+          <path d={FALCON_CERE_PATH} fill={ORANGE} />
+          {/* Beak */}
+          <path
+            d={FALCON_BEAK_PATH}
+            fill={SKY_DEEP}
+            stroke={SKY_DEEP}
+            strokeLinejoin="round"
+            strokeWidth={0.8}
+          />
+
+          {/* Eye */}
+          <circle
+            cx={FALCON_EYE.x}
+            cy={FALCON_EYE.y}
+            r={FALCON_EYE.r + 1.4}
+            fill="none"
+            stroke={ORANGE}
+            strokeWidth={0.9}
+          />
+          <circle
+            cx={FALCON_EYE.x}
+            cy={FALCON_EYE.y}
+            r={FALCON_EYE.r}
+            fill={CREAM}
+          />
+          <circle
+            cx={FALCON_EYE.x + 0.6}
+            cy={FALCON_EYE.y}
+            r={1.8}
+            fill={SKY_DEEP}
+          />
+
+          {/* Nostril */}
+          <circle
+            cx={FALCON_NOSTRIL.x}
+            cy={FALCON_NOSTRIL.y}
+            r={1.6}
+            fill={SKY_DEEP}
+          />
+          <circle
+            cx={FALCON_NOSTRIL.x}
+            cy={FALCON_NOSTRIL.y}
+            r={0.7}
+            fill={ORANGE}
+          />
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Target reticle centered on the head */}
+        <g
+          opacity={hudFade * 0.7}
+          transform={`translate(${headWorld.x}, ${headWorld.y})`}
+        >
+          <circle
+            cx={0}
+            cy={0}
+            r={54}
+            fill="none"
+            stroke={CREAM}
+            strokeWidth={0.7}
+            strokeDasharray="4 6"
+          />
+          <line x1={-64} y1={0} x2={-30} y2={0} stroke={CREAM} strokeWidth={0.9} />
+          <line x1={30} y1={0} x2={64} y2={0} stroke={CREAM} strokeWidth={0.9} />
+          <line x1={0} y1={-64} x2={0} y2={-30} stroke={CREAM} strokeWidth={0.9} />
+          <line x1={0} y1={30} x2={0} y2={64} stroke={CREAM} strokeWidth={0.9} />
+        </g>
+
+        {/* Angle-of-attack chip */}
+        <g opacity={hudFade}>
+          <text
+            x={FALCON_CENTER.x - 220}
+            y={FALCON_CENTER.y + 200}
+            fill={CREAM_DIM}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.5}
+            fontWeight={500}
+          >
+            α = 34° · STOOP
+          </text>
+        </g>
+
+        {/* Callout leader to nostril */}
+        {(() => {
+          const c = calloutT;
+          if (c <= 0) return null;
+          const startX = nostrilWorld.x;
+          const startY = nostrilWorld.y;
+          // Leader path: right + down then horizontal to a chip at right edge.
+          const midX = startX + 90;
+          const midY = startY + 80;
+          const endX = FRAME.x + FRAME.w - 44;
+          const endY = midY;
+          const chipW = 220;
+          const chipH = 44;
+          // Draw the leader in three segments; reveal length by clipping via dashoffset trick.
+          const total = 500;
+          const seg1 = `M ${startX} ${startY} L ${midX} ${midY} L ${endX} ${endY}`;
+          return (
+            <g>
+              <circle
+                cx={startX}
+                cy={startY}
+                r={4}
+                fill="none"
+                stroke={ORANGE}
+                strokeWidth={1.4}
+                opacity={c}
+              />
+              <path
+                d={seg1}
+                stroke={ORANGE}
+                strokeWidth={1.3}
+                fill="none"
+                strokeDasharray={total}
+                strokeDashoffset={total * (1 - c)}
+              />
+              <g opacity={Math.max(0, (c - 0.6) / 0.4)}>
+                <rect
+                  x={endX - chipW}
+                  y={endY - chipH / 2}
+                  width={chipW}
+                  height={chipH}
+                  fill={SKY_DEEP}
+                  stroke={ORANGE}
+                  strokeWidth={1.2}
+                />
+                <text
+                  x={endX - chipW + 14}
+                  y={endY - 6}
+                  fill={ORANGE}
+                  fontFamily={inter}
+                  fontSize={10}
+                  fontWeight={600}
+                  letterSpacing={2.6}
+                >
+                  DETAIL · A
+                </text>
+                <text
+                  x={endX - chipW + 14}
+                  y={endY + 12}
+                  fill={CREAM}
+                  fontFamily={inter}
+                  fontSize={11}
+                  fontWeight={500}
+                  letterSpacing={2.4}
+                >
+                  NASAL TUBERCLE
+                </text>
+              </g>
+            </g>
+          );
+        })()}
+
+        {/* Caption strip below frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={CREAM_DIM}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · FALCO PEREGRINUS IN STOOP · TELEMETRY 05.2005</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={ORANGE}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            V-MAX · 389 KM/H
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 915,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,7 +858,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: ORANGE,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,47 +867,45 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+          Role <span style={{ color: CREAM_DIM, margin: "0 4px" }}>/</span>
+          <span style={{ color: CREAM, letterSpacing: 5 }}>
+            Fighter Pilot
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: CREAM,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 82,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The 389 km/h
           <br />
-          city planner.
+          flight instructor.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#D2CFC7",
             fontFamily: inter,
             fontSize: 19,
             lineHeight: 1.4,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          In a hunting stoop, the peregrine falcon accelerates past{" "}
+          <span style={{ color: ORANGE, fontWeight: 600 }}>389 km/h</span> —
+          the fastest animal on Earth. Small bony cones inside its nostrils
+          diffuse the oncoming airstream, the same trick jet-engine inlets
+          use to keep high-speed air from collapsing the compressor behind.
         </div>
       </div>
 
@@ -669,7 +919,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: CREAM_DIM,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,11 +927,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Franklin, K. · Skydive telemetry · 2005</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: ORANGE }}>●</span> Detail A · Nasal tubercle
         </span>
       </div>
+
+      {/* touch durationInFrames to silence lint */}
+      <div style={{ display: "none" }}>{durationInFrames}</div>
     </AbsoluteFill>
   );
 };
