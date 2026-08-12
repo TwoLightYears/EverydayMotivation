@@ -50,168 +50,100 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
+// ── Palette — from Brachinus's real coloration ──────────────────────────
+const INK = "#0A0B10";
+const BOARD = "#101319";
+const ELYTRA = "#151922";
+const ELYTRA_HILITE = "#232939";
+const PRONOTUM = "#E8552A";
+const PRONOTUM_DEEP = "#B0391B";
+const FLASH = "#F6C766";
+const FLASH_HOT = "#FFE7A2";
+const PARCH = "#EFE6D4";
 const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+const GRID = "#181C25";
+const GRID_MAJOR = "#212734";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
-
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// ── Layout constants (poster is 1080×1350) ──────────────────────────────
+const FRAME = { x: 60, y: 128, w: 960, h: 720 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  // ── Timing ────────────────────────────────────────────────────────────
+  const chassisSpring = spring({
+    frame,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 1 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const reservoirFill = interpolate(
+    frame,
+    [fps * 0.8, fps * 2.0],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) },
+  );
+  const chamberGlow = interpolate(
+    frame,
+    [fps * 1.6, fps * 2.3],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const labelIn = interpolate(
+    frame,
+    [fps * 1.2, fps * 2.2],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) },
+  );
+  const captionIn = interpolate(
+    frame,
+    [fps * 1.6, fps * 2.6],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const titleSpring = spring({
+    frame: frame - fps * 0.6,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+  const hookOpacity = interpolate(frame, [fps * 1.2, fps * 2.2], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // ── Pulse train — visualise ~500 Hz as a rhythmic 6-puff loop ────────
+  const PULSE_HZ = 3.0; // 3 puffs per second on screen
+  const PUFFS = 6;
+  const pulsePhase = ((frame / fps) * PULSE_HZ) % 1; // 0..1 emit
+  const ignited = chamberGlow > 0.5;
+
+  // ── Geometry: horizontal beetle inside FRAME ─────────────────────────
+  // Beetle centreline sits roughly middle of the frame.
+  const CY = FRAME.y + 380;
+  const HEAD_X = FRAME.x + 116;
+  const TURRET_X = FRAME.x + FRAME.w - 240; // leave room for the pulse column
+  const BODY_LEN = TURRET_X - HEAD_X;
+
+  // Sections along the body — proper beetle proportions
+  const HEAD_END = HEAD_X + BODY_LEN * 0.11;
+  const PRONOTUM_END = HEAD_X + BODY_LEN * 0.24;
+  const ELYTRA_END = HEAD_X + BODY_LEN * 0.72;
+  const ABDOMEN_END = TURRET_X;
+
+  // ── Reveal mask: chassis draws head-to-tail ──────────────────────────
+  const reveal = Math.min(1, Math.max(0, chassisSpring));
+  const revealX = HEAD_X + reveal * (TURRET_X - HEAD_X + 60);
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* ── Top metadata band ───────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
-          top: 56,
+          top: 54,
           left: 80,
           right: 80,
           display: "flex",
@@ -225,11 +157,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: PRONOTUM }}>2026 · 08 · 12</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* ── Drafting frame + schematic ─────────────────────────────── */}
       <svg
         width={1080}
         height={1350}
@@ -237,91 +169,70 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
+          <pattern id="grid" x={FRAME.x} y={FRAME.y} width={40} height={40} patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke={GRID} strokeWidth={1} />
           </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
+          <pattern id="grid-major" x={FRAME.x} y={FRAME.y} width={160} height={160} patternUnits="userSpaceOnUse">
+            <path d="M 160 0 L 0 0 0 160" fill="none" stroke={GRID_MAJOR} strokeWidth={1} />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="50%" cy="40%" r="72%">
+            <stop offset="0%" stopColor="#141821" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <radialGradient id="flash" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={FLASH_HOT} stopOpacity={1} />
+            <stop offset="45%" stopColor={FLASH} stopOpacity={0.95} />
+            <stop offset="100%" stopColor={FLASH} stopOpacity={0} />
+          </radialGradient>
+
+          <radialGradient id="chamber-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={FLASH_HOT} stopOpacity={1} />
+            <stop offset="100%" stopColor={PRONOTUM} stopOpacity={0} />
+          </radialGradient>
+
+          <linearGradient id="elytra-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={ELYTRA_HILITE} />
+            <stop offset="60%" stopColor={ELYTRA} />
+            <stop offset="100%" stopColor="#0C1017" />
+          </linearGradient>
+
+          <linearGradient id="pronotum-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#F27548" />
+            <stop offset="60%" stopColor={PRONOTUM} />
+            <stop offset="100%" stopColor={PRONOTUM_DEEP} />
+          </linearGradient>
+
+          <filter id="flash-glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          {/* Clip that reveals the chassis progressively head-to-tail */}
+          <clipPath id="reveal-clip">
+            <rect x={FRAME.x - 20} y={FRAME.y - 20} width={revealX - (FRAME.x - 20)} height={FRAME.h + 40} />
+          </clipPath>
         </defs>
 
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-
-        {/* Inner thin border */}
+        {/* Board */}
+        <rect x={FRAME.x} y={FRAME.y} width={FRAME.w} height={FRAME.h} fill="url(#board-vignette)" />
+        <rect x={FRAME.x} y={FRAME.y} width={FRAME.w} height={FRAME.h} fill="url(#grid)" />
+        <rect x={FRAME.x} y={FRAME.y} width={FRAME.w} height={FRAME.h} fill="url(#grid-major)" />
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#2A303B"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner ticks */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,261 +241,563 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={PRONOTUM} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+        {/* Sheet label — top-left of frame */}
+        <g transform={`translate(${FRAME.x + 22}, ${FRAME.y + 30})`}>
+          <text
+            fill={GRAY}
+            fontFamily={inter}
+            fontWeight={600}
+            fontSize={11}
+            letterSpacing={3.5}
+          >
+            SHEET 1 / 1 · DORSAL CUTAWAY · SCALE 12:1
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
+        {/* Sheet label — top-right */}
+        <g transform={`translate(${FRAME.x + FRAME.w - 22}, ${FRAME.y + 30})`}>
+          <text
+            fill={GRAY}
+            fontFamily={inter}
+            fontWeight={600}
+            fontSize={11}
+            letterSpacing={3.5}
+            textAnchor="end"
+          >
+            BRACHINUS · CARABIDAE
+          </text>
+        </g>
+
+        {/* Centreline construction line (thin, dashed) */}
+        <line
+          x1={HEAD_X - 20}
+          y1={CY}
+          x2={TURRET_X + 240}
+          y2={CY}
+          stroke="#2A303B"
+          strokeWidth={1}
+          strokeDasharray="6 6"
+          opacity={0.55}
+        />
+
+        {/* ── Chassis: drawn once and clipped by progressive reveal ── */}
+        <g clipPath="url(#reveal-clip)">
+          {/* ── Legs (drawn under body so joints hide behind chassis) ── */}
+          {/* Three per side, oriented outward with a real knee joint */}
+          {[
+            { x: HEAD_END + 6, coxaY: 34, midX: 22, midY: 82, footX: 14, footY: 128 },
+            { x: PRONOTUM_END + 24, coxaY: 42, midX: 52, midY: 108, footX: 42, footY: 168 },
+            { x: PRONOTUM_END + 96, coxaY: 44, midX: 68, midY: 118, footX: 60, footY: 188 },
+          ].map((leg, i) =>
+            [-1, 1].map((sign) => (
+              <g
+                key={`leg-${i}-${sign}`}
+                stroke={PRONOTUM_DEEP}
+                strokeWidth={2.4}
                 fill="none"
                 strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+                strokeLinejoin="round"
+              >
+                <path
+                  d={`M ${leg.x} ${CY + sign * leg.coxaY} L ${leg.x + leg.midX} ${CY + sign * leg.midY} L ${leg.x + leg.footX} ${CY + sign * leg.footY}`}
+                />
+                {/* Tarsus tip tick */}
+                <line
+                  x1={leg.x + leg.footX}
+                  y1={CY + sign * leg.footY}
+                  x2={leg.x + leg.footX - 6}
+                  y2={CY + sign * (leg.footY + 6)}
+                  stroke={PRONOTUM_DEEP}
+                  strokeWidth={2.2}
+                />
+              </g>
+            )),
+          )}
+
+          {/* Antennae — thick parchment strokes with a subtle bend */}
+          {[0, 1].map((i) => {
+            const sign = i === 0 ? -1 : 1;
+            const y0 = CY + sign * 12;
+            return (
+              <path
+                key={`ant-${i}`}
+                d={`M ${HEAD_X + 4} ${y0} Q ${HEAD_X - 30} ${y0 + sign * 40} ${HEAD_X - 84} ${y0 + sign * 46}`}
+                stroke={PARCH}
+                strokeWidth={2.2}
+                fill="none"
+                strokeLinecap="round"
+                opacity={0.92}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+
+          {/* Head (rounded, slightly larger) */}
+          <path
+            d={`M ${HEAD_X + 8} ${CY - 40} Q ${HEAD_X - 32} ${CY} ${HEAD_X + 8} ${CY + 40} L ${HEAD_END + 6} ${CY + 40} L ${HEAD_END + 6} ${CY - 40} Z`}
+            fill="url(#pronotum-grad)"
+            stroke={PRONOTUM_DEEP}
+            strokeWidth={1.4}
+          />
+          {/* Mandibles — jaw pincers */}
+          <path
+            d={`M ${HEAD_X - 16} ${CY - 8} Q ${HEAD_X - 30} ${CY - 12} ${HEAD_X - 34} ${CY - 20}`}
+            stroke={PRONOTUM_DEEP}
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <path
+            d={`M ${HEAD_X - 16} ${CY + 8} Q ${HEAD_X - 30} ${CY + 12} ${HEAD_X - 34} ${CY + 20}`}
+            stroke={PRONOTUM_DEEP}
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            fill="none"
+          />
+          {/* Compound eyes */}
+          <ellipse cx={HEAD_X - 2} cy={CY - 24} rx={4.5} ry={5.5} fill={INK} />
+          <ellipse cx={HEAD_X - 2} cy={CY + 24} rx={4.5} ry={5.5} fill={INK} />
+          {/* Eye highlight */}
+          <circle cx={HEAD_X - 3} cy={CY - 25} r={1.2} fill={PARCH} opacity={0.7} />
+          <circle cx={HEAD_X - 3} cy={CY + 23} r={1.2} fill={PARCH} opacity={0.7} />
+
+          {/* Pronotum — squarer shield, only slightly wider than head */}
+          <path
+            d={`M ${HEAD_END + 2} ${CY - 46} Q ${HEAD_END + 8} ${CY - 56} ${HEAD_END + 22} ${CY - 58} L ${PRONOTUM_END - 8} ${CY - 60} Q ${PRONOTUM_END + 4} ${CY - 54} ${PRONOTUM_END + 6} ${CY - 44} L ${PRONOTUM_END + 6} ${CY + 44} Q ${PRONOTUM_END + 4} ${CY + 54} ${PRONOTUM_END - 8} ${CY + 60} L ${HEAD_END + 22} ${CY + 58} Q ${HEAD_END + 8} ${CY + 56} ${HEAD_END + 2} ${CY + 46} Z`}
+            fill="url(#pronotum-grad)"
+            stroke={PRONOTUM_DEEP}
+            strokeWidth={1.4}
+          />
+          {/* Pronotum central pit */}
+          <ellipse
+            cx={(HEAD_END + PRONOTUM_END) / 2 + 4}
+            cy={CY}
+            rx={5}
+            ry={18}
+            fill={PRONOTUM_DEEP}
+            opacity={0.55}
+          />
+
+          {/* ── Elytra — two hard wings meeting at the midline ── */}
+          {/* Top elytron */}
+          <path
+            d={`M ${PRONOTUM_END + 4} ${CY - 62} L ${ELYTRA_END - 40} ${CY - 68} Q ${ELYTRA_END + 6} ${CY - 50} ${ELYTRA_END + 2} ${CY - 4} L ${PRONOTUM_END + 8} ${CY - 4} Z`}
+            fill="url(#elytra-grad)"
+            stroke={ELYTRA_HILITE}
+            strokeWidth={1.6}
+          />
+          {/* Bottom elytron */}
+          <path
+            d={`M ${PRONOTUM_END + 4} ${CY + 62} L ${ELYTRA_END - 40} ${CY + 68} Q ${ELYTRA_END + 6} ${CY + 50} ${ELYTRA_END + 2} ${CY + 4} L ${PRONOTUM_END + 8} ${CY + 4} Z`}
+            fill="url(#elytra-grad)"
+            stroke={ELYTRA_HILITE}
+            strokeWidth={1.6}
+          />
+          {/* Dorsal midline suture */}
+          <line
+            x1={PRONOTUM_END + 8}
+            y1={CY}
+            x2={ELYTRA_END + 2}
+            y2={CY}
+            stroke="#0A0D14"
+            strokeWidth={2}
+          />
+          <line
+            x1={PRONOTUM_END + 8}
+            y1={CY - 0.5}
+            x2={ELYTRA_END + 2}
+            y2={CY - 0.5}
+            stroke={ELYTRA_HILITE}
+            strokeWidth={0.6}
+            opacity={0.6}
+          />
+
+          {/* Elytra longitudinal striations — 4 per elytron */}
+          {[-52, -36, -22, -10, 10, 22, 36, 52].map((yOff) => (
+            <path
+              key={`stria-${yOff}`}
+              d={`M ${PRONOTUM_END + 16} ${CY + yOff} Q ${(PRONOTUM_END + ELYTRA_END) / 2 + 20} ${CY + yOff * 1.02} ${ELYTRA_END - 22} ${CY + yOff * 0.75}`}
+              fill="none"
+              stroke="#2E3546"
+              strokeWidth={0.9}
+              opacity={0.75}
+            />
+          ))}
+          {/* Highlight sheen along the top elytron */}
+          <path
+            d={`M ${PRONOTUM_END + 18} ${CY - 48} Q ${(PRONOTUM_END + ELYTRA_END) / 2 + 14} ${CY - 56} ${ELYTRA_END - 44} ${CY - 46}`}
+            fill="none"
+            stroke="#3A4358"
+            strokeWidth={1.6}
+            opacity={0.55}
+          />
+
+          {/* ── Abdomen cutaway (exposed tail beyond elytra) ── */}
+          <path
+            d={`M ${ELYTRA_END - 6} ${CY - 56} L ${ABDOMEN_END - 6} ${CY - 48} Q ${ABDOMEN_END + 6} ${CY - 24} ${ABDOMEN_END + 6} ${CY} Q ${ABDOMEN_END + 6} ${CY + 24} ${ABDOMEN_END - 6} ${CY + 48} L ${ELYTRA_END - 6} ${CY + 56}`}
+            fill="#0F131A"
+            stroke={PARCH}
+            strokeWidth={1.3}
+            strokeDasharray="5 3"
+            opacity={0.9}
+          />
+
+          {/* Segment ticks along the abdomen */}
+          {[0.25, 0.5, 0.75].map((k) => {
+            const x = ELYTRA_END + (ABDOMEN_END - ELYTRA_END) * k;
+            const h = 48 - k * 12;
             return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
+              <line
+                key={`seg-${k}`}
+                x1={x}
+                y1={CY - h}
+                x2={x}
+                y2={CY + h}
+                stroke={PARCH}
+                strokeWidth={0.8}
+                strokeDasharray="2 3"
+                opacity={0.35}
+              />
             );
           })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+          {/* Reservoirs — hydroquinones (top) & H2O2 (bottom) */}
+          {[
+            { sign: -1, tint: "#B69A55" },
+            { sign: 1, tint: "#5FA9C8" },
+          ].map((r) => {
+            const cx = ELYTRA_END + 40;
+            const cy = CY + r.sign * 28;
+            const w = 78;
+            const h = 32;
+            const fillH = h * reservoirFill;
+            return (
+              <g key={`res-${r.sign}`}>
+                {/* Vessel outline */}
+                <rect
+                  x={cx - w / 2}
+                  y={cy - h / 2}
+                  width={w}
+                  height={h}
+                  rx={6}
+                  fill="#0B0E14"
+                  stroke={PARCH}
+                  strokeWidth={1.3}
+                />
+                {/* Fill */}
+                <rect
+                  x={cx - w / 2 + 3}
+                  y={cy + h / 2 - fillH + 1.5}
+                  width={w - 6}
+                  height={Math.max(0, fillH - 3)}
+                  rx={4}
+                  fill={r.tint}
+                  opacity={0.9}
+                />
+                {/* Level marks */}
+                {[0.33, 0.66].map((f) => (
+                  <line
+                    key={`mark-${r.sign}-${f}`}
+                    x1={cx - w / 2}
+                    y1={cy + h / 2 - h * f}
+                    x2={cx - w / 2 + 4}
+                    y2={cy + h / 2 - h * f}
+                    stroke={PARCH}
+                    strokeWidth={0.8}
+                    opacity={0.6}
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
+                ))}
+                {/* Feed pipe → into chamber */}
+                <path
+                  d={`M ${cx + w / 2} ${cy} L ${cx + w / 2 + 22} ${cy} L ${cx + w / 2 + 34} ${CY + r.sign * 6}`}
+                  stroke={PARCH}
+                  strokeWidth={1.4}
+                  fill="none"
                 />
+                {/* Valve tick */}
                 <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
+                  cx={cx + w / 2 + 18}
+                  cy={cy}
+                  r={4.5}
+                  fill={INK}
+                  stroke={PARCH}
+                  strokeWidth={1.2}
                 />
               </g>
             );
           })}
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
+          {/* Reaction chamber */}
+          <g>
+            <circle
+              cx={ABDOMEN_END - 22}
+              cy={CY}
+              r={22}
               fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
+              stroke={PARCH}
+              strokeWidth={1.6}
             />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
+            {/* Catalyst lining — dashed inner ring */}
+            <circle
+              cx={ABDOMEN_END - 22}
+              cy={CY}
+              r={16}
+              fill="none"
+              stroke={PRONOTUM}
+              strokeWidth={1.3}
+              strokeDasharray="3 3"
+              opacity={0.85}
+            />
+            {/* Ignition glow */}
+            <circle
+              cx={ABDOMEN_END - 22}
+              cy={CY}
+              r={30}
+              fill="url(#chamber-glow)"
+              opacity={chamberGlow}
+            />
+            <circle
+              cx={ABDOMEN_END - 22}
+              cy={CY}
+              r={4}
+              fill={FLASH_HOT}
+              opacity={chamberGlow}
+            />
+          </g>
+
+          {/* Turret nozzle */}
+          <g>
+            <path
+              d={`M ${ABDOMEN_END - 2} ${CY - 9} L ${ABDOMEN_END + 24} ${CY - 5} L ${ABDOMEN_END + 24} ${CY + 5} L ${ABDOMEN_END - 2} ${CY + 9} Z`}
+              fill={ELYTRA_HILITE}
+              stroke={PARCH}
+              strokeWidth={1.4}
+            />
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* ── Pulse column: staged concentric puffs (independent of reveal) ── */}
+        {ignited && (
+          <g filter="url(#flash-glow)">
+            {Array.from({ length: PUFFS }).map((_, i) => {
+              // Each puff is offset in age (0..1) by 1/PUFFS from the current phase.
+              const age = (pulsePhase + i / PUFFS) % 1;
+              const cx = ABDOMEN_END + 32 + age * 200;
+              const r = 10 + age * 44;
+              const op = (1 - age) * 0.85;
+              return (
+                <circle
+                  key={`puff-${i}`}
+                  cx={cx}
+                  cy={CY}
+                  r={r}
+                  fill="url(#flash)"
+                  opacity={op}
+                />
+              );
+            })}
+            {/* Nozzle spark — punchy hot core at the very tip */}
+            <circle
+              cx={ABDOMEN_END + 26}
+              cy={CY}
+              r={7 + Math.sin(pulsePhase * Math.PI * 2) * 2}
+              fill={FLASH_HOT}
+              opacity={0.95}
+            />
+          </g>
+        )}
+
+        {/* ── Callouts / leader lines ─────────────────────────────── */}
+        {/* Upper callout: HYDROQUINONES */}
+        <g opacity={labelIn}>
+          <line
+            x1={ELYTRA_END + 34}
+            y1={CY - 60}
+            x2={ELYTRA_END + 34}
+            y2={FRAME.y + 92}
+            stroke={PARCH}
+            strokeWidth={1.1}
+          />
+          <line
+            x1={ELYTRA_END + 34}
+            y1={FRAME.y + 92}
+            x2={FRAME.x + FRAME.w - 40}
+            y2={FRAME.y + 92}
+            stroke={PARCH}
+            strokeWidth={1.1}
+          />
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + 86}
+            textAnchor="end"
+            fill={PARCH}
+            fontFamily={inter}
+            fontSize={12}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            HYDROQUINONES
+          </text>
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + 110}
+            textAnchor="end"
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={2}
+          >
+            C₆H₄(OH)₂ · fuel
+          </text>
+        </g>
+
+        {/* Lower callout: H2O2 */}
+        <g opacity={labelIn}>
+          <line
+            x1={ELYTRA_END + 34}
+            y1={CY + 60}
+            x2={ELYTRA_END + 34}
+            y2={FRAME.y + FRAME.h - 92}
+            stroke={PARCH}
+            strokeWidth={1.1}
+          />
+          <line
+            x1={ELYTRA_END + 34}
+            y1={FRAME.y + FRAME.h - 92}
+            x2={FRAME.x + FRAME.w - 40}
+            y2={FRAME.y + FRAME.h - 92}
+            stroke={PARCH}
+            strokeWidth={1.1}
+          />
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + FRAME.h - 98}
+            textAnchor="end"
+            fill={PARCH}
+            fontFamily={inter}
+            fontSize={12}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            HYDROGEN PEROXIDE
+          </text>
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + FRAME.h - 76}
+            textAnchor="end"
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={2}
+          >
+            H₂O₂ · oxidiser · ≈ 25% aq.
+          </text>
+        </g>
+
+        {/* Chamber callout — top-left over pronotum */}
+        <g opacity={labelIn}>
+          <line
+            x1={ABDOMEN_END - 24}
+            y1={CY - 22}
+            x2={ABDOMEN_END - 24}
+            y2={FRAME.y + 132}
+            stroke={PRONOTUM}
+            strokeWidth={1.1}
+          />
+          <line
+            x1={ABDOMEN_END - 24}
+            y1={FRAME.y + 132}
+            x2={FRAME.x + FRAME.w - 40}
+            y2={FRAME.y + 132}
+            stroke={PRONOTUM}
+            strokeWidth={1.1}
+          />
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + 152}
+            textAnchor="end"
+            fill={PRONOTUM}
+            fontFamily={inter}
+            fontSize={12}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            REACTION CHAMBER
+          </text>
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + 170}
+            textAnchor="end"
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={2}
+          >
+            catalase + peroxidase · ≈ 100 °C
+          </text>
+        </g>
+
+        {/* Turret callout — right-side, aligned with pulse column */}
+        <g opacity={labelIn}>
+          <line
+            x1={ABDOMEN_END + 12}
+            y1={CY + 24}
+            x2={ABDOMEN_END + 12}
+            y2={FRAME.y + FRAME.h - 132}
+            stroke={FLASH}
+            strokeWidth={1.1}
+          />
+          <line
+            x1={ABDOMEN_END + 12}
+            y1={FRAME.y + FRAME.h - 132}
+            x2={FRAME.x + FRAME.w - 40}
+            y2={FRAME.y + FRAME.h - 132}
+            stroke={FLASH}
+            strokeWidth={1.1}
+          />
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + FRAME.h - 152}
+            textAnchor="end"
+            fill={FLASH}
+            fontFamily={inter}
+            fontSize={12}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            PULSE-JET TURRET
+          </text>
+          <text
+            x={FRAME.x + FRAME.w - 40}
+            y={FRAME.y + FRAME.h - 134}
+            textAnchor="end"
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={2}
+          >
+            ≈ 500 pulses · s⁻¹ · 100 °C ejecta
+          </text>
+        </g>
+
+        {/* Caption strip below the frame */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
+          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 24})`}
           fill={GRAY}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
+          opacity={captionIn}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · DORSAL CUTAWAY · BRACHINUS DEFENSIVE APPARATUS</text>
+          <text x={FRAME.w} textAnchor="end" fill={FLASH} opacity={0.9}>
+            HIGH-SPEED THERMOGRAPHY · DEAN ET AL. 1990
           </text>
         </g>
       </svg>
@@ -595,18 +808,14 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 918,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: PRONOTUM,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -616,9 +825,7 @@ export const PairingCard: React.FC = () => {
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>Rocket Engineer</span>
         </div>
 
         <div
@@ -626,15 +833,15 @@ export const PairingCard: React.FC = () => {
             color: "#F4F4F6",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 80,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The beetle who beat
           <br />
-          city planner.
+          us to the pulse-jet.
         </div>
 
         <div
@@ -643,19 +850,19 @@ export const PairingCard: React.FC = () => {
             color: "#C8CAD0",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
             maxWidth: 880,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          A threatened{" "}
+          <span style={{ color: PRONOTUM, fontWeight: 600 }}>
+            Brachinus
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          mixes hydroquinones with 25% hydrogen peroxide over a catalase-peroxidase lining and fires the boiling spray from its abdominal turret at{" "}
+          <span style={{ color: FLASH, fontWeight: 600 }}>~500 pulses per second</span>
+          {" "}— a natural pulse-jet engine timed by high-speed thermography.
         </div>
       </div>
 
@@ -665,7 +872,7 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 46,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
@@ -677,9 +884,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Dean, Aneshansley, Edgerton, Eisner · Science 248 (1990) 1219–1221</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: FLASH }}>●</span> 500 Hz pulse train
         </span>
       </div>
     </AbsoluteFill>
