@@ -50,164 +50,179 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — taken from the concept's visual brief.
+const SPACE = "#050814";
+const BOARD = "#0A0E1B";
+const PULSAR_BLUE = "#8FB8FF";
+const MAGNET_VIOLET = "#E8B2FF";
+const BRASS = "#FFE8B5";
+const GRAY = "#B9BDC7";
+const GRAY_DIM = "#5B6070";
+const GRID = "#131829";
+const GRID_MAJOR = "#1B213A";
+const INK = "#EDEEF3";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Layout constants (1080 × 1350) ────────────────────────────────────
+const PAGE_W = 1080;
+const PAGE_H = 1350;
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
+const FRAME = { x: 60, y: 130, w: 960, h: 720 };
+const DIAL = {
+  cx: FRAME.x + FRAME.w / 2,
+  cy: FRAME.y + FRAME.h / 2,
+  rOuter: 300,
+  rInner: 268,
+  rTickMinor: 262,
+  rTickMinorInner: 252,
+  rTickMajor: 262,
+  rTickMajorInner: 238,
+  rNumeral: 214,
+  rBeamStart: 60,
+  rBeamEnd: 296,
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// Star and beam geometry
+const STAR_CORE_R = 22;
+const STAR_GLOW_R = 60;
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Motion timing ──────────────────────────────────────────────────
+  // Intro settle (0.0 → 0.9s): dial fades in, then beams spring into rotation.
+  const dialFade = interpolate(frame, [0, fps * 0.7], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const starPop = spring({
+    frame: frame - fps * 0.25,
+    fps,
+    config: { damping: 12, mass: 0.8, stiffness: 140 },
+  });
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const beamSpringIn = spring({
+    frame: frame - fps * 0.6,
+    fps,
+    config: { damping: 200, mass: 1.1 },
+  });
 
+  // Beam rotation: 1 rotation every 1.2s once settled.
+  // We drive it as an angle so we can reveal ticks the moment the beam sweeps past.
+  const rotSpeed = (2 * Math.PI) / (fps * 1.2); // rad per frame
+  const beamAngle = beamSpringIn * frame * rotSpeed;
+
+  // Rotation counter (integer count of full revolutions)
+  const revolutions = Math.floor(beamAngle / (2 * Math.PI));
+
+  // Type block timing
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 0.5,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const dataOpacity = interpolate(frame, [fps * 0.9, fps * 1.7], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Ticks: 60 minor, 12 major (every 5).
+  const ticks: JSX.Element[] = [];
+  for (let i = 0; i < 60; i++) {
+    const a = (i / 60) * Math.PI * 2 - Math.PI / 2; // 12 o'clock at top
+    const isMajor = i % 5 === 0;
+
+    // Highlight if either beam has swept past within the last ~0.18 rad.
+    const beamA = ((beamAngle - Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) %
+      (Math.PI * 2);
+    const beamB = (beamA + Math.PI) % (Math.PI * 2);
+    const tickA = ((a + Math.PI * 2) % (Math.PI * 2));
+    // shortest arc from either beam behind the tick
+    const arc = (from: number, to: number) => {
+      // measures how far *behind* the beam the tick is (positive = beam has swept past it recently)
+      return ((from - to + Math.PI * 2) % (Math.PI * 2));
+    };
+    const trailA = arc(beamA, tickA);
+    const trailB = arc(beamB, tickA);
+    const trail = Math.min(trailA, trailB);
+    const highlight = Math.max(0, 1 - trail / 0.45); // fade off after ~26°
+
+    const rOut = isMajor ? DIAL.rTickMajor : DIAL.rTickMinor;
+    const rIn = isMajor ? DIAL.rTickMajorInner : DIAL.rTickMinorInner;
+    const x1 = DIAL.cx + Math.cos(a) * rIn;
+    const y1 = DIAL.cy + Math.sin(a) * rIn;
+    const x2 = DIAL.cx + Math.cos(a) * rOut;
+    const y2 = DIAL.cy + Math.sin(a) * rOut;
+
+    const baseColor = isMajor ? BRASS : GRAY_DIM;
+    const litColor = BRASS;
+    // interpolate stroke opacity for glow effect
+    const strokeOpacity = isMajor ? 0.9 : 0.55;
+    ticks.push(
+      <g key={`tick-${i}`} opacity={dialFade}>
+        <line
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={baseColor}
+          strokeOpacity={strokeOpacity}
+          strokeWidth={isMajor ? 3 : 1.5}
+          strokeLinecap="square"
+        />
+        {highlight > 0.01 && (
+          <line
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            stroke={litColor}
+            strokeOpacity={highlight * 0.95}
+            strokeWidth={isMajor ? 4 : 2}
+            strokeLinecap="round"
+          />
+        )}
+      </g>,
+    );
+  }
+
+  // Numerals at 12 / 3 / 6 / 9
+  const numerals = [
+    { n: "XII", a: -Math.PI / 2 },
+    { n: "III", a: 0 },
+    { n: "VI", a: Math.PI / 2 },
+    { n: "IX", a: Math.PI },
+  ];
+
+  // Beam path helpers
+  const beamPath = (angle: number, wideRad: number) => {
+    const a1 = angle - wideRad / 2;
+    const a2 = angle + wideRad / 2;
+    const x1 = DIAL.cx + Math.cos(angle) * DIAL.rBeamStart;
+    const y1 = DIAL.cy + Math.sin(angle) * DIAL.rBeamStart;
+    const x2 = DIAL.cx + Math.cos(a1) * DIAL.rBeamEnd;
+    const y2 = DIAL.cy + Math.sin(a1) * DIAL.rBeamEnd;
+    const x3 = DIAL.cx + Math.cos(a2) * DIAL.rBeamEnd;
+    const y3 = DIAL.cy + Math.sin(a2) * DIAL.rBeamEnd;
+    return `M ${x1} ${y1} L ${x2} ${y2} L ${x3} ${y3} Z`;
+  };
+
+  const dataX = FRAME.x + FRAME.w - 14;
+  const dataY = FRAME.y + 42;
+  const dataLabelX = -128;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: SPACE, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* ── Top metadata band ────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -225,28 +240,29 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: BRASS }}>2026 · 08 · 13</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* ── Main SVG (frame, dial, star, beams, data) ───────────────── */}
       <svg
-        width={1080}
-        height={1350}
-        viewBox="0 0 1080 1350"
+        width={PAGE_W}
+        height={PAGE_H}
+        viewBox={`0 0 ${PAGE_W} ${PAGE_H}`}
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
+          {/* Fine grid inside the frame */}
           <pattern
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={40}
+            height={40}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d={`M 40 0 L 0 0 0 40`}
               fill="none"
               stroke={GRID}
               strokeWidth={1}
@@ -256,38 +272,51 @@ export const PairingCard: React.FC = () => {
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={160}
+            height={160}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d={`M 160 0 L 0 0 0 160`}
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="50%" cy="50%" r="70%">
+            <stop offset="0%" stopColor="#0F1428" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <radialGradient id="star-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity={1} />
+            <stop offset="45%" stopColor={PULSAR_BLUE} stopOpacity={1} />
+            <stop offset="100%" stopColor={PULSAR_BLUE} stopOpacity={0} />
+          </radialGradient>
+
+          <radialGradient id="magnetosphere" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={MAGNET_VIOLET} stopOpacity={0.75} />
+            <stop offset="60%" stopColor={MAGNET_VIOLET} stopOpacity={0.15} />
+            <stop offset="100%" stopColor={MAGNET_VIOLET} stopOpacity={0} />
+          </radialGradient>
+
+          <linearGradient id="beam-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={BRASS} stopOpacity={0.05} />
+            <stop offset="18%" stopColor={BRASS} stopOpacity={0.55} />
+            <stop offset="55%" stopColor={PULSAR_BLUE} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={PULSAR_BLUE} stopOpacity={0} />
+          </linearGradient>
+
+          <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2" />
+          </filter>
+          <filter id="softer" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="5" />
           </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* ── Drafting board ─────────────────────────────────────────── */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
@@ -309,15 +338,14 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
+        {/* Inner border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#212842"
           strokeWidth={1}
         />
 
@@ -330,261 +358,326 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={BRASS} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Small ident labels along the frame (draftsman aesthetic) */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+          fill={GRAY_DIM}
           fontFamily={inter}
           fontSize={10}
           letterSpacing={3}
           fontWeight={500}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <text x={FRAME.x + 26} y={FRAME.y + 30}>
+            OBS · JODRELL BANK
+          </text>
+          <text
+            x={FRAME.x + FRAME.w - 26}
+            y={FRAME.y + FRAME.h - 24}
+            textAnchor="end"
+          >
+            FIG. 1 · PSR B1937+21 DIAL
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+        {/* ── Dial ─────────────────────────────────────────────────── */}
+        <g opacity={dialFade}>
+          {/* Concentric bezel rings */}
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={DIAL.rOuter}
+            fill="none"
+            stroke={GRAY_DIM}
+            strokeOpacity={0.5}
+            strokeWidth={1.2}
+          />
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={DIAL.rOuter - 8}
+            fill="none"
+            stroke={BRASS}
+            strokeOpacity={0.35}
+            strokeWidth={0.8}
+          />
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={DIAL.rInner}
+            fill="none"
+            stroke={GRAY_DIM}
+            strokeOpacity={0.35}
+            strokeWidth={1}
+          />
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={DIAL.rInner - 60}
+            fill="none"
+            stroke={GRAY_DIM}
+            strokeOpacity={0.2}
+            strokeWidth={0.8}
+            strokeDasharray="2 4"
+          />
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
+          {/* Ticks (60) */}
+          {ticks}
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
+          {/* Roman numerals */}
+          {numerals.map((num) => {
+            const x = DIAL.cx + Math.cos(num.a) * DIAL.rNumeral;
+            const y = DIAL.cy + Math.sin(num.a) * DIAL.rNumeral;
             return (
               <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
+                key={num.n}
+                x={x}
+                y={y + 6}
+                textAnchor="middle"
                 fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
+                fontFamily={playfair}
+                fontSize={22}
+                fontStyle="italic"
                 fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
+                letterSpacing={1}
+                opacity={0.85}
               >
-                {l.text}
+                {num.n}
               </text>
             );
           })}
+        </g>
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
+        {/* ── Beams from magnetic poles (rotating) ─────────────────── */}
+        <g opacity={dialFade}>
+          {[0, Math.PI].map((offset, idx) => {
+            const a = beamAngle - Math.PI / 2 + offset;
+            // Wide soft outer cone
+            return (
+              <g key={idx}>
+                {/* soft outer glow */}
+                <path
+                  d={beamPath(a, 0.34)}
+                  fill="url(#beam-grad)"
+                  opacity={0.55 * beamSpringIn}
+                  filter="url(#softer)"
+                  transform={`rotate(${(a * 180) / Math.PI - 0} ${DIAL.cx} ${DIAL.cy})`}
+                  style={{ transformOrigin: `${DIAL.cx}px ${DIAL.cy}px` }}
+                />
+                {/* mid cone */}
+                <path
+                  d={beamPath(a, 0.18)}
+                  fill="url(#beam-grad)"
+                  opacity={0.85 * beamSpringIn}
+                  filter="url(#soft)"
+                />
+                {/* bright core line */}
+                <line
+                  x1={DIAL.cx + Math.cos(a) * DIAL.rBeamStart}
+                  y1={DIAL.cy + Math.sin(a) * DIAL.rBeamStart}
+                  x2={DIAL.cx + Math.cos(a) * DIAL.rBeamEnd}
+                  y2={DIAL.cy + Math.sin(a) * DIAL.rBeamEnd}
+                  stroke={BRASS}
+                  strokeOpacity={0.9 * beamSpringIn}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                />
+              </g>
+            );
+          })}
+        </g>
+
+        {/* ── Neutron star at the pivot ───────────────────────────── */}
+        <g
+          style={{
+            transform: `scale(${starPop})`,
+            transformOrigin: `${DIAL.cx}px ${DIAL.cy}px`,
+          }}
+        >
+          {/* Outer magnetosphere corona */}
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={STAR_GLOW_R}
+            fill="url(#magnetosphere)"
+          />
+          {/* Rotation axis hairline */}
+          <line
+            x1={DIAL.cx}
+            y1={DIAL.cy - 78}
+            x2={DIAL.cx}
+            y2={DIAL.cy + 78}
+            stroke={GRAY_DIM}
+            strokeOpacity={0.55 * dialFade}
+            strokeDasharray="2 4"
+            strokeWidth={1}
+          />
+          {/* Star core */}
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={STAR_CORE_R + 8}
+            fill="url(#star-core)"
+            opacity={0.9}
+          />
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={STAR_CORE_R}
+            fill="#FFFFFF"
+          />
+          {/* Pivot dot */}
+          <circle cx={DIAL.cx} cy={DIAL.cy} r={3} fill={SPACE} />
+        </g>
+
+        {/* ── Data cluster (upper-right of the frame, stacked lab plate) ── */}
+        <g
+          opacity={dataOpacity}
+          fontFamily={inter}
+          transform={`translate(${dataX}, ${dataY})`}
+        >
+          {/* Header */}
+          <text
+            x={0}
+            y={0}
+            textAnchor="end"
+            fill={BRASS}
+            fontSize={10}
+            letterSpacing={4}
+            fontWeight={600}
+          >
+            SPECIMEN
+          </text>
+          <text
+            x={0}
+            y={26}
+            textAnchor="end"
+            fill={INK}
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontSize={22}
+            fontWeight={500}
+          >
+            PSR B1937+21
+          </text>
+
+          {/* Divider */}
+          <line
+            x1={dataLabelX}
+            y1={42}
+            x2={0}
+            y2={42}
+            stroke={GRAY_DIM}
+            strokeWidth={1}
+          />
+
+          {/* Data rows — label above value, right-aligned */}
+          {(
+            [
+              { label: "PERIOD", value: "1.5578 ms", accent: false },
+              { label: "FREQUENCY", value: "641.9 Hz", accent: false },
+              { label: "STABILITY", value: "Δf/f ≈ 10⁻¹⁵", accent: true },
+            ] as const
+          ).map((row, i) => {
+            const yTop = 62 + i * 40;
+            return (
+              <g key={row.label}>
+                <text
+                  x={0}
+                  y={yTop}
+                  textAnchor="end"
+                  fill={GRAY}
+                  fontSize={10}
+                  letterSpacing={3.2}
+                  fontWeight={500}
+                >
+                  {row.label}
+                </text>
+                <text
+                  x={0}
+                  y={yTop + 18}
+                  textAnchor="end"
+                  fill={row.accent ? BRASS : INK}
+                  fontSize={16}
+                  letterSpacing={0.5}
+                  fontWeight={row.accent ? 600 : 500}
+                >
+                  {row.value}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Rotation counter (below, separated by dashed rule) */}
+          <line
+            x1={dataLabelX}
+            y1={192}
+            x2={0}
+            y2={192}
+            stroke={GRAY_DIM}
+            strokeOpacity={0.55}
+            strokeWidth={1}
+            strokeDasharray="2 4"
+          />
+          <g transform="translate(0, 210)">
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
+              x={0}
+              y={0}
+              textAnchor="end"
+              fill={BRASS}
+              fontSize={10}
+              letterSpacing={4}
               fontWeight={600}
-              letterSpacing={3.5}
             >
-              TOKYO
+              ROTATIONS
+            </text>
+            <text
+              x={0}
+              y={40}
+              textAnchor="end"
+              fill={INK}
+              fontFamily={playfair}
+              fontStyle="italic"
+              fontSize={40}
+              fontWeight={500}
+            >
+              {String(revolutions).padStart(3, "0")}
+            </text>
+            <text
+              x={0}
+              y={58}
+              textAnchor="end"
+              fill={GRAY_DIM}
+              fontSize={9}
+              letterSpacing={2.4}
+              fontWeight={500}
+            >
+              SIM · SLOWED 500×
             </text>
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip below the frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={GRAY_DIM}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · TWIN RADIO BEAMS FROM MAGNETIC POLES</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
+            fill={BRASS}
             opacity={0.85}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            ONE TICK EVERY 1.5578 MILLISECONDS
           </text>
         </g>
       </svg>
@@ -595,7 +688,7 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 915,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,7 +699,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: BRASS,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,15 +708,13 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: GRAY_DIM, margin: "0 4px" }}>/</span>
+          <span style={{ color: INK, letterSpacing: 5 }}>Watchmaker</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: INK,
             fontFamily: playfair,
             fontWeight: 500,
             fontSize: 84,
@@ -632,9 +723,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The neutron
           <br />
-          city planner.
+          watchmaker.
         </div>
 
         <div
@@ -649,13 +740,14 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          <span style={{ color: BRASS, fontWeight: 600 }}>PSR B1937+21</span> —
+          the first millisecond pulsar, discovered in 1982 — spins{" "}
+          <span style={{ color: BRASS, fontWeight: 600 }}>641.9 times</span> a
+          second, its ticks stable to about{" "}
+          <span style={{ color: BRASS, fontWeight: 600 }}>one part in 10¹⁵</span>
+          {" "}over years. Astronomers now use these stellar corpses as a
+          galaxy-scale set of watch movements — precise enough to hear
+          gravitational waves in their jitter.
         </div>
       </div>
 
@@ -669,7 +761,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: GRAY_DIM,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,11 +769,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Backer et al. · Nature 300 (1982) 615–618</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: BRASS }}>●</span> Beam = radio pulse
         </span>
       </div>
+
+      {/* silence unused warning while keeping length declaration available */}
+      <div style={{ display: "none" }}>{durationInFrames}</div>
     </AbsoluteFill>
   );
 };
