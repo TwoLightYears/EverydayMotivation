@@ -50,79 +50,93 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief.
-const SPACE = "#050814";
-const BOARD = "#0A0E1B";
-const PULSAR_BLUE = "#8FB8FF";
-const MAGNET_VIOLET = "#E8B2FF";
-const BRASS = "#FFE8B5";
-const GRAY = "#B9BDC7";
-const GRAY_DIM = "#5B6070";
-const GRID = "#131829";
-const GRID_MAJOR = "#1B213A";
-const INK = "#EDEEF3";
+// ── Palette (from the concept brief) ─────────────────────────────────
+const PAPER = "#F1E7D2";        // chart paper / cream ground
+const PAPER_WARM = "#EADFC6";   // slightly darker paper for insets
+const INK = "#141519";          // mole-fur near-black
+const INK_SOFT = "#2E2F35";     // secondary ink
+const RULE = "#B7A98A";         // ruled line
+const RULE_SOFT = "#C8BCA0";    // ledger lines
+const TEAL = "#1F5A5E";         // clinical teal
+const TEAL_SOFT = "#3F797E";
+const FLESH = "#E7A2A6";        // nose pink
+const FLESH_DIM = "#C57A80";
+const AMBER = "#E3803A";        // triage accent
+const AMBER_SOFT = "#C86A26";
 
-// ── Layout constants (1080 × 1350) ────────────────────────────────────
+// ── Layout constants (1080 × 1350) ───────────────────────────────────
 const PAGE_W = 1080;
 const PAGE_H = 1350;
 
 const FRAME = { x: 60, y: 130, w: 960, h: 720 };
 const DIAL = {
   cx: FRAME.x + FRAME.w / 2,
-  cy: FRAME.y + FRAME.h / 2,
-  rOuter: 300,
-  rInner: 268,
-  rTickMinor: 262,
-  rTickMinorInner: 252,
-  rTickMajor: 262,
-  rTickMajorInner: 238,
-  rNumeral: 214,
-  rBeamStart: 60,
-  rBeamEnd: 296,
+  cy: FRAME.y + 350,   // 480
+  rOuter: 285,         // outer bezel line
+  rTick: 281,          // tick outer
+  rTickInner: 265,     // minor tick inner
+  rMajorInner: 252,    // major tick inner
+  rNumber: 226,        // numeric labels INSIDE the ticks
+  rHead: 52,           // small central dark hub — mole head
+  raySnout: 32,        // pink snout radius
+  rayInner: 42,        // tentacle start
+  rayOuter: 214,       // tentacle end — sits clearly inside numeric labels
 };
 
-// Star and beam geometry
-const STAR_CORE_R = 22;
-const STAR_GLOW_R = 60;
+const N_RAYS = 22;
+
+// One primary ray currently under the amber "CONFIRM" flash.
+// The sweep pointer moves; every ~120ms cycle, the amber ray fires.
+const RAY_CONFIRM_INDEX = 4; // Star-nosed moles use ray 11 for detail; we mark one distinguished ray.
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
-  // ── Motion timing ──────────────────────────────────────────────────
-  // Intro settle (0.0 → 0.9s): dial fades in, then beams spring into rotation.
-  const dialFade = interpolate(frame, [0, fps * 0.7], [0, 1], {
+  // ── Motion timing ─────────────────────────────────────────────────
+  const paperFade = interpolate(frame, [0, fps * 0.4], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const starPop = spring({
-    frame: frame - fps * 0.25,
+
+  const headPop = spring({
+    frame: frame - fps * 0.2,
     fps,
-    config: { damping: 12, mass: 0.8, stiffness: 140 },
+    config: { damping: 14, mass: 0.9, stiffness: 130 },
   });
 
-  const beamSpringIn = spring({
-    frame: frame - fps * 0.6,
+  const raysIn = spring({
+    frame: frame - fps * 0.55,
     fps,
-    config: { damping: 200, mass: 1.1 },
+    config: { damping: 200, mass: 1.0 },
   });
 
-  // Beam rotation: 1 rotation every 1.2s once settled.
-  // We drive it as an angle so we can reveal ticks the moment the beam sweeps past.
-  const rotSpeed = (2 * Math.PI) / (fps * 1.2); // rad per frame
-  const beamAngle = beamSpringIn * frame * rotSpeed;
+  // Sweep pointer: 12 rays per second → pointer completes one full loop
+  // in (22 / 12) ≈ 1.83 seconds. We drive an angle so ticks light in step.
+  const sweepStart = fps * 0.75;
+  const sweepAngle = interpolate(
+    Math.max(0, frame - sweepStart),
+    [0, fps * 1.83],
+    [0, Math.PI * 2],
+    { extrapolateRight: "extend" },
+  );
 
-  // Rotation counter (integer count of full revolutions)
-  const revolutions = Math.floor(beamAngle / (2 * Math.PI));
+  // Amber "CONFIRM" pulse every ~120ms of "sim" time (loops nicely at 3.6s).
+  const confirmCycle = 0.36 * fps; // 360ms real-time per confirm pulse
+  const confirmPhase = ((frame - fps * 0.6) % confirmCycle) / confirmCycle;
+  const confirm = confirmPhase >= 0 && confirmPhase < 0.35
+    ? Math.pow(1 - confirmPhase / 0.35, 1.6)
+    : 0;
+  const showConfirm = frame > fps * 0.75;
 
   // Type block timing
   const titleSpring = spring({
-    frame: frame - fps * 0.5,
+    frame: frame - fps * 0.6,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
-  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 1.15, fps * 2.0], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -133,48 +147,62 @@ export const PairingCard: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  // Ticks: 60 minor, 12 major (every 5).
+  // Ray angles: full 360° in 22 steps, starting at top
+  const rayAngle = (i: number) => -Math.PI / 2 + (i / N_RAYS) * Math.PI * 2;
+
+  // All rays sit at full length once settled; a small "flick" adds ~6% on
+  // the ray the pointer just passed. That way the star always reads whole,
+  // and motion is a delicate tick, not a whip.
+  const rayFlick = (i: number) => {
+    const a = ((rayAngle(i) + Math.PI * 2) % (Math.PI * 2));
+    const sweep = ((sweepAngle - Math.PI / 2 + Math.PI * 2) % (Math.PI * 2));
+    const behind = (sweep - a + Math.PI * 2) % (Math.PI * 2);
+    const near = Math.max(0, 1 - behind / 0.35);
+    const base = 0.92; // baseline extension of every ray
+    const bump = 0.10 * near;
+    return raysIn * (base + bump);
+  };
+
+  // Millisecond tick marks around the outer ring: 0 → 120 ms, in 12 major
+  // and 60 minor ticks. The dial spans a full circle so the visual reads as
+  // "a stopwatch dial with a nose star inside".
+  const N_TICKS = 60;
+  const TICK_LABELS = [
+    { i: 0, label: "0" },
+    { i: 10, label: "20" },
+    { i: 20, label: "40" },
+    { i: 30, label: "60" },
+    { i: 40, label: "80" },
+    { i: 50, label: "100" },
+  ];
+
   const ticks: JSX.Element[] = [];
-  for (let i = 0; i < 60; i++) {
-    const a = (i / 60) * Math.PI * 2 - Math.PI / 2; // 12 o'clock at top
+  for (let i = 0; i < N_TICKS; i++) {
+    const a = -Math.PI / 2 + (i / N_TICKS) * Math.PI * 2;
     const isMajor = i % 5 === 0;
-
-    // Highlight if either beam has swept past within the last ~0.18 rad.
-    const beamA = ((beamAngle - Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) %
-      (Math.PI * 2);
-    const beamB = (beamA + Math.PI) % (Math.PI * 2);
-    const tickA = ((a + Math.PI * 2) % (Math.PI * 2));
-    // shortest arc from either beam behind the tick
-    const arc = (from: number, to: number) => {
-      // measures how far *behind* the beam the tick is (positive = beam has swept past it recently)
-      return ((from - to + Math.PI * 2) % (Math.PI * 2));
-    };
-    const trailA = arc(beamA, tickA);
-    const trailB = arc(beamB, tickA);
-    const trail = Math.min(trailA, trailB);
-    const highlight = Math.max(0, 1 - trail / 0.45); // fade off after ~26°
-
-    const rOut = isMajor ? DIAL.rTickMajor : DIAL.rTickMinor;
-    const rIn = isMajor ? DIAL.rTickMajorInner : DIAL.rTickMinorInner;
+    const rIn = isMajor ? DIAL.rMajorInner : DIAL.rTickInner;
+    const rOut = DIAL.rTick;
     const x1 = DIAL.cx + Math.cos(a) * rIn;
     const y1 = DIAL.cy + Math.sin(a) * rIn;
     const x2 = DIAL.cx + Math.cos(a) * rOut;
     const y2 = DIAL.cy + Math.sin(a) * rOut;
 
-    const baseColor = isMajor ? BRASS : GRAY_DIM;
-    const litColor = BRASS;
-    // interpolate stroke opacity for glow effect
-    const strokeOpacity = isMajor ? 0.9 : 0.55;
+    // Highlight ticks that the pointer just passed.
+    const sweep = ((sweepAngle - Math.PI / 2 + Math.PI * 2) % (Math.PI * 2));
+    const tickA = ((a + Math.PI * 2) % (Math.PI * 2));
+    const behind = (sweep - tickA + Math.PI * 2) % (Math.PI * 2);
+    const highlight = Math.max(0, 1 - behind / 0.35);
+
     ticks.push(
-      <g key={`tick-${i}`} opacity={dialFade}>
+      <g key={`tk-${i}`} opacity={paperFade}>
         <line
           x1={x1}
           y1={y1}
           x2={x2}
           y2={y2}
-          stroke={baseColor}
-          strokeOpacity={strokeOpacity}
-          strokeWidth={isMajor ? 3 : 1.5}
+          stroke={INK_SOFT}
+          strokeOpacity={isMajor ? 0.85 : 0.4}
+          strokeWidth={isMajor ? 2 : 1}
           strokeLinecap="square"
         />
         {highlight > 0.01 && (
@@ -183,9 +211,9 @@ export const PairingCard: React.FC = () => {
             y1={y1}
             x2={x2}
             y2={y2}
-            stroke={litColor}
-            strokeOpacity={highlight * 0.95}
-            strokeWidth={isMajor ? 4 : 2}
+            stroke={AMBER}
+            strokeOpacity={highlight * 0.9}
+            strokeWidth={isMajor ? 3 : 1.6}
             strokeLinecap="round"
           />
         )}
@@ -193,33 +221,13 @@ export const PairingCard: React.FC = () => {
     );
   }
 
-  // Numerals at 12 / 3 / 6 / 9
-  const numerals = [
-    { n: "XII", a: -Math.PI / 2 },
-    { n: "III", a: 0 },
-    { n: "VI", a: Math.PI / 2 },
-    { n: "IX", a: Math.PI },
-  ];
-
-  // Beam path helpers
-  const beamPath = (angle: number, wideRad: number) => {
-    const a1 = angle - wideRad / 2;
-    const a2 = angle + wideRad / 2;
-    const x1 = DIAL.cx + Math.cos(angle) * DIAL.rBeamStart;
-    const y1 = DIAL.cy + Math.sin(angle) * DIAL.rBeamStart;
-    const x2 = DIAL.cx + Math.cos(a1) * DIAL.rBeamEnd;
-    const y2 = DIAL.cy + Math.sin(a1) * DIAL.rBeamEnd;
-    const x3 = DIAL.cx + Math.cos(a2) * DIAL.rBeamEnd;
-    const y3 = DIAL.cy + Math.sin(a2) * DIAL.rBeamEnd;
-    return `M ${x1} ${y1} L ${x2} ${y2} L ${x3} ${y3} Z`;
-  };
-
-  const dataX = FRAME.x + FRAME.w - 14;
-  const dataY = FRAME.y + 42;
-  const dataLabelX = -128;
+  // Sweep pointer position
+  const pointerA = sweepAngle - Math.PI / 2;
+  const pointerX = DIAL.cx + Math.cos(pointerA) * (DIAL.rTick - 6);
+  const pointerY = DIAL.cy + Math.sin(pointerA) * (DIAL.rTick - 6);
 
   return (
-    <AbsoluteFill style={{ backgroundColor: SPACE, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: PAPER, fontFamily: inter }}>
       <style>{fontCss}</style>
 
       {/* ── Top metadata band ────────────────────────────────────────── */}
@@ -232,19 +240,20 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: TEAL,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
           textTransform: "uppercase",
-          fontWeight: 500,
+          fontWeight: 600,
+          opacity: paperFade,
         }}
       >
-        <span>Everyday Motivation · No. 003</span>
-        <span style={{ color: BRASS }}>2026 · 08 · 13</span>
+        <span>Everyday Motivation · No. 004</span>
+        <span style={{ color: AMBER }}>2026 · 08 · 14</span>
       </div>
 
-      {/* ── Main SVG (frame, dial, star, beams, data) ───────────────── */}
+      {/* ── Main SVG ─────────────────────────────────────────────────── */}
       <svg
         width={PAGE_W}
         height={PAGE_H}
@@ -252,464 +261,517 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          {/* Fine grid inside the frame */}
+          {/* Fine ledger lines inside the chart */}
           <pattern
-            id="grid"
+            id="ledger"
             x={FRAME.x}
             y={FRAME.y}
             width={40}
             height={40}
             patternUnits="userSpaceOnUse"
           >
-            <path
-              d={`M 40 0 L 0 0 0 40`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={160}
-            height={160}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M 160 0 L 0 0 0 160`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
+            <path d="M 0 40 L 40 40" fill="none" stroke={RULE_SOFT} strokeOpacity={0.35} strokeWidth={0.8} />
           </pattern>
 
-          <radialGradient id="board-vignette" cx="50%" cy="50%" r="70%">
-            <stop offset="0%" stopColor="#0F1428" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <radialGradient id="star-core" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#FFFFFF" stopOpacity={1} />
-            <stop offset="45%" stopColor={PULSAR_BLUE} stopOpacity={1} />
-            <stop offset="100%" stopColor={PULSAR_BLUE} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="magnetosphere" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={MAGNET_VIOLET} stopOpacity={0.75} />
-            <stop offset="60%" stopColor={MAGNET_VIOLET} stopOpacity={0.15} />
-            <stop offset="100%" stopColor={MAGNET_VIOLET} stopOpacity={0} />
-          </radialGradient>
-
-          <linearGradient id="beam-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor={BRASS} stopOpacity={0.05} />
-            <stop offset="18%" stopColor={BRASS} stopOpacity={0.55} />
-            <stop offset="55%" stopColor={PULSAR_BLUE} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={PULSAR_BLUE} stopOpacity={0} />
+          <linearGradient id="paper-shade" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={PAPER} />
+            <stop offset="100%" stopColor={PAPER_WARM} />
           </linearGradient>
+
+          {/* Nose flesh gradient — soft dome */}
+          <radialGradient id="ray-flesh" cx="30%" cy="35%" r="70%">
+            <stop offset="0%" stopColor="#F6C8CB" />
+            <stop offset="60%" stopColor={FLESH} />
+            <stop offset="100%" stopColor={FLESH_DIM} />
+          </radialGradient>
+
+          {/* Dark mole head silhouette */}
+          <radialGradient id="head" cx="45%" cy="40%" r="65%">
+            <stop offset="0%" stopColor="#292A31" />
+            <stop offset="70%" stopColor={INK} />
+            <stop offset="100%" stopColor="#08090C" />
+          </radialGradient>
+
+          {/* Amber pulse gradient for the confirmation halo */}
+          <radialGradient id="confirm-halo" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={AMBER} stopOpacity={0.85} />
+            <stop offset="60%" stopColor={AMBER} stopOpacity={0.2} />
+            <stop offset="100%" stopColor={AMBER} stopOpacity={0} />
+          </radialGradient>
 
           <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="2" />
           </filter>
           <filter id="softer" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="5" />
+            <feGaussianBlur stdDeviation="6" />
           </filter>
         </defs>
 
-        {/* ── Drafting board ─────────────────────────────────────────── */}
+        {/* ── Chart card ─────────────────────────────────────────────── */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#paper-shade)"
         />
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#grid)"
+          fill="url(#ledger)"
         />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-        {/* Inner border */}
+        {/* Card border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#212842"
-          strokeWidth={1}
+          stroke={TEAL}
+          strokeOpacity={0.55}
+          strokeWidth={1.2}
+        />
+        <rect
+          x={FRAME.x + 12}
+          y={FRAME.y + 12}
+          width={FRAME.w - 24}
+          height={FRAME.h - 24}
+          fill="none"
+          stroke={RULE}
+          strokeOpacity={0.55}
+          strokeWidth={0.8}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner reg marks */}
         {(
           [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
+            [FRAME.x + 6, FRAME.y + 6, 1, 1],
+            [FRAME.x + FRAME.w - 6, FRAME.y + 6, -1, 1],
+            [FRAME.x + 6, FRAME.y + FRAME.h - 6, 1, -1],
+            [FRAME.x + FRAME.w - 6, FRAME.y + FRAME.h - 6, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={BRASS} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={TEAL} strokeWidth={1.5} fill="none" opacity={0.7}>
+            <line x1={cx} y1={cy} x2={cx + sx * 18} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 18} />
           </g>
         ))}
 
-        {/* Small ident labels along the frame (draftsman aesthetic) */}
+        {/* Top header inside chart */}
         <g
-          fill={GRAY_DIM}
           fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
+          fontSize={11}
+          letterSpacing={3.2}
+          fontWeight={600}
+          fill={TEAL}
+          opacity={paperFade}
         >
-          <text x={FRAME.x + 26} y={FRAME.y + 30}>
-            OBS · JODRELL BANK
-          </text>
+          <text x={FRAME.x + 34} y={FRAME.y + 42}>TRIAGE CHART · CONDYLURA CRISTATA</text>
           <text
-            x={FRAME.x + FRAME.w - 26}
-            y={FRAME.y + FRAME.h - 24}
+            x={FRAME.x + FRAME.w - 34}
+            y={FRAME.y + 42}
             textAnchor="end"
+            fill={INK_SOFT}
           >
-            FIG. 1 · PSR B1937+21 DIAL
+            FIG. 1 · SENSORY FAN
           </text>
         </g>
+        {/* Divider under header */}
+        <line
+          x1={FRAME.x + 34}
+          y1={FRAME.y + 58}
+          x2={FRAME.x + FRAME.w - 34}
+          y2={FRAME.y + 58}
+          stroke={TEAL}
+          strokeOpacity={0.55}
+          strokeWidth={1}
+        />
 
-        {/* ── Dial ─────────────────────────────────────────────────── */}
-        <g opacity={dialFade}>
-          {/* Concentric bezel rings */}
+        {/* ── Outer millisecond dial ──────────────────────────────────── */}
+        <g opacity={paperFade}>
           <circle
             cx={DIAL.cx}
             cy={DIAL.cy}
             r={DIAL.rOuter}
             fill="none"
-            stroke={GRAY_DIM}
+            stroke={TEAL}
+            strokeOpacity={0.55}
+            strokeWidth={1.6}
+          />
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={DIAL.rOuter - 12}
+            fill="none"
+            stroke={RULE}
             strokeOpacity={0.5}
-            strokeWidth={1.2}
-          />
-          <circle
-            cx={DIAL.cx}
-            cy={DIAL.cy}
-            r={DIAL.rOuter - 8}
-            fill="none"
-            stroke={BRASS}
-            strokeOpacity={0.35}
             strokeWidth={0.8}
           />
-          <circle
-            cx={DIAL.cx}
-            cy={DIAL.cy}
-            r={DIAL.rInner}
-            fill="none"
-            stroke={GRAY_DIM}
-            strokeOpacity={0.35}
-            strokeWidth={1}
-          />
-          <circle
-            cx={DIAL.cx}
-            cy={DIAL.cy}
-            r={DIAL.rInner - 60}
-            fill="none"
-            stroke={GRAY_DIM}
-            strokeOpacity={0.2}
-            strokeWidth={0.8}
-            strokeDasharray="2 4"
-          />
-
-          {/* Ticks (60) */}
           {ticks}
-
-          {/* Roman numerals */}
-          {numerals.map((num) => {
-            const x = DIAL.cx + Math.cos(num.a) * DIAL.rNumeral;
-            const y = DIAL.cy + Math.sin(num.a) * DIAL.rNumeral;
+          {/* Numeric labels around the dial */}
+          {TICK_LABELS.map((t) => {
+            const a = -Math.PI / 2 + (t.i / N_TICKS) * Math.PI * 2;
+            const x = DIAL.cx + Math.cos(a) * DIAL.rNumber;
+            const y = DIAL.cy + Math.sin(a) * DIAL.rNumber;
             return (
               <text
-                key={num.n}
+                key={t.i}
                 x={x}
-                y={y + 6}
+                y={y + 5}
                 textAnchor="middle"
-                fill={GRAY}
+                fill={INK}
                 fontFamily={playfair}
-                fontSize={22}
                 fontStyle="italic"
                 fontWeight={500}
-                letterSpacing={1}
-                opacity={0.85}
+                fontSize={18}
+                opacity={0.9}
               >
-                {num.n}
+                {t.label}
               </text>
             );
           })}
+          {/* Unit hint below the "0" mark */}
+          <text
+            x={DIAL.cx}
+            y={DIAL.cy - DIAL.rNumber + 22}
+            textAnchor="middle"
+            fill={TEAL}
+            fontFamily={inter}
+            fontSize={9.5}
+            letterSpacing={3.4}
+            fontWeight={600}
+          >
+            MS
+          </text>
         </g>
 
-        {/* ── Beams from magnetic poles (rotating) ─────────────────── */}
-        <g opacity={dialFade}>
-          {[0, Math.PI].map((offset, idx) => {
-            const a = beamAngle - Math.PI / 2 + offset;
-            // Wide soft outer cone
+        {/* ── Concentric guide rings behind rays ──────────────────────── */}
+        <g opacity={paperFade * 0.7}>
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={DIAL.rayOuter}
+            fill="none"
+            stroke={TEAL_SOFT}
+            strokeOpacity={0.35}
+            strokeWidth={0.8}
+            strokeDasharray="2 5"
+          />
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy}
+            r={(DIAL.rayInner + DIAL.rayOuter) / 2}
+            fill="none"
+            stroke={TEAL_SOFT}
+            strokeOpacity={0.22}
+            strokeWidth={0.6}
+            strokeDasharray="1 4"
+          />
+        </g>
+
+        {/* ── 22 nose rays (tentacles) ───────────────────────────────── */}
+        <g>
+          {Array.from({ length: N_RAYS }).map((_, i) => {
+            const a = rayAngle(i);
+            const flick = rayFlick(i);
+            const rIn = DIAL.rayInner;
+            const rOut = DIAL.rayInner + (DIAL.rayOuter - DIAL.rayInner) * flick;
+            const isConfirm = i === RAY_CONFIRM_INDEX && showConfirm && confirm > 0.02;
+            const baseColor = isConfirm ? AMBER : FLESH;
+            const stemColor = isConfirm ? AMBER_SOFT : FLESH_DIM;
+
+            // Ray as a slim tapered lozenge (wider at base, tip small).
+            const wBase = 14;
+            const wTip = 3.5;
+
+            // Perpendicular unit vector
+            const px = -Math.sin(a);
+            const py = Math.cos(a);
+
+            const bx1 = DIAL.cx + Math.cos(a) * rIn + px * (wBase / 2);
+            const by1 = DIAL.cy + Math.sin(a) * rIn + py * (wBase / 2);
+            const bx2 = DIAL.cx + Math.cos(a) * rIn - px * (wBase / 2);
+            const by2 = DIAL.cy + Math.sin(a) * rIn - py * (wBase / 2);
+            const tx1 = DIAL.cx + Math.cos(a) * rOut + px * (wTip / 2);
+            const ty1 = DIAL.cy + Math.sin(a) * rOut + py * (wTip / 2);
+            const tx2 = DIAL.cx + Math.cos(a) * rOut - px * (wTip / 2);
+            const ty2 = DIAL.cy + Math.sin(a) * rOut - py * (wTip / 2);
+
+            // Tentacle path with rounded tip
+            const path = `M ${bx1} ${by1} L ${tx1} ${ty1} Q ${DIAL.cx + Math.cos(a) * (rOut + 6)} ${DIAL.cy + Math.sin(a) * (rOut + 6)} ${tx2} ${ty2} L ${bx2} ${by2} Z`;
+
             return (
-              <g key={idx}>
-                {/* soft outer glow */}
+              <g key={`ray-${i}`}>
+                {/* Under-shadow */}
                 <path
-                  d={beamPath(a, 0.34)}
-                  fill="url(#beam-grad)"
-                  opacity={0.55 * beamSpringIn}
-                  filter="url(#softer)"
-                  transform={`rotate(${(a * 180) / Math.PI - 0} ${DIAL.cx} ${DIAL.cy})`}
-                  style={{ transformOrigin: `${DIAL.cx}px ${DIAL.cy}px` }}
-                />
-                {/* mid cone */}
-                <path
-                  d={beamPath(a, 0.18)}
-                  fill="url(#beam-grad)"
-                  opacity={0.85 * beamSpringIn}
+                  d={path}
+                  fill={stemColor}
+                  opacity={0.55}
                   filter="url(#soft)"
+                  transform={`translate(0.6 0.6)`}
                 />
-                {/* bright core line */}
+                {/* Ray body */}
+                <path
+                  d={path}
+                  fill={isConfirm ? AMBER : "url(#ray-flesh)"}
+                  opacity={raysIn}
+                />
+                {/* Center highlight line */}
                 <line
-                  x1={DIAL.cx + Math.cos(a) * DIAL.rBeamStart}
-                  y1={DIAL.cy + Math.sin(a) * DIAL.rBeamStart}
-                  x2={DIAL.cx + Math.cos(a) * DIAL.rBeamEnd}
-                  y2={DIAL.cy + Math.sin(a) * DIAL.rBeamEnd}
-                  stroke={BRASS}
-                  strokeOpacity={0.9 * beamSpringIn}
-                  strokeWidth={2}
+                  x1={DIAL.cx + Math.cos(a) * (rIn + 6)}
+                  y1={DIAL.cy + Math.sin(a) * (rIn + 6)}
+                  x2={DIAL.cx + Math.cos(a) * (rOut - 4)}
+                  y2={DIAL.cy + Math.sin(a) * (rOut - 4)}
+                  stroke="#FBE1E3"
+                  strokeOpacity={0.55 * raysIn}
+                  strokeWidth={1.2}
                   strokeLinecap="round"
+                />
+                {/* Terminal dot — Eimer's organ marker */}
+                <circle
+                  cx={DIAL.cx + Math.cos(a) * (rOut + 3)}
+                  cy={DIAL.cy + Math.sin(a) * (rOut + 3)}
+                  r={isConfirm ? 3.4 : 2.2}
+                  fill={baseColor}
+                  opacity={raysIn}
                 />
               </g>
             );
           })}
         </g>
 
-        {/* ── Neutron star at the pivot ───────────────────────────── */}
+        {/* ── Central hub: small mole head + pink snout ──────────────── */}
         <g
           style={{
-            transform: `scale(${starPop})`,
+            transform: `scale(${headPop})`,
             transformOrigin: `${DIAL.cx}px ${DIAL.cy}px`,
           }}
         >
-          {/* Outer magnetosphere corona */}
+          {/* soft under-glow */}
+          <circle
+            cx={DIAL.cx}
+            cy={DIAL.cy + 4}
+            r={DIAL.rHead + 12}
+            fill="#000"
+            opacity={0.18}
+            filter="url(#softer)"
+          />
+          {/* head silhouette (small hub, not the whole composition) */}
           <circle
             cx={DIAL.cx}
             cy={DIAL.cy}
-            r={STAR_GLOW_R}
-            fill="url(#magnetosphere)"
+            r={DIAL.rHead}
+            fill="url(#head)"
           />
-          {/* Rotation axis hairline */}
-          <line
-            x1={DIAL.cx}
-            y1={DIAL.cy - 78}
-            x2={DIAL.cx}
-            y2={DIAL.cy + 78}
-            stroke={GRAY_DIM}
-            strokeOpacity={0.55 * dialFade}
-            strokeDasharray="2 4"
-            strokeWidth={1}
-          />
-          {/* Star core */}
+          {/* fine fur rim */}
           <circle
             cx={DIAL.cx}
             cy={DIAL.cy}
-            r={STAR_CORE_R + 8}
-            fill="url(#star-core)"
-            opacity={0.9}
+            r={DIAL.rHead - 1}
+            fill="none"
+            stroke="#3E4048"
+            strokeOpacity={0.4}
+            strokeWidth={0.8}
           />
+          {/* Pink snout disk */}
           <circle
             cx={DIAL.cx}
             cy={DIAL.cy}
-            r={STAR_CORE_R}
-            fill="#FFFFFF"
+            r={DIAL.raySnout}
+            fill="url(#ray-flesh)"
           />
-          {/* Pivot dot */}
-          <circle cx={DIAL.cx} cy={DIAL.cy} r={3} fill={SPACE} />
+          {/* Nostrils */}
+          <ellipse cx={DIAL.cx - 9} cy={DIAL.cy + 4} rx={3.2} ry={5.5} fill="#5A2C31" />
+          <ellipse cx={DIAL.cx + 9} cy={DIAL.cy + 4} rx={3.2} ry={5.5} fill="#5A2C31" />
+          {/* Central pivot dot */}
+          <circle cx={DIAL.cx} cy={DIAL.cy - 10} r={1.6} fill="#5A2C31" opacity={0.7} />
         </g>
 
-        {/* ── Data cluster (upper-right of the frame, stacked lab plate) ── */}
-        <g
+        {/* ── Sweep pointer (thin amber needle riding the outer dial) ─ */}
+        {frame > sweepStart && (
+          <g opacity={raysIn}>
+            <line
+              x1={DIAL.cx + Math.cos(pointerA) * DIAL.rayInner * 0.55}
+              y1={DIAL.cy + Math.sin(pointerA) * DIAL.rayInner * 0.55}
+              x2={pointerX}
+              y2={pointerY}
+              stroke={AMBER}
+              strokeOpacity={0.7}
+              strokeWidth={1.4}
+              strokeLinecap="round"
+            />
+            <circle cx={pointerX} cy={pointerY} r={4} fill={AMBER} />
+            <circle cx={pointerX} cy={pointerY} r={9} fill={AMBER} opacity={0.25} filter="url(#soft)" />
+          </g>
+        )}
+
+        {/* ── Confirmation halo behind the accent ray ─────────────────── */}
+        {showConfirm && confirm > 0.02 && (() => {
+          const a = rayAngle(RAY_CONFIRM_INDEX);
+          const hx = DIAL.cx + Math.cos(a) * (DIAL.rayOuter + 16);
+          const hy = DIAL.cy + Math.sin(a) * (DIAL.rayOuter + 16);
+          const r = 40 + 22 * (1 - confirm);
+          return (
+            <g opacity={0.9 * confirm}>
+              <circle cx={hx} cy={hy} r={r} fill="url(#confirm-halo)" />
+              <circle
+                cx={hx}
+                cy={hy}
+                r={r * 0.55}
+                fill="none"
+                stroke={AMBER}
+                strokeOpacity={0.55}
+                strokeWidth={1.2}
+              />
+            </g>
+          );
+        })()}
+
+        {/* ── Divider above stats ───────────────────────────────────── */}
+        <line
+          x1={FRAME.x + 34}
+          y1={FRAME.y + FRAME.h - 128}
+          x2={FRAME.x + FRAME.w - 34}
+          y2={FRAME.y + FRAME.h - 128}
+          stroke={TEAL}
+          strokeOpacity={0.35}
+          strokeWidth={1}
           opacity={dataOpacity}
-          fontFamily={inter}
-          transform={`translate(${dataX}, ${dataY})`}
+        />
+
+        {/* ── Hero stat (left) + three sidekicks (right column) ─────── */}
+        <g
+          transform={`translate(${FRAME.x + 34}, ${FRAME.y + FRAME.h - 104})`}
+          opacity={dataOpacity}
         >
-          {/* Header */}
+          {/* HERO: 120 ms */}
           <text
             x={0}
             y={0}
-            textAnchor="end"
-            fill={BRASS}
-            fontSize={10}
-            letterSpacing={4}
-            fontWeight={600}
+            fill={AMBER}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={3.8}
+            fontWeight={700}
           >
-            SPECIMEN
+            HANDLING TIME · WORLD RECORD
           </text>
           <text
             x={0}
-            y={26}
-            textAnchor="end"
+            y={64}
             fill={INK}
             fontFamily={playfair}
             fontStyle="italic"
-            fontSize={22}
+            fontSize={78}
             fontWeight={500}
           >
-            PSR B1937+21
-          </text>
-
-          {/* Divider */}
-          <line
-            x1={dataLabelX}
-            y1={42}
-            x2={0}
-            y2={42}
-            stroke={GRAY_DIM}
-            strokeWidth={1}
-          />
-
-          {/* Data rows — label above value, right-aligned */}
-          {(
-            [
-              { label: "PERIOD", value: "1.5578 ms", accent: false },
-              { label: "FREQUENCY", value: "641.9 Hz", accent: false },
-              { label: "STABILITY", value: "Δf/f ≈ 10⁻¹⁵", accent: true },
-            ] as const
-          ).map((row, i) => {
-            const yTop = 62 + i * 40;
-            return (
-              <g key={row.label}>
-                <text
-                  x={0}
-                  y={yTop}
-                  textAnchor="end"
-                  fill={GRAY}
-                  fontSize={10}
-                  letterSpacing={3.2}
-                  fontWeight={500}
-                >
-                  {row.label}
-                </text>
-                <text
-                  x={0}
-                  y={yTop + 18}
-                  textAnchor="end"
-                  fill={row.accent ? BRASS : INK}
-                  fontSize={16}
-                  letterSpacing={0.5}
-                  fontWeight={row.accent ? 600 : 500}
-                >
-                  {row.value}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Rotation counter (below, separated by dashed rule) */}
-          <line
-            x1={dataLabelX}
-            y1={192}
-            x2={0}
-            y2={192}
-            stroke={GRAY_DIM}
-            strokeOpacity={0.55}
-            strokeWidth={1}
-            strokeDasharray="2 4"
-          />
-          <g transform="translate(0, 210)">
-            <text
-              x={0}
-              y={0}
-              textAnchor="end"
-              fill={BRASS}
-              fontSize={10}
-              letterSpacing={4}
+            120
+            <tspan
+              dx={6}
+              fontSize={30}
+              fill={AMBER_SOFT}
+              fontStyle="normal"
+              fontFamily={inter}
               fontWeight={600}
             >
-              ROTATIONS
-            </text>
-            <text
-              x={0}
-              y={40}
-              textAnchor="end"
-              fill={INK}
-              fontFamily={playfair}
-              fontStyle="italic"
-              fontSize={40}
-              fontWeight={500}
-            >
-              {String(revolutions).padStart(3, "0")}
-            </text>
-            <text
-              x={0}
-              y={58}
-              textAnchor="end"
-              fill={GRAY_DIM}
-              fontSize={9}
-              letterSpacing={2.4}
-              fontWeight={500}
-            >
-              SIM · SLOWED 500×
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip below the frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY_DIM}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TWIN RADIO BEAMS FROM MAGNETIC POLES</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={BRASS}
-            opacity={0.85}
-          >
-            ONE TICK EVERY 1.5578 MILLISECONDS
+              ms
+            </tspan>
           </text>
+          <text
+            x={0}
+            y={88}
+            fill={INK_SOFT}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={2.4}
+            fontWeight={500}
+          >
+            TOUCH → DECIDE → SWALLOW
+          </text>
+
+          {/* Sidekick stack (three small stats, right side) */}
+          <g transform={`translate(${FRAME.w - 68}, 0)`}>
+            {(
+              [
+                { label: "TENTACLE RAYS", value: "22" },
+                { label: "EIMER'S ORGANS", value: "25 000+" },
+                { label: "TOUCHES / SEC", value: "10–13" },
+              ] as const
+            ).map((row, i) => {
+              const y = i * 30;
+              return (
+                <g key={row.label}>
+                  <text
+                    x={-170}
+                    y={y}
+                    fill={TEAL}
+                    fontFamily={inter}
+                    fontSize={10}
+                    letterSpacing={3.2}
+                    fontWeight={600}
+                    textAnchor="end"
+                  >
+                    {row.label}
+                  </text>
+                  <line
+                    x1={-160}
+                    y1={y - 4}
+                    x2={-24}
+                    y2={y - 4}
+                    stroke={RULE}
+                    strokeOpacity={0.35}
+                    strokeWidth={0.6}
+                    strokeDasharray="1 3"
+                  />
+                  <text
+                    x={0}
+                    y={y}
+                    fill={INK}
+                    fontFamily={playfair}
+                    fontStyle="italic"
+                    fontSize={22}
+                    fontWeight={500}
+                    textAnchor="end"
+                  >
+                    {row.value}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup (below the chart) ────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 915,
+          top: 950,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
             [0, 1],
-            [16, 0],
+            [18, 0],
           )}px)`,
         }}
       >
         <div
           style={{
-            color: BRASS,
+            color: TEAL,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
-            fontWeight: 600,
+            marginBottom: 20,
+            fontWeight: 700,
           }}
         >
-          Role <span style={{ color: GRAY_DIM, margin: "0 4px" }}>/</span>
-          <span style={{ color: INK, letterSpacing: 5 }}>Watchmaker</span>
+          Role <span style={{ color: RULE, margin: "0 4px" }}>/</span>
+          <span style={{ color: INK, letterSpacing: 5 }}>ER Triage Nurse</span>
         </div>
 
         <div
@@ -717,65 +779,64 @@ export const PairingCard: React.FC = () => {
             color: INK,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
+            fontSize: 92,
+            lineHeight: 0.94,
+            letterSpacing: -1.6,
             fontStyle: "italic",
           }}
         >
-          The neutron
+          The mammal
           <br />
-          watchmaker.
+          triage nurse.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 32,
+            color: INK_SOFT,
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.44,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          <span style={{ color: BRASS, fontWeight: 600 }}>PSR B1937+21</span> —
-          the first millisecond pulsar, discovered in 1982 — spins{" "}
-          <span style={{ color: BRASS, fontWeight: 600 }}>641.9 times</span> a
-          second, its ticks stable to about{" "}
-          <span style={{ color: BRASS, fontWeight: 600 }}>one part in 10¹⁵</span>
-          {" "}over years. Astronomers now use these stellar corpses as a
-          galaxy-scale set of watch movements — precise enough to hear
-          gravitational waves in their jitter.
+          The <span style={{ color: TEAL, fontWeight: 600 }}>star-nosed mole</span>
+          {" "}wears <span style={{ color: TEAL, fontWeight: 600 }}>22 fleshy rays</span>
+          {" "}packed with <span style={{ color: TEAL, fontWeight: 600 }}>25 000+ Eimer's organs</span>
+          {" "}— the densest touch field known. It fingers
+          {" "}<span style={{ color: TEAL, fontWeight: 600 }}>12 targets a second</span>
+          {" "}and can identify, decide on and swallow prey in
+          {" "}<span style={{ color: AMBER, fontWeight: 700 }}>120 milliseconds</span>
+          {" "}— the fastest triage in any mammal.
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer — carries the citation now that it's off the chart */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 46,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY_DIM,
+          color: TEAL,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
           textTransform: "uppercase",
-          fontWeight: 500,
+          fontWeight: 600,
         }}
       >
-        <span>Backer et al. · Nature 300 (1982) 615–618</span>
+        <span>Catania &amp; Remple · Nature 433 (2005) 519–522</span>
         <span>
-          <span style={{ color: BRASS }}>●</span> Beam = radio pulse
+          <span style={{ color: AMBER }}>●</span> Specimen No. 004
         </span>
       </div>
 
-      {/* silence unused warning while keeping length declaration available */}
       <div style={{ display: "none" }}>{durationInFrames}</div>
     </AbsoluteFill>
   );
