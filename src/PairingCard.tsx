@@ -50,158 +50,79 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
-
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
-
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// ── Palette — from the concept's visual brief ─────────────────────────────
+const INK = "#050D18"; // abyssal background
+const BOARD = "#0E1C30"; // deep-sea drafting board
+const BOARD_CORE = "#122842"; // inner vignette
+const PEARL = "#EEE4C4"; // biogenic silica
+const PEARL_DIM = "#B8AF95"; // shaded silica
+const CYAN = "#5EE7D2"; // bioluminescent photon
+const CYAN_HALO = "#B8F8ED"; // photon halo
+const AMBER = "#E9A94A"; // annotation accent
+const GRAY = "#7C8598"; // metadata
+const GRID = "#152740";
+const GRID_MAJOR = "#1D3452";
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Global growth timeline — the fibre lights up left-to-right.
+  const growSpan = fps * 2.0;
+  const growT = Math.max(0, Math.min(1, frame / growSpan));
+  const growEased = 1 - Math.pow(1 - growT, 3);
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Photon pulse — starts once the fibre is fully lit.
+  const photonPhase = ((frame - fps * 2.2) % (fps * 2.4)) / (fps * 2.4);
+  const photonActive = frame > fps * 2.2;
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 0.35,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 0.9, fps * 1.7], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
+  // ── Page grid (1080 × 1350 portrait) ────────────────────────────────
   // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
+  // Drafting frame     : 130..841  (h 711, w 960)
+  // Title block        : 900..
+  // Hook               : ~1095..
+  // Footer             : 1290..
   const FRAME = { x: 60, y: 130, w: 960, h: 711 };
   const MAP_W = 1080;
   const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const scale = FRAME.w / MAP_W;
+
+  // ── Spicule geometry in map coords (1080 × 800) ────────────────────
+  // A horizontal fibre viewed from the side; the cut left end shows
+  // concentric silica layers.
+  const AXIS_Y = 400;
+  const CUT_X = 330; // centre of the cross-section circle
+  const TAIL_X = 970; // where the fibre exits the right edge
+  const CUT_R = 88; // outer radius of the cross-section
+  const FIBRE_H = CUT_R * 1.55; // fibre body height
+  const FIBRE_TOP = AXIS_Y - FIBRE_H / 2;
+
+  // Concentric silica layers (from outer to inner core)
+  const LAYERS = [
+    { r: 88, fill: PEARL_DIM, stroke: "#7A705A" }, // outer sheath
+    { r: 74, fill: "#D8CDA9", stroke: "#8A8065" }, // laminated silica
+    { r: 58, fill: PEARL, stroke: "#8A8065" }, // cladding
+    { r: 44, fill: "#F5EBCB", stroke: "#8A8065" }, // Na-doped ring
+    { r: 30, fill: CYAN_HALO, stroke: "#8A8065", opacity: 0.9 }, // graded
+    { r: 16, fill: CYAN, stroke: "#4FC7B4" }, // core
+  ];
+
+  // Photon position along the fibre (map coords)
+  const photonStart = CUT_X + 8;
+  const photonEnd = TAIL_X - 20;
+  const photonX = photonStart + (photonEnd - photonStart) * photonPhase;
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -225,11 +146,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: CYAN }}>2026 · 08 · 19</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Main figure */}
       <svg
         width={1080}
         height={1350}
@@ -268,22 +189,38 @@ export const PairingCard: React.FC = () => {
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="45%" cy="42%" r="72%">
+            <stop offset="0%" stopColor={BOARD_CORE} stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <linearGradient id="fibre-body" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#8A8065" />
+            <stop offset="18%" stopColor={PEARL} />
+            <stop offset="50%" stopColor="#FBF3D8" />
+            <stop offset="82%" stopColor={PEARL_DIM} />
+            <stop offset="100%" stopColor="#5C5540" />
+          </linearGradient>
+
+          <linearGradient id="beam" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stopColor={CYAN} stopOpacity={0} />
+            <stop offset="15%" stopColor={CYAN} stopOpacity={0.9} />
+            <stop offset="85%" stopColor={CYAN_HALO} stopOpacity={0.9} />
+            <stop offset="100%" stopColor={CYAN_HALO} stopOpacity={0} />
+          </linearGradient>
+
+          <radialGradient id="photon-halo" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={CYAN_HALO} stopOpacity={0.9} />
+            <stop offset="60%" stopColor={CYAN} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={CYAN} stopOpacity={0} />
+          </radialGradient>
+
+          <filter id="beam-glow" x="-20%" y="-40%" width="140%" height="180%">
+            <feGaussianBlur stdDeviation="4" />
+          </filter>
+
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2.5" />
           </filter>
         </defs>
 
@@ -309,15 +246,13 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#26405F"
           strokeWidth={1}
         />
 
@@ -330,240 +265,421 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={AMBER} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Depth marker (top-left of the frame) */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
+          transform={`translate(${FRAME.x + 22}, ${FRAME.y + 34})`}
           fill={GRAY}
           fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
           fontWeight={500}
+          fontSize={10}
+          letterSpacing={2.8}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
+          <text>DEPTH · 500–1000 M</text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
+        {/* ── Main figure: spicule in map coords ─────────────────── */}
         <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
+          {/* ── Whole-organism silhouette (upper-right corner) ──── */}
+          <g transform="translate(935, 78)" opacity={0.9}>
+            {(() => {
+              // Slender vase-lattice cage — a schematic of the whole sponge.
+              const bw = 86;
+              const bh = 168;
+              const bx = -bw / 2;
+              const paths: React.ReactElement[] = [];
+              const rows = 9;
+              const cols = 5;
+              const dx = bw / cols;
+              const dy = bh / rows;
+              // Diagonal ribs (both diagonals) — the sponge's cross-lattice
+              for (let r = 0; r < rows; r++) {
+                for (let c = 0; c <= cols; c++) {
+                  const x1 = bx + c * dx;
+                  const y1 = r * dy;
+                  const x2 = bx + (c + 1) * dx;
+                  const y2 = (r + 1) * dy;
+                  paths.push(
+                    <line
+                      key={`d1-${r}-${c}`}
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke={PEARL}
+                      strokeOpacity={0.55}
+                      strokeWidth={1.1}
+                    />,
+                  );
+                  paths.push(
+                    <line
+                      key={`d2-${r}-${c}`}
+                      x1={x1 + dx}
+                      y1={y1}
+                      x2={x1}
+                      y2={y2}
+                      stroke={PEARL}
+                      strokeOpacity={0.55}
+                      strokeWidth={1.1}
+                    />,
+                  );
                 }
-                acc += segs[i];
               }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
+              // Horizontal binding rings
+              for (let r = 0; r <= rows; r++) {
+                paths.push(
+                  <line
+                    key={`h-${r}`}
+                    x1={bx}
+                    y1={r * dy}
+                    x2={bx + bw}
+                    y2={r * dy}
+                    stroke={PEARL}
+                    strokeOpacity={0.85}
+                    strokeWidth={1.4}
+                  />,
+                );
+              }
+              // Outer bounding rectangle (subtle)
+              paths.push(
+                <rect
+                  key="bound"
+                  x={bx}
+                  y={0}
+                  width={bw}
+                  height={bh}
+                  fill="none"
+                  stroke={PEARL}
+                  strokeOpacity={0.25}
+                  strokeWidth={1}
+                />,
               );
+              return <g>{paths}</g>;
             })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
+              x={0}
+              y={-42}
               textAnchor="middle"
-              fill={OAT}
+              fill={PEARL}
+              fontFamily={inter}
+              fontStyle="italic"
+              fontSize={14}
+              fontWeight={500}
+            >
+              Euplectella aspergillum
+            </text>
+            <text
+              x={0}
+              y={-22}
+              textAnchor="middle"
+              fill={GRAY}
               fontFamily={inter}
               fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
+              letterSpacing={3.2}
+              fontWeight={500}
             >
-              TOKYO
+              WHOLE ORGANISM · 20 CM
+            </text>
+          </g>
+
+          {/* ── Hero: the spicule ──────────────────────────────── */}
+
+          {/* Body — pill-shape reveal from left to right */}
+          <clipPath id="spicule-clip">
+            <rect
+              x={CUT_X - 20}
+              y={FIBRE_TOP - 4}
+              width={(TAIL_X + 20 - (CUT_X - 20)) * growEased}
+              height={FIBRE_H + 8}
+            />
+          </clipPath>
+
+          <g clipPath="url(#spicule-clip)">
+            {/* Fibre body */}
+            <rect
+              x={CUT_X}
+              y={FIBRE_TOP}
+              width={TAIL_X - CUT_X + 40}
+              height={FIBRE_H}
+              fill="url(#fibre-body)"
+            />
+            {/* Right-end taper */}
+            <ellipse
+              cx={TAIL_X}
+              cy={AXIS_Y}
+              rx={14}
+              ry={FIBRE_H / 2}
+              fill="#3E3A2A"
+            />
+            {/* Highlight bar */}
+            <rect
+              x={CUT_X}
+              y={FIBRE_TOP + 12}
+              width={TAIL_X - CUT_X + 40}
+              height={6}
+              fill="#FBF3D8"
+              opacity={0.55}
+            />
+            {/* Subtle length striations (annular joints along the fibre) */}
+            {Array.from({ length: 8 }).map((_, i) => {
+              const x = CUT_X + 80 + i * 90;
+              return (
+                <line
+                  key={`stria-${i}`}
+                  x1={x}
+                  y1={FIBRE_TOP + 2}
+                  x2={x}
+                  y2={FIBRE_TOP + FIBRE_H - 2}
+                  stroke="#6C6142"
+                  strokeOpacity={0.35}
+                  strokeWidth={1}
+                />
+              );
+            })}
+
+            {/* Light beam inside the fibre (once the tube is lit) */}
+            <rect
+              x={CUT_X + 12}
+              y={AXIS_Y - 6}
+              width={TAIL_X - CUT_X - 20}
+              height={12}
+              fill="url(#beam)"
+              opacity={growEased}
+              filter="url(#beam-glow)"
+            />
+            <rect
+              x={CUT_X + 12}
+              y={AXIS_Y - 1.5}
+              width={TAIL_X - CUT_X - 20}
+              height={3}
+              fill={CYAN_HALO}
+              opacity={growEased}
+            />
+
+            {/* Photon pulse */}
+            {photonActive && (
+              <g opacity={Math.min(1, (frame - fps * 2.2) / fps)}>
+                <circle
+                  cx={photonX}
+                  cy={AXIS_Y}
+                  r={26}
+                  fill="url(#photon-halo)"
+                />
+                <circle
+                  cx={photonX}
+                  cy={AXIS_Y}
+                  r={7}
+                  fill="#FFFFFF"
+                  filter="url(#soft-glow)"
+                />
+                <circle
+                  cx={photonX}
+                  cy={AXIS_Y}
+                  r={3}
+                  fill="#FFFFFF"
+                />
+              </g>
+            )}
+          </g>
+
+          {/* Cross-section (cut end) — concentric silica layers */}
+          <g transform={`translate(${CUT_X}, ${AXIS_Y})`}>
+            {/* Subtle drop shadow */}
+            <circle cx={0} cy={4} r={CUT_R + 2} fill="#000" opacity={0.35} />
+            {LAYERS.map((L, i) => (
+              <circle
+                key={`layer-${i}`}
+                cx={0}
+                cy={0}
+                r={L.r}
+                fill={L.fill}
+                stroke={L.stroke}
+                strokeWidth={i === LAYERS.length - 1 ? 1.4 : 0.9}
+                opacity={
+                  L.opacity !== undefined
+                    ? L.opacity * Math.min(1, growEased * 1.4)
+                    : Math.min(1, growEased * 1.4)
+                }
+              />
+            ))}
+            {/* Center highlight */}
+            <circle cx={-6} cy={-6} r={5} fill="#FFFFFF" opacity={0.55} />
+          </g>
+
+          {/* ── Callouts / annotations ────────────────────────── */}
+
+          {/* Callout A: CORE — leader goes UP-LEFT from the top of the
+              cross-section to a label above (inside frame margins) */}
+          <g
+            opacity={Math.min(1, Math.max(0, growEased - 0.15) * 1.4)}
+            fill={AMBER}
+            stroke={AMBER}
+            fontFamily={inter}
+          >
+            <line
+              x1={CUT_X - 6}
+              y1={AXIS_Y - CUT_R + 12}
+              x2={CUT_X - 90}
+              y2={AXIS_Y - CUT_R - 60}
+              strokeWidth={1.2}
+              fill="none"
+            />
+            <line
+              x1={CUT_X - 90}
+              y1={AXIS_Y - CUT_R - 60}
+              x2={135}
+              y2={AXIS_Y - CUT_R - 60}
+              strokeWidth={1.2}
+              fill="none"
+            />
+            <text
+              x={135}
+              y={AXIS_Y - CUT_R - 74}
+              fontSize={15}
+              letterSpacing={3}
+              fontWeight={600}
+            >
+              CORE · Na-DOPED SiO₂
+            </text>
+            <text
+              x={135}
+              y={AXIS_Y - CUT_R - 50}
+              fontSize={13}
+              letterSpacing={2}
+              fontWeight={400}
+              fill={PEARL}
+              stroke="none"
+            >
+              graded refractive index
+            </text>
+          </g>
+
+          {/* Callout B: LAMINATED SILICA — leader goes DOWN-LEFT from
+              the bottom outer ring to a label below the cross-section */}
+          <g
+            opacity={Math.min(1, Math.max(0, growEased - 0.2) * 1.4)}
+            fill={AMBER}
+            stroke={AMBER}
+            fontFamily={inter}
+          >
+            <line
+              x1={CUT_X - CUT_R + 18}
+              y1={AXIS_Y + CUT_R - 20}
+              x2={CUT_X - 130}
+              y2={AXIS_Y + CUT_R + 60}
+              strokeWidth={1.2}
+              fill="none"
+            />
+            <line
+              x1={CUT_X - 130}
+              y1={AXIS_Y + CUT_R + 60}
+              x2={135}
+              y2={AXIS_Y + CUT_R + 60}
+              strokeWidth={1.2}
+              fill="none"
+            />
+            <text
+              x={135}
+              y={AXIS_Y + CUT_R + 78}
+              fontSize={15}
+              letterSpacing={3}
+              fontWeight={600}
+            >
+              LAMINATED SILICA
+            </text>
+            <text
+              x={135}
+              y={AXIS_Y + CUT_R + 102}
+              fontSize={13}
+              letterSpacing={2}
+              fontWeight={400}
+              fill={PEARL}
+              stroke="none"
+            >
+              5–10 nm organic interleaves
+            </text>
+          </g>
+
+          {/* ── Comparison stat below the fibre — the story ── */}
+          <g
+            transform={`translate(500, ${AXIS_Y + FIBRE_H / 2 + 88})`}
+            opacity={Math.min(1, Math.max(0, growEased - 0.35) * 1.4)}
+            fontFamily={inter}
+          >
+            {/* Divider */}
+            <line
+              x1={240}
+              y1={-52}
+              x2={240}
+              y2={36}
+              stroke="#31445E"
+              strokeWidth={1}
+            />
+
+            {/* Left cell — this sponge */}
+            <text
+              x={0}
+              y={-32}
+              fill={GRAY}
+              fontSize={11}
+              letterSpacing={3.2}
+              fontWeight={500}
+            >
+              SPONGE · SEAFLOOR
+            </text>
+            <text
+              x={0}
+              y={22}
+              fill={CYAN}
+              fontFamily={playfair}
+              fontSize={54}
+              fontWeight={500}
+              fontStyle="italic"
+              letterSpacing={-0.4}
+            >
+              4 °C
+            </text>
+
+            {/* Right cell — industry */}
+            <text
+              x={270}
+              y={-32}
+              fill={GRAY}
+              fontSize={11}
+              letterSpacing={3.2}
+              fontWeight={500}
+            >
+              INDUSTRIAL DRAW TOWER
+            </text>
+            <text
+              x={270}
+              y={22}
+              fill={PEARL_DIM}
+              fontFamily={playfair}
+              fontSize={54}
+              fontWeight={500}
+              fontStyle="italic"
+              letterSpacing={-0.4}
+            >
+              ~2000 °C
+            </text>
+
+            {/* Footnote spanning both cells */}
+            <text
+              x={240}
+              y={64}
+              textAnchor="middle"
+              fill={GRAY}
+              fontSize={11}
+              letterSpacing={2.8}
+              fontWeight={500}
+            >
+              — SAME FIBRE-OPTIC BEHAVIOUR —
             </text>
           </g>
         </g>
@@ -577,14 +693,9 @@ export const PairingCard: React.FC = () => {
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · BASAL SPICULE, EUPLECTELLA ASPERGILLUM</text>
+          <text x={FRAME.w} textAnchor="end" fill={CYAN} opacity={0.85}>
+            LIGHT-GUIDING BIOGENIC SILICA
           </text>
         </g>
       </svg>
@@ -606,7 +717,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CYAN,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -617,7 +728,7 @@ export const PairingCard: React.FC = () => {
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Fiber-Optic Engineer
           </span>
         </div>
 
@@ -632,9 +743,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The 4 °C
           <br />
-          city planner.
+          glass foundry.
         </div>
 
         <div
@@ -649,13 +760,15 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          Grown on the abyssal seafloor at{" "}
+          <span style={{ color: CYAN, fontWeight: 600 }}>4 °C</span>, the basal
+          spicules of{" "}
+          <span style={{ color: PEARL, fontWeight: 600, fontStyle: "italic" }}>
+            Euplectella aspergillum
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          are sodium-doped, layered biogenic silica — their refractive-index
+          profile and light-guiding behaviour rival commercial optical fibre
+          drawn at ~2000 °C.
         </div>
       </div>
 
@@ -677,9 +790,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Sundar et al. · Nature 424 (2003) 899–900</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: CYAN }}>●</span> Photon along fibre axis
         </span>
       </div>
     </AbsoluteFill>
