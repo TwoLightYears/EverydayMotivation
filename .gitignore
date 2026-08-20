@@ -1,4 +1,5 @@
 node_modules/
 .cache/
 .remotion/
+scratchpad/
 *.log
