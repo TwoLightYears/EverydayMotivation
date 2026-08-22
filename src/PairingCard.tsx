@@ -50,158 +50,196 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0A0E12";
+const BOARD = "#0F1418";
+const MEMBRANE = "#EFE1BF";
+const MEMBRANE_DIM = "#8C7F60";
+const IRIS = "#2F7A6E";
+const IRIS_HOT = "#5CC1AF";
+const AMBER = "#C57A3E";
+const AMBER_HOT = "#E89A5A";
+const GRAY = "#7C8390";
+const GRID = "#161B20";
+const GRID_MAJOR = "#1F262C";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Wing geometry (in map coord system: 1080 × 800) ───────────────────
+// Wing sits diagonally, base at lower-left, tip pushed up-right.
+// Leading edge (upper): near-straight, slightly convex, characteristic of a
+// cicada forewing. Trailing edge (lower): a fuller curve, tapering to apex.
+const WING_OUTLINE = `
+M 205,468
+C 285,388 405,308 555,258
+C 700,220 830,238 908,308
+C 858,352 780,378 700,398
+C 615,418 520,462 430,486
+C 345,506 258,502 205,468 Z
+`;
+
+// Longitudinal veins radiating from base cluster at (~215,455).
+// End near, but do not overshoot, the wing margin (clip also enforces this).
+type Vein = { d: string; w: number };
+const VEINS: Vein[] = [
+  // C (costa) — hugs the leading edge
+  { d: "M 220,452 C 320,370 460,300 610,272 C 740,258 830,270 895,308", w: 2.4 },
+  // Sc + R (radial trunk)
+  { d: "M 220,457 C 330,405 470,340 620,308 C 740,290 815,300 875,325", w: 2.0 },
+  // R + M split (upper distal fan)
+  { d: "M 220,461 C 335,430 480,378 620,348 C 730,335 800,340 848,352", w: 1.7 },
+  // M (median)
+  { d: "M 220,464 C 330,455 470,420 605,395 C 705,382 770,378 810,378", w: 1.6 },
+  // Cu (cubital)
+  { d: "M 220,467 C 315,470 435,468 555,458 C 645,450 710,436 750,420", w: 1.5 },
+  // A (anal, sweeps into trailing edge)
+  { d: "M 220,470 C 290,486 395,498 495,486 C 570,476 615,460 640,446", w: 1.3 },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
+// Cross-veins — each one connects two adjacent longitudinal veins.
+// Their endpoints are chosen to sit ON the longitudinal curves above so
+// they terminate visibly on veins rather than in negative space.
+const CROSS_VEINS: string[] = [
+  // C – R
+  "M 470,318 L 478,344",
+  "M 560,286 L 568,315",
+  "M 660,270 L 665,295",
+  // R – M split
+  "M 620,308 L 620,348",
+  "M 730,290 L 732,336",
+  // M split – M
+  "M 555,382 L 560,410",
+  "M 660,370 L 662,388",
+  // M – Cu
+  "M 465,432 L 470,462",
+  "M 585,405 L 585,455",
+  // Cu – A
+  "M 385,478 L 388,492",
+  "M 500,464 L 500,489",
 ];
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
+// Hotspot on the wing where the magnifier detail is called out
+const HOTSPOT = { x: 620, y: 355 };
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+// Inset detail — upper-right of the frame (map coords)
+const INSET = { cx: 890, cy: 130, r: 128 };
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+// Hex-packed pillar grid inside inset — visible top-down as circles
+const PILLAR_PITCH = 22; // spacing between pillar centers
+const PILLAR_R = 5.5;
+type Pillar = { x: number; y: number; i: number };
+const PILLARS: Pillar[] = (() => {
+  const out: Pillar[] = [];
+  let idx = 0;
+  for (let row = -6; row <= 6; row++) {
+    const y = INSET.cy + row * (PILLAR_PITCH * 0.866);
+    const xOff = row % 2 === 0 ? 0 : PILLAR_PITCH / 2;
+    for (let col = -6; col <= 6; col++) {
+      const x = INSET.cx + col * PILLAR_PITCH + xOff;
+      const inside = Math.hypot(x - INSET.cx, y - INSET.cy) < INSET.r - 8;
+      if (inside) {
+        // deterministic stagger order: outward from center
+        const d = Math.hypot(x - INSET.cx, y - INSET.cy);
+        out.push({ x, y, i: d });
+        idx++;
+      }
+    }
   }
-  return ((h >>> 0) % 1000) / 1000;
-};
+  // sort by distance from center so they appear from the middle out
+  out.sort((a, b) => a.i - b.i);
+  return out.map((p, i) => ({ ...p, i }));
+})();
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// Bacterium (rod) sits across the pillars: base centerline and length
+const BACT = {
+  cx: INSET.cx + 6,
+  cy: INSET.cy - 6,
+  len: 148,
+  h0: 30, // full-height, unruptured
+  rot: -18, // degrees
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Timeline ─────────────────────────────────────────────────────
+  //  0.0s   board + grid on
+  //  0.4s   wing scale in (spring)
+  //  1.4s   iridescent sweep across membrane
+  //  1.8s   leader line draws
+  //  2.2s   pillars stagger in
+  //  3.2s   bacterium settles, deflates
+  //  3.2s   role tag, title, hook fade in with springs
+  const T = (s: number) => fps * s;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  const wingSpring = spring({
+    frame: frame - T(0.4),
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.9, stiffness: 90 },
+  });
+  const wingScale = 0.94 + wingSpring * 0.06;
+  const wingOp = wingSpring;
+
+  const sweepP = interpolate(frame, [T(1.4), T(2.3)], [-0.2, 1.2], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const leaderP = interpolate(frame, [T(1.8), T(2.6)], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
+  const pillarsP = interpolate(frame, [T(2.2), T(3.4)], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const bactApproach = interpolate(frame, [T(3.2), T(3.9)], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  // Deflation: 1 = full, 0 = collapsed
+  const bactHeight = interpolate(frame, [T(3.9), T(4.7)], [1, 0.28], {
+    easing: Easing.inOut(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const bactBreachOp = interpolate(frame, [T(4.1), T(4.7)], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const roleSpring = spring({
+    frame: frame - T(3.2),
+    fps,
+    config: { damping: 200, mass: 0.8 },
+  });
+  const titleSpring = spring({
+    frame: frame - T(3.5),
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+  const hookOp = interpolate(frame, [T(4.0), T(4.9)], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // ── Page layout ──────────────────────────────────────────────────
+  // Top metadata band : 0..110
+  // Drafting frame    : 130..841 (h 711, w 960)
+  // Type block        : 900..
+  // Footer            : bottom 50
   const FRAME = { x: 60, y: 130, w: 960, h: 711 };
   const MAP_W = 1080;
   const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const scale = FRAME.w / MAP_W; // 0.888... == FRAME.h / MAP_H
+
+  // Sweep highlight positional bounds in map coords (across wing)
+  const sweepX = interpolate(sweepP, [0, 1], [140, 940]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -225,11 +263,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: IRIS_HOT }}>2026 · 08 · 22</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Drafting frame + specimen */}
       <svg
         width={1080}
         height={1350}
@@ -268,22 +306,64 @@ export const PairingCard: React.FC = () => {
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
           <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+            <stop offset="0%" stopColor="#12181D" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          {/* Wing membrane base fill: warm ivory with amber base and pale tip */}
+          <linearGradient
+            id="wing-fill"
+            x1="200"
+            y1="470"
+            x2="890"
+            y2="260"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0%" stopColor="#C4913E" stopOpacity={0.55} />
+            <stop offset="35%" stopColor={MEMBRANE} stopOpacity={0.28} />
+            <stop offset="100%" stopColor={MEMBRANE} stopOpacity={0.14} />
+          </linearGradient>
+
+          {/* Iridescent overlay — teal-green (real cicada wing sheen) */}
+          <radialGradient
+            id="wing-iris"
+            cx="500"
+            cy="330"
+            r="380"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0%" stopColor={IRIS_HOT} stopOpacity={0.38} />
+            <stop offset="45%" stopColor={IRIS} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={IRIS} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Sweep highlight — a soft moving vertical band */}
+          <linearGradient
+            id="sweep"
+            x1={sweepX - 90}
+            y1="0"
+            x2={sweepX + 90}
+            y2="0"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0%" stopColor={IRIS_HOT} stopOpacity={0} />
+            <stop offset="50%" stopColor={IRIS_HOT} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={IRIS_HOT} stopOpacity={0} />
+          </linearGradient>
+
+          {/* Clip for wing membrane so overlays don't spill */}
+          <clipPath id="wing-clip">
+            <path d={WING_OUTLINE} />
+          </clipPath>
+
+          {/* Clip for inset circle */}
+          <clipPath id="inset-clip">
+            <circle cx={INSET.cx} cy={INSET.cy} r={INSET.r - 4} />
+          </clipPath>
+
+          <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" />
           </filter>
         </defs>
 
@@ -309,19 +389,17 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#242B33"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner crop marks (specimen sheet) */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,36 +408,33 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={AMBER} strokeWidth={1.4} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Specimen label in top-left of frame */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 32})`}
           fill={GRAY}
           fontFamily={inter}
           fontWeight={600}
           fontSize={11}
           letterSpacing={3}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text>SPECIMEN</text>
+          <text y={17} fill={MEMBRANE} letterSpacing={2.2} fontWeight={500}>
+            PSALTODA CLARIPENNIS
+          </text>
+          <text y={32} fill={GRAY} letterSpacing={2.2} fontWeight={400}>
+            LEFT FOREWING, ADAXIAL
+          </text>
         </g>
 
-        {/* Scale bar */}
+        {/* Scale bar (bottom right of frame) */}
         <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
+          transform={`translate(${FRAME.x + FRAME.w - 200}, ${
             FRAME.y + FRAME.h - 28
           })`}
           stroke={GRAY}
@@ -369,206 +444,423 @@ export const PairingCard: React.FC = () => {
           letterSpacing={3}
           fontWeight={500}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
+          <line x1={0} y1={0} x2={120} y2={0} strokeWidth={1.2} />
           <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <line x1={60} y1={-3} x2={60} y2={3} strokeWidth={1.2} />
+          <line x1={120} y1={-5} x2={120} y2={5} strokeWidth={1.2} />
+          <text x={130} y={4} stroke="none">
+            10 MM
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
+        {/* Content scaled into FRAME */}
         <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+          {/* ── WING ─────────────────────────────────────────────── */}
+          <g
+            opacity={wingOp}
+            transform={`rotate(-9 540 380) translate(${(1 - wingScale) * 540} ${
+              (1 - wingScale) * 380
+            }) scale(${wingScale})`}
+            style={{ transformOrigin: "540px 380px" }}
+          >
+            {/* Membrane fill */}
+            <path
+              d={WING_OUTLINE}
+              fill="url(#wing-fill)"
+              stroke={AMBER}
+              strokeWidth={2.2}
+              strokeLinejoin="round"
+            />
+
+            {/* Iridescent overlay (clipped to wing) */}
+            <g clipPath="url(#wing-clip)">
+              <rect
+                x={140}
+                y={200}
+                width={800}
+                height={340}
+                fill="url(#wing-iris)"
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
+              {/* Moving sweep */}
+              <rect
+                x={140}
+                y={200}
+                width={800}
+                height={340}
+                fill="url(#sweep)"
+                opacity={interpolate(sweepP, [0, 0.2, 0.8, 1], [0, 1, 1, 0])}
+              />
+            </g>
+
+            {/* Veins — clipped to the wing outline so nothing overshoots */}
+            <g clipPath="url(#wing-clip)">
+              {/* Longitudinal veins */}
+              <g fill="none" stroke={AMBER} strokeLinecap="round">
+                {VEINS.map((v, i) => (
+                  <path key={i} d={v.d} strokeWidth={v.w} />
+                ))}
               </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
+              {/* Cross veins */}
+              <g
+                fill="none"
+                stroke={AMBER}
+                strokeOpacity={0.9}
+                strokeLinecap="round"
               >
-                {l.text}
-              </text>
-            );
-          })}
+                {CROSS_VEINS.map((d, i) => (
+                  <path key={i} d={d} strokeWidth={1} />
+                ))}
+              </g>
+              {/* Faint apical shading near the tip (cicada apex spot) */}
+              <ellipse
+                cx={820}
+                cy={310}
+                rx={95}
+                ry={40}
+                fill={AMBER}
+                opacity={0.09}
+              />
+            </g>
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
+            {/* Wing base — a slimmer, deeper articulation, not a bright bead */}
+            <path
+              d="M 200,470 C 214,455 224,449 236,449 C 244,458 244,470 236,478 C 224,480 212,478 200,470 Z"
+              fill="#8A4E24"
+              opacity={0.95}
+            />
+            <path
+              d="M 205,462 C 214,456 224,454 232,458 C 232,464 226,470 218,470 C 212,470 208,467 205,462 Z"
+              fill={AMBER}
+              opacity={0.9}
+            />
+
+            {/* Sharper outline pass on top — reads crisp at print scale */}
+            <path
+              d={WING_OUTLINE}
+              fill="none"
+              stroke="#6D3F1A"
+              strokeOpacity={0.7}
+              strokeWidth={0.9}
+            />
+          </g>
+
+          {/* ── HOTSPOT MARKER ───────────────────────────────────── */}
+          <g opacity={interpolate(frame, [T(1.6), T(2.0)], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          })}>
+            <circle
+              cx={HOTSPOT.x}
+              cy={HOTSPOT.y}
+              r={9}
+              fill="none"
+              stroke={IRIS_HOT}
+              strokeWidth={1.4}
+            />
+            <circle cx={HOTSPOT.x} cy={HOTSPOT.y} r={2.5} fill={IRIS_HOT} />
             <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
+              x1={HOTSPOT.x - 14}
+              y1={HOTSPOT.y}
+              x2={HOTSPOT.x - 7}
+              y2={HOTSPOT.y}
+              stroke={IRIS_HOT}
               strokeWidth={1.2}
             />
             <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
+              x1={HOTSPOT.x + 7}
+              y1={HOTSPOT.y}
+              x2={HOTSPOT.x + 14}
+              y2={HOTSPOT.y}
+              stroke={IRIS_HOT}
               strokeWidth={1.2}
             />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
+            <line
+              x1={HOTSPOT.x}
+              y1={HOTSPOT.y - 14}
+              x2={HOTSPOT.x}
+              y2={HOTSPOT.y - 7}
+              stroke={IRIS_HOT}
+              strokeWidth={1.2}
+            />
+            <line
+              x1={HOTSPOT.x}
+              y1={HOTSPOT.y + 7}
+              x2={HOTSPOT.x}
+              y2={HOTSPOT.y + 14}
+              stroke={IRIS_HOT}
               strokeWidth={1.2}
             />
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
+              x={HOTSPOT.x + 18}
+              y={HOTSPOT.y - 12}
+              fill={IRIS_HOT}
               fontFamily={inter}
-              fontSize={11}
+              fontSize={13}
               fontWeight={600}
-              letterSpacing={3.5}
+              letterSpacing={3}
             >
-              TOKYO
+              A
             </text>
+          </g>
+
+          {/* ── LEADER LINE from hotspot to inset ───────────────── */}
+          {(() => {
+            // Two-segment leader with a knee
+            const knee = { x: HOTSPOT.x + 90, y: HOTSPOT.y - 90 };
+            const target = {
+              x: INSET.cx - Math.cos(0) * INSET.r - 2,
+              y: INSET.cy + 60,
+            };
+            // Compute segment lengths for dash animation
+            const l1 = Math.hypot(knee.x - HOTSPOT.x, knee.y - HOTSPOT.y);
+            const l2 = Math.hypot(target.x - knee.x, target.y - knee.y);
+            const total = l1 + l2;
+            const drawn = total * leaderP;
+            let d = `M ${HOTSPOT.x} ${HOTSPOT.y}`;
+            if (drawn <= l1) {
+              const f = drawn / l1;
+              d += ` L ${HOTSPOT.x + (knee.x - HOTSPOT.x) * f} ${
+                HOTSPOT.y + (knee.y - HOTSPOT.y) * f
+              }`;
+            } else {
+              d += ` L ${knee.x} ${knee.y}`;
+              const f = (drawn - l1) / l2;
+              d += ` L ${knee.x + (target.x - knee.x) * f} ${
+                knee.y + (target.y - knee.y) * f
+              }`;
+            }
+            return (
+              <path
+                d={d}
+                stroke={IRIS_HOT}
+                strokeWidth={1.2}
+                fill="none"
+                strokeLinecap="round"
+              />
+            );
+          })()}
+
+          {/* ── DETAIL INSET (top-right) ────────────────────────── */}
+          <g opacity={interpolate(frame, [T(2.0), T(2.5)], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          })}>
+            {/* Backing disk */}
+            <circle
+              cx={INSET.cx}
+              cy={INSET.cy}
+              r={INSET.r}
+              fill="#080B0F"
+            />
+            <circle
+              cx={INSET.cx}
+              cy={INSET.cy}
+              r={INSET.r}
+              fill="none"
+              stroke={IRIS_HOT}
+              strokeWidth={1.6}
+            />
+            {/* Concentric graticule */}
+            <circle
+              cx={INSET.cx}
+              cy={INSET.cy}
+              r={INSET.r * 0.66}
+              fill="none"
+              stroke={IRIS}
+              strokeOpacity={0.35}
+              strokeWidth={0.8}
+              strokeDasharray="2 4"
+            />
+            <circle
+              cx={INSET.cx}
+              cy={INSET.cy}
+              r={INSET.r * 0.33}
+              fill="none"
+              stroke={IRIS}
+              strokeOpacity={0.35}
+              strokeWidth={0.8}
+              strokeDasharray="2 4"
+            />
+            {/* Crosshair */}
+            <line
+              x1={INSET.cx - INSET.r + 6}
+              y1={INSET.cy}
+              x2={INSET.cx + INSET.r - 6}
+              y2={INSET.cy}
+              stroke={IRIS}
+              strokeOpacity={0.35}
+              strokeWidth={0.8}
+              strokeDasharray="2 4"
+            />
+            <line
+              x1={INSET.cx}
+              y1={INSET.cy - INSET.r + 6}
+              x2={INSET.cx}
+              y2={INSET.cy + INSET.r - 6}
+              stroke={IRIS}
+              strokeOpacity={0.35}
+              strokeWidth={0.8}
+              strokeDasharray="2 4"
+            />
+
+            {/* Clipped content */}
+            <g clipPath="url(#inset-clip)">
+              {/* Pillar field: amber discs on dark ground, staggered appearance */}
+              {PILLARS.map((p, i) => {
+                const stage = i / Math.max(1, PILLARS.length - 1);
+                const local = (pillarsP - stage * 0.9) * 6;
+                const op = Math.max(0, Math.min(1, local));
+                const r = PILLAR_R * (0.6 + 0.4 * op);
+                return (
+                  <g key={i} opacity={op}>
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={r + 1.6}
+                      fill={AMBER_HOT}
+                      opacity={0.22}
+                    />
+                    <circle cx={p.x} cy={p.y} r={r} fill={AMBER} />
+                    <circle
+                      cx={p.x - 1.4}
+                      cy={p.y - 1.4}
+                      r={r * 0.45}
+                      fill={AMBER_HOT}
+                      opacity={0.9}
+                    />
+                  </g>
+                );
+              })}
+
+              {/* Bacterium — rod-shaped, settles then deflates between pillars */}
+              <g
+                transform={`translate(${BACT.cx}, ${
+                  BACT.cy - 30 + 30 * bactApproach
+                }) rotate(${BACT.rot})`}
+                opacity={bactApproach}
+              >
+                {/* Halo (surface tension) */}
+                <ellipse
+                  cx={0}
+                  cy={0}
+                  rx={BACT.len / 2 + 6}
+                  ry={(BACT.h0 * bactHeight) / 2 + 4}
+                  fill={IRIS_HOT}
+                  opacity={0.08 * bactApproach}
+                />
+                {/* Rod body */}
+                <rect
+                  x={-BACT.len / 2}
+                  y={(-BACT.h0 * bactHeight) / 2}
+                  width={BACT.len}
+                  height={BACT.h0 * bactHeight}
+                  rx={BACT.h0 * bactHeight * 0.5}
+                  fill={MEMBRANE_DIM}
+                  stroke={MEMBRANE}
+                  strokeOpacity={0.55}
+                  strokeWidth={1}
+                />
+                {/* Membrane sag — small dark scallops along the underside */}
+                {[-56, -28, 0, 28, 56].map((sx, i) => (
+                  <ellipse
+                    key={i}
+                    cx={sx}
+                    cy={(BACT.h0 * bactHeight) / 2 - 2}
+                    rx={6}
+                    ry={3 + 3 * (1 - bactHeight)}
+                    fill="#050708"
+                    opacity={0.6 * bactApproach}
+                  />
+                ))}
+                {/* Rupture cracks appear as bactHeight collapses */}
+                {[-42, -8, 24, 46].map((sx, i) => (
+                  <path
+                    key={`crack-${i}`}
+                    d={`M ${sx} ${-BACT.h0 * bactHeight * 0.5 + 2} L ${
+                      sx + 5
+                    } ${BACT.h0 * bactHeight * 0.5 - 2}`}
+                    stroke="#050708"
+                    strokeWidth={1.1}
+                    opacity={bactBreachOp}
+                  />
+                ))}
+                {/* Leaking cytoplasm droplets */}
+                {[-34, -6, 20, 38].map((sx, i) => (
+                  <circle
+                    key={`drop-${i}`}
+                    cx={sx}
+                    cy={(BACT.h0 * bactHeight) / 2 + 4 + (i % 2) * 2}
+                    r={2}
+                    fill={IRIS_HOT}
+                    opacity={0.75 * bactBreachOp}
+                  />
+                ))}
+              </g>
+
+              {/* Species caption inside the inset (bottom curve) */}
+              <text
+                x={INSET.cx}
+                y={INSET.cy + INSET.r - 20}
+                textAnchor="middle"
+                fill={MEMBRANE}
+                opacity={0.75}
+                fontFamily={inter}
+                fontSize={11}
+                fontStyle="italic"
+                fontWeight={500}
+                letterSpacing={1.6}
+              >
+                P. aeruginosa
+              </text>
+            </g>
+
+            {/* Inset title strip */}
+            <g>
+              <text
+                x={INSET.cx - INSET.r + 4}
+                y={INSET.cy - INSET.r - 10}
+                fill={IRIS_HOT}
+                fontFamily={inter}
+                fontSize={11}
+                fontWeight={600}
+                letterSpacing={3}
+              >
+                DETAIL · A
+              </text>
+              <text
+                x={INSET.cx + INSET.r - 4}
+                y={INSET.cy - INSET.r - 10}
+                fill={GRAY}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={500}
+                letterSpacing={2.5}
+                textAnchor="end"
+              >
+                MAG · 40,000×
+              </text>
+            </g>
+            {/* Inset scale bar (nano) */}
+            <g
+              transform={`translate(${INSET.cx - 40}, ${INSET.cy + INSET.r + 22})`}
+              stroke={GRAY}
+              fill={GRAY}
+              fontFamily={inter}
+              fontSize={9}
+              letterSpacing={2.5}
+              fontWeight={500}
+            >
+              <line x1={0} y1={0} x2={80} y2={0} strokeWidth={1.2} />
+              <line x1={0} y1={-4} x2={0} y2={4} strokeWidth={1.2} />
+              <line x1={80} y1={-4} x2={80} y2={4} strokeWidth={1.2} />
+              <text x={40} y={14} textAnchor="middle" stroke="none">
+                200 NM
+              </text>
+            </g>
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip below the drafting frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
           fill={GRAY}
@@ -577,14 +869,14 @@ export const PairingCard: React.FC = () => {
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 3 · NANOPILLAR ARRAY, ~200 NM TALL · ~170 NM PITCH</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={IRIS_HOT}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            MECHANICAL BACTERICIDE · NO CHEMISTRY
           </text>
         </g>
       </svg>
@@ -596,17 +888,17 @@ export const PairingCard: React.FC = () => {
           left: 80,
           right: 80,
           top: 905,
-          opacity: titleSpring,
+          opacity: roleSpring,
           transform: `translateY(${interpolate(
-            titleSpring,
+            roleSpring,
             [0, 1],
-            [16, 0],
+            [10, 0],
           )}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: IRIS_HOT,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -617,10 +909,25 @@ export const PairingCard: React.FC = () => {
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Public Health Inspector
           </span>
         </div>
+      </div>
 
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          top: 962,
+          opacity: titleSpring,
+          transform: `translateY(${interpolate(
+            titleSpring,
+            [0, 1],
+            [16, 0],
+          )}px)`,
+        }}
+      >
         <div
           style={{
             color: "#F4F4F6",
@@ -632,31 +939,34 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The wing that
           <br />
-          city planner.
+          sterilizes itself.
         </div>
+      </div>
 
-        <div
-          style={{
-            marginTop: 30,
-            color: "#C8CAD0",
-            fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
-            fontWeight: 400,
-            maxWidth: 880,
-            opacity: hookOpacity,
-          }}
-        >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
-        </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 200,
+          top: 1170,
+          color: "#C8CAD0",
+          fontFamily: inter,
+          fontSize: 19,
+          lineHeight: 1.4,
+          fontWeight: 400,
+          maxWidth: 820,
+          opacity: hookOp,
+        }}
+      >
+        The transparent membrane of the clanger cicada is covered in a lattice
+        of nanoscale pillars —{" "}
+        <span style={{ color: IRIS_HOT, fontWeight: 600 }}>
+          ~200 nm tall, ~170 nm apart
+        </span>{" "}
+        — that mechanically rupture the membranes of gram-negative bacteria on
+        contact. A cicada disinfects its wing with geometry, not chemistry.
       </div>
 
       {/* Footer */}
@@ -677,9 +987,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Ivanova et al. · Small 8 (2012) 2489–2494</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: AMBER }}>●</span> Pillar = Bactericide
         </span>
       </div>
     </AbsoluteFill>
