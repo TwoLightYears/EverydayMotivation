@@ -50,158 +50,232 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0A0F1F";
+const BOARD = "#0E1428";
+const SKY_DEEP = "#111834";
+const PLASMA = "#F7F3E1";
+const BOLT_HALO = "#C9E1FF";
+const BOLT_MID = "#7FA8FF";
+const AMBER = "#E88A2E";
+const AMBER_GLOW = "#FFC57A";
+const SAND_DARK = "#2A2114";
+const SAND_MID = "#3A2A16";
+const GRAY = "#7C8494";
+const GRID = "#1A2038";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Geometry: the bolt (above ground) & fulgurite (below ground) ───────────
+// The map lives in a 1080×800 coord space, then scales into a framed pane.
+// The strike lands at STRIKE.x on the horizon line HORIZON_Y.
+const HORIZON_Y = 470; // above ground: 0..HORIZON_Y ; below: HORIZON_Y..800
+const STRIKE = { x: 470, y: HORIZON_Y };
+
+// Bolt: a jagged polyline top→strike with branches.
+type P = { x: number; y: number };
+const BOLT_MAIN: P[] = [
+  { x: 494, y: 60 },
+  { x: 456, y: 104 },
+  { x: 502, y: 148 },
+  { x: 468, y: 196 },
+  { x: 514, y: 240 },
+  { x: 472, y: 290 },
+  { x: 498, y: 344 },
+  { x: 458, y: 402 },
+  { x: 484, y: 442 },
+  { x: STRIKE.x, y: STRIKE.y },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
+// Branch pieces peel off from a specific main-index and jag outward.
+type Branch = { fromIdx: number; pts: P[]; w: number; delay: number };
+const BOLT_BRANCHES: Branch[] = [
+  {
+    fromIdx: 2,
+    pts: [
+      { x: 502, y: 148 },
+      { x: 566, y: 184 },
+      { x: 552, y: 222 },
+      { x: 604, y: 258 },
+    ],
+    w: 3,
+    delay: 0.22,
+  },
+  {
+    fromIdx: 4,
+    pts: [
+      { x: 514, y: 240 },
+      { x: 436, y: 274 },
+      { x: 418, y: 314 },
+    ],
+    w: 2.6,
+    delay: 0.28,
+  },
+  {
+    fromIdx: 6,
+    pts: [
+      { x: 498, y: 344 },
+      { x: 578, y: 374 },
+      { x: 620, y: 414 },
+    ],
+    w: 2.4,
+    delay: 0.34,
+  },
+  {
+    fromIdx: 7,
+    pts: [
+      { x: 458, y: 402 },
+      { x: 394, y: 430 },
+    ],
+    w: 2.1,
+    delay: 0.4,
+  },
 ];
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
+// Fulgurite: mirrors the bolt shape below ground, thicker glassy tubes.
+const FULG_MAIN: P[] = [
+  { x: STRIKE.x, y: STRIKE.y },
+  { x: 452, y: 512 },
+  { x: 488, y: 562 },
+  { x: 458, y: 618 },
+  { x: 494, y: 674 },
+  { x: 466, y: 738 },
+  { x: 486, y: 776 },
+];
+const FULG_BRANCHES: Branch[] = [
+  {
+    fromIdx: 1,
+    pts: [
+      { x: 452, y: 512 },
+      { x: 380, y: 548 },
+      { x: 342, y: 594 },
+      { x: 316, y: 632 },
+    ],
+    w: 5.5,
+    delay: 0.05,
+  },
+  {
+    fromIdx: 2,
+    pts: [
+      { x: 488, y: 562 },
+      { x: 566, y: 594 },
+      { x: 616, y: 638 },
+      { x: 652, y: 674 },
+    ],
+    w: 5,
+    delay: 0.12,
+  },
+  {
+    fromIdx: 3,
+    pts: [
+      { x: 458, y: 618 },
+      { x: 402, y: 656 },
+      { x: 380, y: 704 },
+    ],
+    w: 3.6,
+    delay: 0.22,
+  },
+  {
+    fromIdx: 4,
+    pts: [
+      { x: 494, y: 674 },
+      { x: 560, y: 712 },
+      { x: 596, y: 748 },
+    ],
+    w: 3.6,
+    delay: 0.28,
+  },
+  {
+    fromIdx: 5,
+    pts: [
+      { x: 466, y: 738 },
+      { x: 428, y: 770 },
+    ],
+    w: 2.4,
+    delay: 0.38,
+  },
 ];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+const pathFromPts = (pts: P[]): string =>
+  pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const polyLen = (pts: P[]): number => {
+  let L = 0;
+  for (let i = 1; i < pts.length; i++) {
+    L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
   }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+  return L;
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
-    fps,
-    config: { damping: 200, mass: 0.8 },
-  });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  // ── Timing ────────────────────────────────────────────────────────────
+  // 0.00s  premonition / dim clouds
+  // 0.35s  bolt fires (spring) — 0.35..0.85
+  // 0.75s  strike flash peaks
+  // 0.85s  fulgurite draws underground — 0.85..1.60
+  // 1.40s  callouts appear
+  // 1.60s  title spring
+  // 2.00s  hook fades in
+  // 4.30s+ ambient shimmer, small aftershock pulse
+  const boltProg = interpolate(frame, [fps * 0.35, fps * 0.85], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  const strikeFlash = interpolate(
+    frame,
+    [fps * 0.72, fps * 0.85, fps * 1.15, fps * 1.5],
+    [0, 1, 0.3, 0.06],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const fulgProg = interpolate(frame, [fps * 0.85, fps * 1.6], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const calloutsOp = interpolate(frame, [fps * 1.4, fps * 1.9], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const titleSpring = spring({
+    frame: frame - fps * 1.6,
+    fps,
+    config: { damping: 200, mass: 0.8 },
+  });
+  const hookOpacity = interpolate(frame, [fps * 2.0, fps * 2.8], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  // A subtle after-flicker every ~1.6s once formed.
+  const flickerBase = Math.max(0, frame - fps * 1.5);
+  const flicker =
+    0.08 *
+    Math.sin(flickerBase * 0.55) *
+    Math.exp(-((flickerBase / (fps * 2.4)) ** 2) * 0.6);
 
   // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
+  const FRAME = { x: 60, y: 130, w: 960, h: 800 };
   const MAP_W = 1080;
   const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const scale = FRAME.w / MAP_W;
+
+  // Helpers for progressively drawing a polyline.
+  const strokeReveal = (pts: P[], t: number) => {
+    const L = polyLen(pts);
+    const dash = L;
+    const off = L * (1 - Math.max(0, Math.min(1, t)));
+    return { dash, off, L };
+  };
+  const branchReveal = (b: Branch, prog: number) => {
+    const local = (prog - b.delay) / (1 - b.delay);
+    return strokeReveal(b.pts, local);
+  };
+
+  const bolt = strokeReveal(BOLT_MAIN, boltProg);
+  const fulg = strokeReveal(FULG_MAIN, fulgProg);
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -225,11 +299,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: AMBER }}>2026 · 08 · 24</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Main pane — sky above, cross-section below */}
       <svg
         width={1080}
         height={1350}
@@ -237,63 +311,81 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
+          <clipPath id="sky-clip">
+            <rect x={0} y={0} width={MAP_W} height={HORIZON_Y} />
+          </clipPath>
+          <filter id="cloud-soft" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="10" />
+          </filter>
+          {/* Grid pattern — draftsman's fine grid over the whole pane */}
           <pattern
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={40 * scale}
+            height={40 * scale}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d={`M ${40 * scale} 0 L 0 0 0 ${40 * scale}`}
               fill="none"
               stroke={GRID}
               strokeWidth={1}
             />
           </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Sky vertical gradient — darker at top */}
+          <linearGradient id="sky-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0A0F1F" />
+            <stop offset="65%" stopColor="#111832" />
+            <stop offset="100%" stopColor="#152046" />
+          </linearGradient>
+
+          {/* Earth vertical gradient */}
+          <linearGradient id="earth-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2A2114" />
+            <stop offset="100%" stopColor="#140E06" />
+          </linearGradient>
+
+          {/* Flash halo radial around strike point */}
+          <radialGradient id="strike-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={PLASMA} stopOpacity={0.95} />
+            <stop offset="35%" stopColor={BOLT_HALO} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={BOLT_MID} stopOpacity={0} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* Sky-wide bloom for the flash */}
+          <radialGradient id="sky-flash" cx="50%" cy="55%" r="70%">
+            <stop offset="0%" stopColor={PLASMA} stopOpacity={0.35} />
+            <stop offset="60%" stopColor={BOLT_HALO} stopOpacity={0.08} />
+            <stop offset="100%" stopColor={BOLT_MID} stopOpacity={0} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          {/* Fulgurite hot-glass halo */}
+          <radialGradient id="fulg-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={AMBER_GLOW} stopOpacity={0.7} />
+            <stop offset="100%" stopColor={AMBER} stopOpacity={0} />
+          </radialGradient>
+
+          <filter id="soft-blur" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="6" />
+          </filter>
+          <filter id="tight-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode in="b" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Board base + grid */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill={BOARD}
         />
         <rect
           x={FRAME.x}
@@ -302,25 +394,591 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid)"
         />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
 
-        {/* Inner thin border */}
+        {/* Sky and earth blocks inside the frame (scale coord space) */}
+        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
+          {/* Sky */}
+          <rect
+            x={0}
+            y={0}
+            width={MAP_W}
+            height={HORIZON_Y}
+            fill="url(#sky-grad)"
+          />
+          {/* Earth */}
+          <rect
+            x={0}
+            y={HORIZON_Y}
+            width={MAP_W}
+            height={MAP_H - HORIZON_Y}
+            fill="url(#earth-grad)"
+          />
+
+          {/* Sky bloom on flash */}
+          <rect
+            x={0}
+            y={0}
+            width={MAP_W}
+            height={HORIZON_Y}
+            fill="url(#sky-flash)"
+            opacity={strikeFlash * 0.9}
+          />
+
+          {/* Sand grain texture — faint short vertical strokes */}
+          {Array.from({ length: 130 }).map((_, i) => {
+            const seed = (i * 9301 + 49297) % 233280;
+            const rx = (seed / 233280) * MAP_W;
+            const ry =
+              HORIZON_Y + ((i * 7919) % (MAP_H - HORIZON_Y - 20)) + 6;
+            const h = 3 + ((i * 131) % 6);
+            const op = 0.05 + ((i * 17) % 10) / 130;
+            return (
+              <line
+                key={`g-${i}`}
+                x1={rx}
+                y1={ry}
+                x2={rx}
+                y2={ry + h}
+                stroke="#5A4426"
+                strokeOpacity={op}
+                strokeWidth={0.7}
+              />
+            );
+          })}
+
+          {/* Horizon: crisp ground line */}
+          <line
+            x1={0}
+            y1={HORIZON_Y}
+            x2={MAP_W}
+            y2={HORIZON_Y}
+            stroke="#4B3A1F"
+            strokeWidth={1.4}
+          />
+          {/* Tick marks along horizon */}
+          {Array.from({ length: 27 }).map((_, i) => (
+            <line
+              key={`t-${i}`}
+              x1={40 + i * 40}
+              y1={HORIZON_Y}
+              x2={40 + i * 40}
+              y2={HORIZON_Y + (i % 4 === 0 ? 8 : 4)}
+              stroke="#4B3A1F"
+              strokeWidth={1}
+            />
+          ))}
+
+          {/* Star / faint cloud specks */}
+          {Array.from({ length: 40 }).map((_, i) => {
+            const sx = (i * 613) % MAP_W;
+            const sy = ((i * 977) % (HORIZON_Y - 40)) + 20;
+            const r = 0.6 + ((i * 31) % 5) / 10;
+            return (
+              <circle
+                key={`st-${i}`}
+                cx={sx}
+                cy={sy}
+                r={r}
+                fill="#C9D0E4"
+                opacity={0.18 + ((i * 7) % 10) / 40}
+              />
+            );
+          })}
+
+          {/* Cloud bank — soft dark cumulus silhouette clipped to sky */}
+          <g clipPath="url(#sky-clip)">
+            <g filter="url(#cloud-soft)" opacity={0.75}>
+              <ellipse
+                cx={STRIKE.x - 40}
+                cy={-40}
+                rx={340}
+                ry={110}
+                fill="#060A16"
+              />
+              <ellipse
+                cx={STRIKE.x - 220}
+                cy={-30}
+                rx={200}
+                ry={80}
+                fill="#060A16"
+              />
+              <ellipse
+                cx={STRIKE.x + 200}
+                cy={-24}
+                rx={230}
+                ry={90}
+                fill="#060A16"
+              />
+              <ellipse
+                cx={STRIKE.x - 60}
+                cy={-70}
+                rx={420}
+                ry={70}
+                fill="#040814"
+              />
+            </g>
+            {/* Cloud underside plasma glow while flash */}
+            <ellipse
+              cx={STRIKE.x - 10}
+              cy={70}
+              rx={260}
+              ry={26}
+              fill={BOLT_HALO}
+              opacity={0.22 * strikeFlash + 0.04}
+              filter="url(#soft-blur)"
+            />
+          </g>
+
+          {/* Strike sky-halo — big soft radial around strike (below bolt) */}
+          <circle
+            cx={STRIKE.x}
+            cy={STRIKE.y - 20}
+            r={280}
+            fill="url(#strike-glow)"
+            opacity={strikeFlash}
+          />
+
+          {/* ── Bolt — soft outer halo, medium blue, plasma core ── */}
+          {/* Outer halo (bloomed) */}
+          <path
+            d={pathFromPts(BOLT_MAIN)}
+            stroke={BOLT_HALO}
+            strokeWidth={22}
+            strokeOpacity={0.28 + 0.28 * strikeFlash}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={bolt.dash}
+            strokeDashoffset={bolt.off}
+            filter="url(#soft-blur)"
+          />
+          {/* Medium blue */}
+          <path
+            d={pathFromPts(BOLT_MAIN)}
+            stroke={BOLT_MID}
+            strokeWidth={8}
+            strokeOpacity={0.88}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={bolt.dash}
+            strokeDashoffset={bolt.off}
+            filter="url(#tight-glow)"
+          />
+          {/* Plasma core */}
+          <path
+            d={pathFromPts(BOLT_MAIN)}
+            stroke={PLASMA}
+            strokeWidth={2.8}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={bolt.dash}
+            strokeDashoffset={bolt.off}
+          />
+
+          {/* Bolt branches */}
+          {BOLT_BRANCHES.map((b, i) => {
+            const r = branchReveal(b, boltProg);
+            return (
+              <g key={`bb-${i}`}>
+                <path
+                  d={pathFromPts(b.pts)}
+                  stroke={BOLT_HALO}
+                  strokeWidth={b.w + 8}
+                  strokeOpacity={0.18 + 0.18 * strikeFlash}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={r.dash}
+                  strokeDashoffset={r.off}
+                  filter="url(#soft-blur)"
+                />
+                <path
+                  d={pathFromPts(b.pts)}
+                  stroke={BOLT_MID}
+                  strokeWidth={b.w + 1.5}
+                  strokeOpacity={0.75}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={r.dash}
+                  strokeDashoffset={r.off}
+                  filter="url(#tight-glow)"
+                />
+                <path
+                  d={pathFromPts(b.pts)}
+                  stroke={PLASMA}
+                  strokeWidth={b.w * 0.55}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={r.dash}
+                  strokeDashoffset={r.off}
+                />
+              </g>
+            );
+          })}
+
+          {/* ── Fulgurite — hot glass mirror below ─────────────── */}
+          {/* Sand crater above the strike */}
+          <ellipse
+            cx={STRIKE.x}
+            cy={HORIZON_Y + 6}
+            rx={54}
+            ry={9}
+            fill={SAND_DARK}
+            opacity={fulgProg}
+          />
+          {/* Amber halo cluster around top of fulgurite */}
+          <circle
+            cx={STRIKE.x}
+            cy={HORIZON_Y + 30}
+            r={90}
+            fill="url(#fulg-glow)"
+            opacity={0.55 * fulgProg + strikeFlash * 0.4}
+          />
+
+          {/* Fulgurite outer glow */}
+          <path
+            d={pathFromPts(FULG_MAIN)}
+            stroke={AMBER_GLOW}
+            strokeWidth={20}
+            strokeOpacity={0.22}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={fulg.dash}
+            strokeDashoffset={fulg.off}
+            filter="url(#soft-blur)"
+          />
+          {/* Fulgurite tube body */}
+          <path
+            d={pathFromPts(FULG_MAIN)}
+            stroke={AMBER}
+            strokeWidth={9}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={fulg.dash}
+            strokeDashoffset={fulg.off}
+          />
+          {/* Hot inner filament */}
+          <path
+            d={pathFromPts(FULG_MAIN)}
+            stroke={AMBER_GLOW}
+            strokeWidth={3}
+            strokeOpacity={0.9}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={fulg.dash}
+            strokeDashoffset={fulg.off}
+          />
+
+          {/* Fulgurite branches */}
+          {FULG_BRANCHES.map((b, i) => {
+            const r = branchReveal(b, fulgProg);
+            return (
+              <g key={`fb-${i}`}>
+                <path
+                  d={pathFromPts(b.pts)}
+                  stroke={AMBER_GLOW}
+                  strokeWidth={b.w + 10}
+                  strokeOpacity={0.16}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={r.dash}
+                  strokeDashoffset={r.off}
+                  filter="url(#soft-blur)"
+                />
+                <path
+                  d={pathFromPts(b.pts)}
+                  stroke={AMBER}
+                  strokeWidth={b.w}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={r.dash}
+                  strokeDashoffset={r.off}
+                />
+                <path
+                  d={pathFromPts(b.pts)}
+                  stroke={AMBER_GLOW}
+                  strokeWidth={Math.max(1, b.w * 0.35)}
+                  strokeOpacity={0.85}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={r.dash}
+                  strokeDashoffset={r.off}
+                />
+              </g>
+            );
+          })}
+
+          {/* Late after-flicker on bolt core */}
+          <path
+            d={pathFromPts(BOLT_MAIN)}
+            stroke={PLASMA}
+            strokeWidth={1.9}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={Math.max(0, flicker + 0.02) * (boltProg > 0.98 ? 1 : 0)}
+          />
+
+          {/* Strike point marker — small white spark */}
+          <circle
+            cx={STRIKE.x}
+            cy={STRIKE.y}
+            r={5 + 4 * strikeFlash}
+            fill={PLASMA}
+            opacity={boltProg}
+          />
+
+          {/* ── Callouts (draftsman-style) ─────────────────────── */}
+          <g opacity={calloutsOp} fontFamily={inter} fill={PLASMA}>
+            {/* Top-right: temperature */}
+            <g>
+              <line
+                x1={STRIKE.x + 60}
+                y1={280}
+                x2={840}
+                y2={280}
+                stroke={BOLT_HALO}
+                strokeOpacity={0.75}
+                strokeWidth={1.1}
+              />
+              <line
+                x1={840}
+                y1={280}
+                x2={840}
+                y2={310}
+                stroke={BOLT_HALO}
+                strokeOpacity={0.75}
+                strokeWidth={1.1}
+              />
+              <text
+                x={840}
+                y={264}
+                fill={BOLT_HALO}
+                fontSize={12}
+                letterSpacing={3.5}
+                fontWeight={600}
+                textAnchor="end"
+              >
+                CHANNEL TEMP
+              </text>
+              <text
+                x={840}
+                y={334}
+                fill={PLASMA}
+                fontSize={38}
+                fontFamily={playfair}
+                fontStyle="italic"
+                textAnchor="end"
+              >
+                ≈ 30,000 K
+              </text>
+              <text
+                x={840}
+                y={358}
+                fill={GRAY}
+                fontSize={11}
+                letterSpacing={2.5}
+                textAnchor="end"
+              >
+                ≈ 5× SURFACE OF THE SUN
+              </text>
+            </g>
+
+            {/* Left: duration — aligned to left rule, well clear of bolt path */}
+            <g>
+              <line
+                x1={200}
+                y1={170}
+                x2={370}
+                y2={170}
+                stroke={BOLT_HALO}
+                strokeOpacity={0.75}
+                strokeWidth={1.1}
+              />
+              <line
+                x1={200}
+                y1={170}
+                x2={200}
+                y2={198}
+                stroke={BOLT_HALO}
+                strokeOpacity={0.75}
+                strokeWidth={1.1}
+              />
+              <text
+                x={200}
+                y={156}
+                fill={BOLT_HALO}
+                fontSize={12}
+                letterSpacing={3.5}
+                fontWeight={600}
+              >
+                DURATION
+              </text>
+              <text
+                x={200}
+                y={224}
+                fill={PLASMA}
+                fontSize={32}
+                fontFamily={playfair}
+                fontStyle="italic"
+              >
+                &lt; 1 ms
+              </text>
+              <text
+                x={200}
+                y={246}
+                fill={GRAY}
+                fontSize={11}
+                letterSpacing={2.5}
+              >
+                RETURN STROKE
+              </text>
+            </g>
+
+            {/* Bottom-right: material */}
+            <g>
+              <line
+                x1={STRIKE.x + 60}
+                y1={620}
+                x2={840}
+                y2={620}
+                stroke={AMBER_GLOW}
+                strokeOpacity={0.75}
+                strokeWidth={1.1}
+              />
+              <line
+                x1={840}
+                y1={620}
+                x2={840}
+                y2={650}
+                stroke={AMBER_GLOW}
+                strokeOpacity={0.75}
+                strokeWidth={1.1}
+              />
+              <text
+                x={840}
+                y={606}
+                fill={AMBER_GLOW}
+                fontSize={12}
+                letterSpacing={3.5}
+                fontWeight={600}
+                textAnchor="end"
+              >
+                MATERIAL
+              </text>
+              <text
+                x={840}
+                y={676}
+                fill={AMBER_GLOW}
+                fontSize={30}
+                fontFamily={playfair}
+                fontStyle="italic"
+                textAnchor="end"
+              >
+                SiO₂ → lechatelierite
+              </text>
+              <text
+                x={840}
+                y={700}
+                fill={GRAY}
+                fontSize={11}
+                letterSpacing={2.5}
+                textAnchor="end"
+              >
+                FUSED SAND · SHOCKED GLASS
+              </text>
+            </g>
+
+            {/* Depth ruler down the left inside the earth */}
+            <g stroke="#5A4426" strokeWidth={1}>
+              <line x1={140} y1={HORIZON_Y} x2={140} y2={760} />
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <line
+                  key={`d-${i}`}
+                  x1={132}
+                  y1={HORIZON_Y + i * 50}
+                  x2={148}
+                  y2={HORIZON_Y + i * 50}
+                />
+              ))}
+              <text
+                x={124}
+                y={HORIZON_Y + 4}
+                fill={GRAY}
+                fontSize={10}
+                letterSpacing={2}
+                textAnchor="end"
+                stroke="none"
+              >
+                0 M
+              </text>
+              <text
+                x={124}
+                y={HORIZON_Y + 154}
+                fill={GRAY}
+                fontSize={10}
+                letterSpacing={2}
+                textAnchor="end"
+                stroke="none"
+              >
+                1
+              </text>
+              <text
+                x={124}
+                y={HORIZON_Y + 254}
+                fill={GRAY}
+                fontSize={10}
+                letterSpacing={2}
+                textAnchor="end"
+                stroke="none"
+              >
+                2 M
+              </text>
+            </g>
+
+            {/* Horizon label — left/right of horizon line, inside the coord space */}
+            <text
+              x={30}
+              y={HORIZON_Y - 10}
+              fill={GRAY}
+              fontSize={10}
+              letterSpacing={2.5}
+            >
+              SURFACE
+            </text>
+            <text
+              x={MAP_W - 30}
+              y={HORIZON_Y - 10}
+              fill={GRAY}
+              fontSize={10}
+              letterSpacing={2.5}
+              textAnchor="end"
+            >
+              SANDY SOIL · SiO₂
+            </text>
+          </g>
+        </g>
+
+        {/* Frame border on top */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#242A3D"
           strokeWidth={1}
         />
-
         {/* Corner crop marks */}
         {(
           [
@@ -330,245 +988,13 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={AMBER} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip below the pane */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
           fill={GRAY}
@@ -577,25 +1003,20 @@ export const PairingCard: React.FC = () => {
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · CLOUD-TO-GROUND STRIKE &amp; FULGURITE CAST</text>
+          <text x={FRAME.w} textAnchor="end" fill={AMBER} opacity={0.85}>
+            SECTION VIEW · NOT TO SCALE
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ──────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 990,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,18 +1027,18 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: AMBER,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 14,
             fontWeight: 600,
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Glassblower
           </span>
         </div>
 
@@ -626,36 +1047,35 @@ export const PairingCard: React.FC = () => {
             color: "#F4F4F6",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 78,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The million-degree
           <br />
-          city planner.
+          glassmaker.
         </div>
 
         <div
           style={{
-            marginTop: 30,
+            marginTop: 20,
             color: "#C8CAD0",
             fontFamily: inter,
-            fontSize: 19,
+            fontSize: 18,
             lineHeight: 1.4,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 920,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          In under a millisecond, a lightning channel heats sandy soil past{" "}
+          <span style={{ color: PLASMA, fontWeight: 600 }}>≈ 30,000 K</span> —
+          five times the surface of the sun — fusing silica into hollow,
+          branching glass tubes called{" "}
+          <span style={{ color: AMBER, fontWeight: 600 }}>fulgurites</span>:
+          petrified casts of the bolt itself.
         </div>
       </div>
 
@@ -677,11 +1097,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Pasek &amp; Block · J. Geophys. Res. Planets 114 (2009)</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: AMBER }}>●</span> Fused sand = Fulgurite
         </span>
       </div>
+
+      {/* Suppress unused-warning */}
+      <span style={{ display: "none" }}>{durationInFrames}</span>
     </AbsoluteFill>
   );
 };
