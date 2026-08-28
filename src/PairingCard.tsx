@@ -50,161 +50,216 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// ── Palette — pulled from the concept's visual brief ─────────────────────
+const VAULT = "#14100E"; // near-black backing
+const PLATE = "#1A1512"; // slightly warmer wood-ground panel
+const AMBER = "#C79A5A"; // resin amber / late-wood highlights
+const CREAM = "#B8A57C"; // weathered sapwood cream
+const BARK = "#6C6155"; // silvery strip-bark
+const NEEDLE = "#384A2C"; // deep needle green (used sparingly)
+const BONE = "#E8D9B5"; // paper cream
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Ring generation ─────────────────────────────────────────────────────
+// Trunk cross-section centered at (CX, CY) with max radius R_MAX. Rings are
+// generated with variable spacing (drought years compress, wet years widen)
+// via a cheap deterministic noise so the pattern reads as real growth.
+const CX = 540;
+const CY = 495;
+const R_MAX = 360;
+const R_MIN = 4;
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+// Seeded PRNG (mulberry32)
+const mulberry32 = (a: number) => () => {
+  let t = (a += 0x6d2b79f5);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+// Slight elliptical bristlecone silhouette (asymmetric strip-bark) —
+// per-angle radius factor. We use a smooth field of cos harmonics so
+// every ring shares the same lobed shape, growing outward.
+const shapeFactor = (theta: number): number => {
+  const t = theta;
+  return (
+    1 +
+    0.04 * Math.cos(t + 0.4) +
+    0.03 * Math.cos(2 * t - 0.9) +
+    0.02 * Math.cos(3 * t + 1.7) -
+    0.02 * Math.sin(2 * t)
+  );
+};
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+// A small dent on the "dead" side — bristlecones grow only on a live strip.
+const stripBarkDent = (theta: number): number => {
+  // Bark stripe centred around θ ≈ 2.2 rad (upper-left)
+  const d = Math.cos(theta - 2.2);
+  return d > 0.55 ? -0.055 * (d - 0.55) * 6 : 0;
+};
+
+const ringRadius = (theta: number, r: number): number =>
+  r * (shapeFactor(theta) + stripBarkDent(theta));
+
+const buildRingPath = (r: number): string => {
+  if (r < 0.5) return "";
+  const steps = 96;
+  let d = "";
+  for (let i = 0; i <= steps; i++) {
+    const th = (i / steps) * Math.PI * 2;
+    const rr = ringRadius(th, r);
+    const x = CX + Math.cos(th) * rr;
+    const y = CY + Math.sin(th) * rr;
+    d += (i === 0 ? "M" : "L") + " " + x.toFixed(1) + " " + y.toFixed(1) + " ";
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return d + "Z";
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+// Build ~200 rings from pith (2833 BCE) to bark (2026 CE) with variable widths.
+type Ring = { r: number; year: number; drought: number };
+const buildRings = (): Ring[] => {
+  const yStart = -2833; // BCE negative
+  const yEnd = 2026;
+  const totalYears = yEnd - yStart; // 4859
+  const N = 208;
+  const rand = mulberry32(7);
+  // Assign non-uniform "yearsPerRing" so density feels organic.
+  const raw: number[] = [];
+  for (let i = 0; i < N; i++) raw.push(0.6 + rand() * 0.9);
+  const sum = raw.reduce((a, b) => a + b, 0);
+  let year = yStart;
+  const rings: Ring[] = [];
+  // Non-linear radius scaling: densest near pith, then eases outward.
+  for (let i = 0; i < N; i++) {
+    const frac = (i + 1) / N;
+    // ease so rings are packed near center, wider farther out
+    const eased = Math.pow(frac, 0.72);
+    const r = R_MIN + (R_MAX - R_MIN) * eased;
+    const yearsThisRing = (raw[i] / sum) * totalYears;
+    year += yearsThisRing;
+    // Drought signature: occasional very compressed dark rings
+    const drought = rand() < 0.11 ? 1 : 0;
+    rings.push({ r, year: Math.round(year), drought });
+  }
+  return rings;
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+const RINGS = buildRings();
+
+// ── Historical annotations — real years that Methuselah lived through ──
+// Each annotation gives an on-ring "hit angle" and an absolute target
+// position for its label chip, so nothing can clip against the plate frame.
+type Anno = {
+  year: number;
+  label: string;
+  subLabel: string;
+  angle: number; // radians, direction on the ring to anchor the leader
+  chip: { x: number; y: number; side: "left" | "right" };
 };
+const ANNOS: Anno[] = [
+  {
+    year: -2833,
+    label: "2833 BCE",
+    subLabel: "PITH · GERMINATION",
+    angle: -Math.PI / 2,
+    chip: { x: 605, y: 405, side: "right" },
+  },
+  {
+    year: -2560,
+    label: "2560 BCE",
+    subLabel: "GREAT PYRAMID BUILT",
+    angle: -2.4,
+    chip: { x: 265, y: 380, side: "left" },
+  },
+  {
+    year: -776,
+    label: "776 BCE",
+    subLabel: "FIRST OLYMPIAD",
+    angle: -1.1,
+    chip: { x: 720, y: 220, side: "right" },
+  },
+  {
+    year: 79,
+    label: "79 CE",
+    subLabel: "POMPEII BURIED",
+    angle: 0.3,
+    chip: { x: 860, y: 560, side: "right" },
+  },
+  {
+    year: 1215,
+    label: "1215 CE",
+    subLabel: "MAGNA CARTA SEALED",
+    angle: 0.95,
+    chip: { x: 700, y: 780, side: "right" },
+  },
+  {
+    year: 1815,
+    label: "1815 CE",
+    subLabel: "TAMBORA · FROST RING",
+    angle: 2.25,
+    chip: { x: 275, y: 680, side: "left" },
+  },
+  {
+    year: 2026,
+    label: "2026 CE",
+    subLabel: "OUTER BARK · TODAY",
+    angle: -2.75,
+    chip: { x: 240, y: 210, side: "left" },
+  },
+];
+
+// Find the ring closest to a given year and return its radius.
+const ringRForYear = (y: number): number => {
+  let best = RINGS[0];
+  let bestD = Math.abs(best.year - y);
+  for (const r of RINGS) {
+    const d = Math.abs(r.year - y);
+    if (d < bestD) {
+      best = r;
+      bestD = d;
+    }
+  }
+  return best.r;
+};
+
+// ── Frame layout (portrait 1080 × 1350) ─────────────────────────────────
+const FRAME = { x: 60, y: 130, w: 960, h: 780 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Ring paint-on progress: 0.6 s hold, 3.0 s grow
+  const growStart = fps * 0.6;
+  const growDur = fps * 3.0;
+  const growth = interpolate(frame, [growStart, growStart + growDur], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const rGrown = R_MIN + (R_MAX - R_MIN) * growth;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Year counter — tied to same growth curve
+  const displayedYear = Math.round(-2833 + (2026 - -2833) * growth);
+  const yearLabel =
+    displayedYear < 0 ? `${-displayedYear} BCE` : `${displayedYear} CE`;
 
+  // Title & hook
   const titleSpring = spring({
     frame: frame - fps * 0.4,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.9 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 1.3, fps * 2.3], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Annotation reveal sequence — after growth completes
+  const annoStart = growStart + growDur + fps * 0.2;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: VAULT, fontFamily: inter }}>
       <style>{fontCss}</style>
 
       {/* Top metadata band */}
@@ -217,7 +272,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: BARK,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +280,10 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: AMBER }}>2026 · 08 · 28</span>
       </div>
 
-      {/* Drafting frame + map */}
       <svg
         width={1080}
         height={1350}
@@ -237,91 +291,51 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Wood-panel background: subtle warm vignette on the plate */}
+          <radialGradient id="plate-vignette" cx="48%" cy="42%" r="70%">
+            <stop offset="0%" stopColor="#1F1913" stopOpacity={1} />
+            <stop offset="100%" stopColor={PLATE} stopOpacity={1} />
           </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* Pith heartwood glow */}
+          <radialGradient id="pith-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={AMBER} stopOpacity={0.9} />
+            <stop offset="55%" stopColor={AMBER} stopOpacity={0.18} />
+            <stop offset="100%" stopColor={AMBER} stopOpacity={0} />
           </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          {/* Ring stroke gradient (from amber-ish inner to cool cream outer) */}
+          <linearGradient id="ring-tint" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor={AMBER} />
+            <stop offset="1" stopColor={CREAM} />
+          </linearGradient>
+          {/* Clip so rings never bleed past frame */}
+          <clipPath id="plate-clip">
+            <rect x={FRAME.x} y={FRAME.y} width={FRAME.w} height={FRAME.h} />
+          </clipPath>
+          {/* Soft glow filter for pith */}
+          <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="6" />
           </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Plate */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#plate-vignette)"
         />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-
-        {/* Inner thin border */}
+        {/* Inner hairline */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#2A231C"
           strokeWidth={1}
         />
-
-        {/* Corner crop marks */}
+        {/* Corner ticks in amber */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,272 +344,343 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={AMBER} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Plate header row — inside the frame */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 34})`}
+          fill={CREAM}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
+          letterSpacing={3.4}
           fontWeight={500}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
+          <text>SPECIMEN · PINUS LONGAEVA · METHUSELAH</text>
+        </g>
+        <g
+          transform={`translate(${FRAME.x + FRAME.w - 26}, ${FRAME.y + 34})`}
+          fill={AMBER}
+          fontFamily={inter}
+          fontSize={11}
+          letterSpacing={3.4}
+          fontWeight={600}
+          textAnchor="end"
+        >
+          <text>PLATE 003 · CROSS-SECTION</text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+        {/* Ring assembly, clipped to plate */}
+        <g clipPath="url(#plate-clip)">
+          {/* Deep wood tint fill of latest grown radius (very subtle) */}
+          <circle
+            cx={CX}
+            cy={CY}
+            r={rGrown * 1.03}
+            fill={"#221A12"}
+            opacity={0.55}
+          />
+
+          {/* Concentric rings from pith outward */}
+          {RINGS.map((ring, i) => {
+            if (ring.r > rGrown) return null;
+            const revealFactor =
+              1 -
+              Math.max(
+                0,
+                Math.min(1, (ring.r - (rGrown - 20)) / 20),
+              );
+            const isDrought = ring.drought === 1;
+            const strokeW = isDrought ? 0.8 : 1.4;
+            const opacity = isDrought
+              ? 0.85
+              : 0.55 + 0.35 * Math.sin(i * 0.9);
+            const col = isDrought ? "#3A2916" : i % 3 === 0 ? AMBER : CREAM;
             return (
               <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
+                key={`ring-${i}`}
+                d={buildRingPath(ring.r)}
                 fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+                stroke={col}
+                strokeWidth={strokeW}
+                strokeOpacity={opacity * revealFactor}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
+          {/* Strip-bark deadwood sliver — a polished silver arc on the "dead" side */}
+          <g opacity={Math.min(1, growth * 1.3)}>
+            <path
+              d={(() => {
+                const N = 40;
+                const rOuter = R_MAX * 0.995;
+                const rInner = R_MAX * 0.88;
+                const t0 = 2.2 - 0.55;
+                const t1 = 2.2 + 0.55;
+                let d = "";
+                for (let i = 0; i <= N; i++) {
+                  const th = t0 + ((t1 - t0) * i) / N;
+                  const rr = ringRadius(th, rOuter);
+                  d +=
+                    (i === 0 ? "M" : "L") +
+                    " " +
+                    (CX + Math.cos(th) * rr).toFixed(1) +
+                    " " +
+                    (CY + Math.sin(th) * rr).toFixed(1) +
+                    " ";
                 }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+                for (let i = N; i >= 0; i--) {
+                  const th = t0 + ((t1 - t0) * i) / N;
+                  const rr = ringRadius(th, rInner);
+                  d +=
+                    "L " +
+                    (CX + Math.cos(th) * rr).toFixed(1) +
+                    " " +
+                    (CY + Math.sin(th) * rr).toFixed(1) +
+                    " ";
+                }
+                return d + "Z";
+              })()}
+              fill={BARK}
+              opacity={0.75}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
           </g>
+
+          {/* Pith heartwood glow */}
+          <circle
+            cx={CX}
+            cy={CY}
+            r={22}
+            fill="url(#pith-glow)"
+            filter="url(#soft-glow)"
+          />
+          <circle cx={CX} cy={CY} r={4.2} fill={AMBER} />
+          <circle cx={CX} cy={CY} r={1.8} fill={BONE} />
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Crosshair reticle centred on pith — small, static, scientific */}
+        <g stroke={BONE} strokeOpacity={0.28} strokeWidth={1}>
+          <line x1={CX - R_MAX - 20} y1={CY} x2={CX + R_MAX + 20} y2={CY} strokeDasharray="1 6" />
+          <line x1={CX} y1={CY - R_MAX - 20} x2={CX} y2={CY + R_MAX + 20} strokeDasharray="1 6" />
+        </g>
+        {/* Growth cursor — a tiny amber tick sliding out along the +x axis
+             as rings paint on, reinforcing the year-counter without stealing focus */}
+        <g>
+          <line
+            x1={CX + rGrown}
+            y1={CY - 8}
+            x2={CX + rGrown}
+            y2={CY + 8}
+            stroke={AMBER}
+            strokeWidth={1.4}
+          />
+          <circle cx={CX + rGrown} cy={CY} r={2.6} fill={AMBER} />
+        </g>
+
+        {/* Year counter box — floats in bottom-left of plate */}
+        <g transform={`translate(${FRAME.x + 26}, ${FRAME.y + FRAME.h - 52})`}>
+          <rect
+            x={0}
+            y={0}
+            width={230}
+            height={34}
+            fill={VAULT}
+            stroke={AMBER}
+            strokeWidth={1}
+          />
+          <text
+            x={14}
+            y={22}
+            fill={BARK}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.6}
+            fontWeight={500}
+          >
+            RING YEAR
+          </text>
+          <text
+            x={218}
+            y={23}
+            fill={BONE}
+            fontFamily={inter}
+            fontSize={15}
+            letterSpacing={2}
+            fontWeight={600}
+            textAnchor="end"
+          >
+            {yearLabel}
+          </text>
+        </g>
+
+        {/* Bottom-right rings-counted box */}
+        <g
+          transform={`translate(${FRAME.x + FRAME.w - 26 - 230}, ${
+            FRAME.y + FRAME.h - 52
+          })`}
+        >
+          <rect
+            x={0}
+            y={0}
+            width={230}
+            height={34}
+            fill={VAULT}
+            stroke={AMBER}
+            strokeWidth={1}
+          />
+          <text
+            x={14}
+            y={22}
+            fill={BARK}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.6}
+            fontWeight={500}
+          >
+            RINGS COUNTED
+          </text>
+          <text
+            x={218}
+            y={23}
+            fill={BONE}
+            fontFamily={inter}
+            fontSize={15}
+            letterSpacing={2}
+            fontWeight={600}
+            textAnchor="end"
+          >
+            {Math.round((displayedYear - -2833)).toLocaleString()}
+          </text>
+        </g>
+
+        {/* Historical annotations — leader lines from a ring to a fixed chip */}
+        {ANNOS.map((a, i) => {
+          const ringR = ringRForYear(a.year);
+          const ringVisible = ringR <= rGrown + 0.5;
+          const opacity = interpolate(
+            frame,
+            [annoStart + i * 3, annoStart + i * 3 + 10],
+            [0, 1],
+            {
+              easing: Easing.out(Easing.cubic),
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            },
+          );
+          if (!ringVisible) return null;
+
+          // Ring anchor point
+          const rr = ringRadius(a.angle, ringR);
+          const x0 = CX + Math.cos(a.angle) * rr;
+          const y0 = CY + Math.sin(a.angle) * rr;
+
+          // Chip geometry — width sized so the longest line clears the padding
+          const chipW =
+            Math.max(a.label.length * 7.6, a.subLabel.length * 7.3) + 22;
+          const chipH = 36;
+          const chipX = a.chip.side === "right" ? a.chip.x : a.chip.x - chipW;
+          const chipY = a.chip.y;
+
+          // Elbow just outside the chip on the leader side
+          const leaderEndX =
+            a.chip.side === "right" ? chipX - 4 : chipX + chipW + 4;
+          const leaderEndY = chipY + chipH / 2;
+
+          // Bend the leader through a mid elbow so it reads as engineered
+          const elbowX =
+            a.chip.side === "right"
+              ? Math.max(x0 + 20, leaderEndX - 26)
+              : Math.min(x0 - 20, leaderEndX + 26);
+          const elbowY = leaderEndY;
+
+          return (
+            <g key={a.year} opacity={opacity}>
+              <circle cx={x0} cy={y0} r={3.4} fill={AMBER} />
+              <line
+                x1={x0}
+                y1={y0}
+                x2={elbowX}
+                y2={elbowY}
+                stroke={AMBER}
+                strokeWidth={1}
+                strokeOpacity={0.9}
+              />
+              <line
+                x1={elbowX}
+                y1={elbowY}
+                x2={leaderEndX}
+                y2={leaderEndY}
+                stroke={AMBER}
+                strokeWidth={1}
+                strokeOpacity={0.9}
+              />
+              <rect
+                x={chipX}
+                y={chipY}
+                width={chipW}
+                height={chipH}
+                fill={VAULT}
+                fillOpacity={0.94}
+                stroke={AMBER}
+                strokeWidth={1}
+              />
+              <text
+                x={chipX + 12}
+                y={chipY + 15}
+                fill={BONE}
+                fontFamily={inter}
+                fontSize={12}
+                fontWeight={600}
+                letterSpacing={2}
+              >
+                {a.label}
+              </text>
+              <text
+                x={chipX + 12}
+                y={chipY + 29}
+                fill={AMBER}
+                fontFamily={inter}
+                fontSize={9}
+                fontWeight={500}
+                letterSpacing={2.4}
+              >
+                {a.subLabel}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Caption strip below the plate */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={BARK}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · METHUSELAH · ~4,859 RINGS · WHITE MTNS · CA</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={AMBER}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            1 RING = 1 YEAR
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* Type lockup */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 970,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,7 +691,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: AMBER,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,47 +700,47 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: BARK, margin: "0 4px" }}>/</span>
+          <span style={{ color: BONE, letterSpacing: 5 }}>Archivist</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: BONE,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 78,
             lineHeight: 0.96,
-            letterSpacing: -1.4,
+            letterSpacing: -1.2,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The 4,800-year
           <br />
-          city planner.
+          archivist.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 24,
+            color: "#D4C6A4",
             fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
+            fontSize: 18,
+            lineHeight: 1.42,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 890,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          A single{" "}
+          <span style={{ color: AMBER, fontWeight: 600 }}>
+            bristlecone pine
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          — Methuselah, high in California's White Mountains — has laid down one
+          distinct ring every year since ~2833 BCE. By cross-dating overlapping
+          bristlecone chronologies, dendrochronologists have built a continuous
+          8,700-year archive that calibrates the radiocarbon curve behind every
+          organic date on Earth.
         </div>
       </div>
 
@@ -669,7 +754,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: BARK,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +762,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Schulman 1958 · IntCal20 · Reimer et al. 2020</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: AMBER }}>●</span> Pith → Bark
         </span>
       </div>
     </AbsoluteFill>
