@@ -50,158 +50,161 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0F1114";
+const WOOD = "#E8DDC7";
+const HEART = "#B8843F";
+const NEEDLE = "#4A6858";
+const SKY = "#7B8FA3";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// Slight tints/shades derived from the palette (no new hues)
+const WOOD_DIM = "#8B846F";
+const WOOD_DARK = "#2A2822"; // deepest ring line (near-black shade of WOOD)
+const WOOD_MID = "#8A7B60"; // mid-tone latewood grain
+const HEART_GLOW = "#D9A365";
+const BOARD = "#141618";
+const BOARD_VIGNETTE = "#181A1D";
+const GRID_LINE = "#1F2226";
+const GRID_MAJOR_LINE = "#292D33";
+// Bleached slab background — light warm WOOD tints
+const SLAB_HI = "#D6C9AC"; // bright bleached highlight
+const SLAB_BASE = "#B0A386"; // slightly cooler shadow side
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// ── Ring layout ───────────────────────────────────────────────────────
+// The slab-slice sits inside the drafting frame. The pith is at the top;
+// rings march downward as calendar years increase, so a leader-line
+// timeline on the right maps 1:1 to y-position.
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+type RingSpec = {
+  y: number; // vertical position within slab (0 = pith / top)
+  weight: number; // stroke width in slab-space (px)
+  brightness: number; // 0..1 — narrower rings are darker (compressed)
+  year: number; // calendar year (negative = BCE)
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+// Build rings across ~4855 years, so year(0) = 2831 BCE, year(N-1) = 2026 CE.
+// A pseudo-random walk gives realistic climate-stressed spacing:
+// mostly narrow (bristlecone at 3000m rarely lays down wide rings), with
+// bands of drought and a few wet decades.
+const YEAR_START = -2831; // BCE (2831 BCE)
+const YEAR_END = 2026;
+const TOTAL_YEARS = YEAR_END - YEAR_START; // 4857
+const RING_COUNT = 128; // visual rings; each rendered ring spans ~38 years
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const rings: RingSpec[] = (() => {
+  // Deterministic pseudo-random via mulberry32
+  let s = 0x9e3779b9;
+  const rand = () => {
+    s |= 0;
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  const arr: RingSpec[] = [];
+  // Build "spacing" per ring; sum is normalised to SLAB_H later.
+  const spacings: number[] = [];
+  // Curated dramatic bands (climate signals visible in the record)
+  const droughtBands = new Set([8, 9, 10, 34, 35, 55, 56, 57, 78, 100, 101]);
+  const wetBands = new Set([21, 22, 46, 47, 66, 89, 90, 116]);
+  for (let i = 0; i < RING_COUNT; i++) {
+    const wave =
+      0.55 +
+      0.35 * Math.sin(i * 0.31 + 1.2) +
+      0.25 * Math.sin(i * 0.11 + 2.9) +
+      0.15 * Math.sin(i * 0.73);
+    const noise = rand() * 0.9 + 0.2;
+    let s = Math.max(0.35, wave * 0.6 + noise * 0.6);
+    if (droughtBands.has(i)) s *= 0.25;
+    else if (rand() < 0.07) s *= 0.4;
+    if (wetBands.has(i)) s *= 2.4;
+    else if (rand() < 0.04) s *= 1.7;
+    spacings.push(s);
   }
-  return ((h >>> 0) % 1000) / 1000;
-};
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
+  let acc = 0;
+  const cum: number[] = [];
+  for (const g of spacings) {
+    acc += g;
+    cum.push(acc);
+  }
+  const total = acc;
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+  for (let i = 0; i < RING_COUNT; i++) {
+    const yNorm = cum[i] / total; // 0..1 down the slab
+    const gap = spacings[i];
+    // Narrow rings are dark and thin; wide rings brighter/heavier
+    const gNorm = Math.min(1, gap / 2.4);
+    const brightness = 0.35 + gNorm * 0.65;
+    const weight = 0.5 + gNorm * 1.3;
+    const yr = Math.round(YEAR_START + (i / (RING_COUNT - 1)) * TOTAL_YEARS);
+    arr.push({ y: yNorm, weight, brightness, year: yr });
+  }
+  return arr;
+})();
+
+type Marker = {
+  year: number;
+  label: string;
+  sub: string;
+  labelDy?: number; // vertical offset (px) applied to the LABEL only
 };
+const MARKERS: Marker[] = [
+  { year: -2560, label: "GREAT PYRAMID · FINISHED", sub: "c. 2560 BCE" },
+  { year: -800, label: "HOMER · ILIAD", sub: "c. 800 BCE" },
+  { year: 476, label: "ROME · FALLS", sub: "476 CE" },
+  { year: 1492, label: "COLUMBUS · LANDFALL", sub: "1492 CE", labelDy: -22 },
+  { year: 1969, label: "APOLLO 11 · MOON", sub: "1969 CE", labelDy: 26 },
+];
+
+const yearToNorm = (yr: number) =>
+  (yr - YEAR_START) / TOTAL_YEARS;
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  // ── Timing ─────────────────────────────────────────────────────────
+  // 0.0..2.6s : rings grow downward (spring-eased)
+  // 1.6..3.2s : leader lines whip out, staggered
+  // 2.4..3.0s : title/role snap
+  // 3.0..3.9s : hook fades in
+  // 4.0..5.0s : gentle "reading" indicator sweep along the ledger
   const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const growT = Math.max(0, Math.min(1, frame / growSpan));
+  const growEased = 1 - Math.pow(1 - growT, 3);
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 2.4,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 3.0, fps * 3.9], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // ── Page layout (1080 × 1350) ─────────────────────────────────────
+  // Metadata band  : top 56..90
+  // Drafting frame : 130..820  (h 690, w 960)
+  // Title lockup   : 880..
+  // Hook           : 1090..
+  // Footer         : 1280..
+  const FRAME = { x: 60, y: 130, w: 960, h: 690 };
+
+  // Slab occupies the LEFT portion of the frame; the ledger sits to its right.
+  const SLAB = {
+    x: FRAME.x + 46,
+    y: FRAME.y + 46,
+    w: 480,
+    h: FRAME.h - 92,
+  };
+  // Ledger axis position
+  const LEDGER_X = SLAB.x + SLAB.w + 60;
+  const LEDGER_LABEL_X = LEDGER_X + 14;
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -217,7 +220,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: SKY,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +228,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: HEART }}>2026 · 08 · 30</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Main SVG canvas */}
       <svg
         width={1080}
         height={1350}
@@ -241,14 +244,14 @@ export const PairingCard: React.FC = () => {
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={40}
+            height={40}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d={`M 40 0 L 0 0 0 40`}
               fill="none"
-              stroke={GRID}
+              stroke={GRID_LINE}
               strokeWidth={1}
             />
           </pattern>
@@ -256,35 +259,64 @@ export const PairingCard: React.FC = () => {
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={160}
+            height={160}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d={`M 160 0 L 0 0 0 160`}
               fill="none"
-              stroke={GRID_MAJOR}
+              stroke={GRID_MAJOR_LINE}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="30%" cy="40%" r="90%">
+            <stop offset="0%" stopColor={BOARD_VIGNETTE} stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          {/* Vertical gradient down the slab: pith slightly warmer / heartwood */}
+          <linearGradient id="slab-warmth" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={HEART} stopOpacity={0.35} />
+            <stop offset="45%" stopColor={HEART} stopOpacity={0.1} />
+            <stop offset="100%" stopColor={HEART} stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="slab-base" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={SLAB_HI} stopOpacity={1} />
+            <stop offset="100%" stopColor={SLAB_BASE} stopOpacity={1} />
+          </linearGradient>
+
+          {/* Subtle vertical grain streaks */}
+          <pattern
+            id="grain"
+            x="0"
+            y="0"
+            width="9"
+            height="120"
+            patternUnits="userSpaceOnUse"
+          >
+            <rect width="9" height="120" fill="transparent" />
+            <line
+              x1="0.5"
+              y1="0"
+              x2="0.5"
+              y2="120"
+              stroke={WOOD_DARK}
+              strokeOpacity="0.18"
+              strokeWidth="0.5"
+            />
+          </pattern>
+
+          {/* Mask that reveals rings from top down as growT progresses */}
+          <clipPath id="slab-clip">
+            <rect
+              x={SLAB.x}
+              y={SLAB.y}
+              width={SLAB.w}
+              height={SLAB.h * growEased}
+            />
+          </clipPath>
         </defs>
 
         {/* Drafting board */}
@@ -310,14 +342,14 @@ export const PairingCard: React.FC = () => {
           fill="url(#grid-major)"
         />
 
-        {/* Inner thin border */}
+        {/* Inner border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#2B2E33"
           strokeWidth={1}
         />
 
@@ -330,261 +362,279 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={HEART} strokeWidth={1.5} fill="none">
+            <line x1={cx} y1={cy} x2={cx + sx * 24} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 24} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Frame caption at top-left of the drafting board */}
         <g
           transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          fill={SKY}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
+          fontWeight={500}
           letterSpacing={3}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text>SLAB · P. LONGAEVA · ×1 SCALE</text>
         </g>
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+        {/* ── The slab (wood block) ────────────────────────────────── */}
+        {/* Slab base: bleached wood, warmer near pith */}
+        <rect
+          x={SLAB.x}
+          y={SLAB.y}
+          width={SLAB.w}
+          height={SLAB.h}
+          fill="url(#slab-base)"
+        />
+        <rect
+          x={SLAB.x}
+          y={SLAB.y}
+          width={SLAB.w}
+          height={SLAB.h}
+          fill="url(#slab-warmth)"
+        />
+        {/* Slab hairline border */}
+        <rect
+          x={SLAB.x + 0.5}
+          y={SLAB.y + 0.5}
+          width={SLAB.w - 1}
+          height={SLAB.h - 1}
+          fill="none"
+          stroke={WOOD_DARK}
+          strokeOpacity={0.55}
+          strokeWidth={1}
+        />
+        {/* Vertical grain, faint */}
+        <rect
+          x={SLAB.x}
+          y={SLAB.y}
+          width={SLAB.w}
+          height={SLAB.h}
+          fill="url(#grain)"
+          opacity={0.35}
+        />
+
+
+        {/* Rings — dark ring lines on pale wood, masked to grow top→bottom.
+             Real bristlecone: each year is a boundary between early- and
+             latewood; narrow rings look almost solid dark, wide rings show a
+             thin dark line with a lighter grain below. */}
+        <g clipPath="url(#slab-clip)">
+          {rings.map((r, i) => {
+            const y = SLAB.y + r.y * SLAB.h;
+            const shadowW = r.brightness < 0.5 ? r.weight + 1.6 : r.weight + 0.6;
+            const shadowOp = r.brightness < 0.5 ? 0.92 : 0.72;
+            const showLate = r.brightness > 0.55;
+            return (
+              <g key={`ring-${i}`}>
+                <line
+                  x1={SLAB.x + 2}
+                  y1={y}
+                  x2={SLAB.x + SLAB.w - 2}
+                  y2={y}
+                  stroke={WOOD_DARK}
+                  strokeWidth={shadowW}
+                  strokeOpacity={shadowOp}
+                  strokeLinecap="butt"
+                />
+                {showLate && (
+                  <line
+                    x1={SLAB.x + 2}
+                    y1={y + shadowW * 0.5 + 0.6}
+                    x2={SLAB.x + SLAB.w - 2}
+                    y2={y + shadowW * 0.5 + 0.6}
+                    stroke={WOOD_MID}
+                    strokeWidth={Math.max(0.5, r.weight * 0.5)}
+                    strokeOpacity={0.35}
+                    strokeLinecap="butt"
+                  />
+                )}
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Pith marker at the top edge */}
+        <g opacity={Math.min(1, growEased * 2)}>
+          <text
+            x={SLAB.x + 6}
+            y={SLAB.y - 8}
+            fill={HEART}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            PITH · 2831 BCE
+          </text>
+        </g>
+        {/* Bark marker at bottom */}
+        <g opacity={Math.min(1, Math.max(0, growEased - 0.8) * 5)}>
+          <text
+            x={SLAB.x + 6}
+            y={SLAB.y + SLAB.h + 20}
+            fill={HEART}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            BARK · 2026 CE · +4855 YR
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+        {/* ── Ledger axis (vertical timeline) ──────────────────────── */}
+        <line
+          x1={LEDGER_X}
+          y1={SLAB.y}
+          x2={LEDGER_X}
+          y2={SLAB.y + SLAB.h}
+          stroke={SKY}
+          strokeOpacity={0.35}
+          strokeWidth={1}
+        />
+        {/* Axis end-caps */}
+        <line
+          x1={LEDGER_X - 5}
+          y1={SLAB.y}
+          x2={LEDGER_X + 5}
+          y2={SLAB.y}
+          stroke={SKY}
+          strokeOpacity={0.35}
+          strokeWidth={1}
+        />
+        <line
+          x1={LEDGER_X - 5}
+          y1={SLAB.y + SLAB.h}
+          x2={LEDGER_X + 5}
+          y2={SLAB.y + SLAB.h}
+          stroke={SKY}
+          strokeOpacity={0.35}
+          strokeWidth={1}
+        />
+
+        {/* Leader lines + markers */}
+        {MARKERS.map((m, idx) => {
+          const yn = yearToNorm(m.year);
+          const ySlab = SLAB.y + yn * SLAB.h;
+          const dy = m.labelDy ?? 0;
+          const yLabel = ySlab + dy;
+          const t0 = fps * (1.6 + idx * 0.18);
+          const localT = interpolate(frame, [t0, t0 + fps * 0.55], [0, 1], {
+            easing: Easing.out(Easing.cubic),
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          });
+          const dashLen = Math.hypot(LEDGER_X - (SLAB.x + SLAB.w), 0) + Math.abs(dy);
+          const dashOff = dashLen * (1 - Math.min(1, localT * 1.4));
+          const labelOp = interpolate(localT, [0.55, 1], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          });
+          const tickOp = Math.min(1, localT * 2.5);
+
+          // Elbow leader path: horizontal from slab, then vertical jog, then
+          // horizontal to ledger axis. dy=0 → straight line.
+          const xSlabEdge = SLAB.x + SLAB.w;
+          const xElbow = xSlabEdge + 24;
+          const path =
+            dy === 0
+              ? `M ${xSlabEdge} ${ySlab} L ${LEDGER_X} ${ySlab}`
+              : `M ${xSlabEdge} ${ySlab} L ${xElbow} ${ySlab} L ${xElbow} ${yLabel} L ${LEDGER_X} ${yLabel}`;
+
+          return (
+            <g key={`m-${idx}`}>
+              {/* Tick INSIDE the slab, at the real ring */}
+              <line
+                x1={SLAB.x + SLAB.w - 14}
+                y1={ySlab}
+                x2={SLAB.x + SLAB.w}
+                y2={ySlab}
+                stroke={HEART}
+                strokeWidth={1.6}
+                opacity={tickOp}
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
+              {/* Leader */}
+              <path
+                d={path}
+                stroke={HEART}
+                strokeWidth={1.2}
+                fill="none"
+                strokeDasharray={dashLen}
+                strokeDashoffset={dashOff}
+              />
+              {/* Ledger tick */}
+              <circle
+                cx={LEDGER_X}
+                cy={yLabel}
+                r={3}
+                fill={HEART_GLOW}
+                opacity={labelOp}
+              />
+              {/* Label block */}
+              <g opacity={labelOp}>
+                <text
+                  x={LEDGER_LABEL_X}
+                  y={yLabel - 4}
+                  fill={WOOD}
+                  fontFamily={inter}
+                  fontSize={13}
+                  fontWeight={600}
+                  letterSpacing={2.6}
+                >
+                  {m.label}
+                </text>
+                <text
+                  x={LEDGER_LABEL_X}
+                  y={yLabel + 14}
+                  fill={SKY}
+                  fontFamily={inter}
+                  fontSize={11}
+                  fontWeight={500}
+                  letterSpacing={2.2}
+                >
+                  {m.sub}
+                </text>
               </g>
-            );
-          })}
+            </g>
+          );
+        })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
+        {/* Ledger heading — placed above the ledger axis */}
+        <g opacity={Math.min(1, growEased * 1.3)}>
+          <text
+            x={LEDGER_X - 6}
+            y={FRAME.y + 30}
+            fill={SKY}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={600}
+            letterSpacing={3.2}
+          >
+            LEDGER · EMBEDDED EVENTS
+          </text>
         </g>
 
         {/* Caption strip just below the drafting frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={SKY}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 3 · CROSS-DATED RING SEQUENCE, ~4855 YR</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
+            fill={HEART}
             opacity={0.85}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            METHUSELAH GROVE · 3050 M
           </text>
         </g>
       </svg>
@@ -595,7 +645,7 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 900,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,7 +656,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: HEART,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,32 +665,32 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
+          Role <span style={{ color: SKY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Archivist
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: "#F4F1EA",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 82,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The tree
           <br />
-          city planner.
+          with rings for pages.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 28,
+            color: "#C7C2B4",
             fontFamily: inter,
             fontSize: 19,
             lineHeight: 1.4,
@@ -649,13 +699,15 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          One Great Basin bristlecone —{" "}
+          <span style={{ color: HEART, fontWeight: 600 }}>Methuselah</span>{" "}
+          — has been laying down rings since 2831 BCE. By splicing overlapping
+          ring patterns from living and long-dead wood, dendrochronologists
+          keep a continuous{" "}
+          <span style={{ color: WOOD, fontWeight: 600 }}>
+            ~9,000-year
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          record that dates atmospheric carbon-14 to the exact calendar year.
         </div>
       </div>
 
@@ -669,7 +721,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: SKY,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +729,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Schulman 1958 · Salzer et al. · IntCal · Pinus longaeva</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: HEART }}>●</span> One ring = one year
         </span>
       </div>
     </AbsoluteFill>
