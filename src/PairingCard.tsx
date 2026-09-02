@@ -50,164 +50,190 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept brief
+const OCEAN = "#0B1B29";        // deep Pacific ground
+const OCEAN_DEEP = "#07131D";   // vignette pit
+const RUFOUS = "#C25A34";       // godwit breeding rust
+const RUFOUS_HI = "#E27346";    // highlight rust
+const BUFF = "#E9C48A";         // buff feather / warm mid
+const CREAM = "#F5EEDF";        // paper / type primary
+const SPRAY = "#6B7B87";        // cool secondary
+const GRID = "#132738";         // faint gridline
+const GRID_MAJOR = "#1B3448";   // stronger gridline
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Chart layout (inside a 960×760 chart plane) ─────────────────────────
+// (0,0) top-left of the chart. The great-circle arc runs from Alaska
+// (upper right) to Tasmania (lower left) — abstracted, not literal.
+const CHART_W = 960;
+const CHART_H = 760;
+
+const START = { x: 830, y: 90, label: "ALASKA" };   // Yukon-Kuskokwim Delta
+const END = { x: 170, y: 660, label: "TASMANIA" };  // Ansons Bay
+
+// Great-circle style curve — a smooth cubic bezier bowing to the SE
+// (out over the central Pacific) between start and finish.
+const ARC_C1 = { x: 830, y: 470 };
+const ARC_C2 = { x: 400, y: 720 };
+
+const arcPath = `M ${START.x} ${START.y} C ${ARC_C1.x} ${ARC_C1.y}, ${ARC_C2.x} ${ARC_C2.y}, ${END.x} ${END.y}`;
+
+// Sample a point along the arc at parameter u∈[0,1] (cubic Bezier).
+const arcPoint = (u: number) => {
+  const mu = 1 - u;
+  const x =
+    mu * mu * mu * START.x +
+    3 * mu * mu * u * ARC_C1.x +
+    3 * mu * u * u * ARC_C2.x +
+    u * u * u * END.x;
+  const y =
+    mu * mu * mu * START.y +
+    3 * mu * mu * u * ARC_C1.y +
+    3 * mu * u * u * ARC_C2.y +
+    u * u * u * END.y;
+  return { x, y };
+};
+
+// Tangent angle (deg) at u — for orienting the flying bird.
+const arcTangentDeg = (u: number) => {
+  const mu = 1 - u;
+  const dx =
+    3 * mu * mu * (ARC_C1.x - START.x) +
+    6 * mu * u * (ARC_C2.x - ARC_C1.x) +
+    3 * u * u * (END.x - ARC_C2.x);
+  const dy =
+    3 * mu * mu * (ARC_C1.y - START.y) +
+    6 * mu * u * (ARC_C2.y - ARC_C1.y) +
+    3 * u * u * (END.y - ARC_C2.y);
+  return (Math.atan2(dy, dx) * 180) / Math.PI;
+};
+
+// Split-time ticks along the arc — race splits at Day 3, 6, 9, and the
+// 13,560-km finish. Positioned by parameter u, since the arc is
+// close enough to constant-speed for this abstract chart.
+const SPLITS: { u: number; day: string; km: string }[] = [
+  { u: 0.24, day: "DAY 3", km: "3,700 KM" },
+  { u: 0.5, day: "DAY 6", km: "7,400 KM" },
+  { u: 0.75, day: "DAY 9", km: "11,000 KM" },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// Coastline hints — thin arcs, not hexagon blobs. Read as "shore."
+// Alaska curves into the upper-right corner. Tasmania curves out of the
+// lower-left. Both stay well outside the type block and split-time labels.
+const ALASKA_COAST =
+  "M 960 40 C 900 40, 855 60, 830 95 C 810 125, 810 160, 830 195";
+const TASMANIA_COAST =
+  "M 0 620 C 60 620, 110 640, 145 675 C 175 705, 195 745, 205 760";
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// Bird silhouette — swept-wing shorebird gliding to the right.
+// A slim body + two swept-back wings + long bill. Path units ≈ 60×22.
+const BIRD_PATH =
+  // body
+  "M -6 0 C -3 -2, 8 -2, 14 -1 L 22 -0.7 L 24 0 L 22 0.7 L 14 1 " +
+  "C 8 2, -3 2, -6 0 Z " +
+  // upper wing — swept back and up
+  "M -4 -1 C -14 -7, -26 -10, -34 -6 " +
+  "C -24 -4, -14 -3, -4 -1 Z " +
+  // lower wing — swept back and down
+  "M -4 1 C -14 7, -26 10, -34 6 " +
+  "C -24 4, -14 3, -4 1 Z";
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// Small compass rose glyph
+const CompassN: React.FC<{ x: number; y: number }> = ({ x, y }) => (
+  <g transform={`translate(${x}, ${y})`}>
+    <circle cx={0} cy={0} r={14} fill="none" stroke={SPRAY} strokeWidth={1} />
+    <polygon points="0,-14 3,0 0,4 -3,0" fill={RUFOUS} />
+    <polygon points="0,14 3,0 0,-4 -3,0" fill={SPRAY} opacity={0.7} />
+    <text
+      x={0}
+      y={-20}
+      textAnchor="middle"
+      fill={SPRAY}
+      fontFamily={inter}
+      fontSize={10}
+      letterSpacing={2}
+      fontWeight={600}
+    >
+      N
+    </text>
+  </g>
+);
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
-    fps,
-    config: { damping: 200, mass: 0.8 },
-  });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  // ── Timing ──────────────────────────────────────────────────────────
+  const drawStart = fps * 0.4;
+  const drawEnd = fps * 3.0;      // ~2.6s draw
+  const drawT = interpolate(frame, [drawStart, drawEnd], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // After drawing, the bird settles at the finish (subtle drift).
+  const settled = drawT >= 1;
+  const settleDrift = settled
+    ? Math.sin((frame - drawEnd) * 0.06) * 0.6
+    : 0;
+
+  const titleSpring = spring({
+    frame: frame - fps * 0.3,
+    fps,
+    config: { damping: 200, mass: 0.8 },
+  });
+
+  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // Approximate arc length — used for the drawing-in stroke-dash trick.
+  // (A ~360px sample sum is fine here — we only need consistent units.)
+  const ARC_LEN = React.useMemo(() => {
+    let len = 0;
+    let prev = arcPoint(0);
+    const steps = 200;
+    for (let i = 1; i <= steps; i++) {
+      const p = arcPoint(i / steps);
+      len += Math.hypot(p.x - prev.x, p.y - prev.y);
+      prev = p;
+    }
+    return len;
+  }, []);
+  const dashOffset = ARC_LEN * (1 - drawT);
+
+  // Bird position — rides the head of the drawn arc, then rests at finish.
+  const birdU = drawT;
+  const birdP = arcPoint(birdU);
+  const birdAngle = arcTangentDeg(birdU);
+
+  // ── Page layout (1080×1350 portrait) ────────────────────────────────
+  // Top metadata band  : 0..110
+  // Chart plate        : 60..900  (h 780; the chart at ~960×760 inside)
+  // Type lockup        : 940..
+  // Footer             : bottom 50
+  const PLATE = { x: 60, y: 130, w: 960, h: 760 };
+
+  // Split ticks appear as the arc-draw passes them.
+  const splitAlpha = (u: number) =>
+    interpolate(drawT, [u - 0.02, u + 0.14], [0, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+
+  // Finish flare intensifies once the arc completes.
+  const finishFlare = interpolate(drawT, [0.9, 1.0], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: OCEAN, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* Top metadata band — flush to a 80-unit margin grid */}
       <div
         style={{
           position: "absolute",
@@ -217,7 +243,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: SPRAY,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +251,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: RUFOUS_HI }}>2026 · 09 · 02</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Chart plate */}
       <svg
         width={1080}
         height={1350}
@@ -237,376 +263,452 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
+          <radialGradient id="plate-vignette" cx="50%" cy="45%" r="70%">
+            <stop offset="0%" stopColor="#122534" stopOpacity={1} />
+            <stop offset="100%" stopColor={OCEAN_DEEP} stopOpacity={1} />
+          </radialGradient>
+
           <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            id="lat-lines"
+            x={PLATE.x}
+            y={PLATE.y}
+            width={PLATE.w}
+            height={95}
             patternUnits="userSpaceOnUse"
           >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
+            <line
+              x1={0}
+              y1={0}
+              x2={PLATE.w}
+              y2={0}
               stroke={GRID}
               strokeWidth={1}
+              strokeDasharray="2 6"
             />
           </pattern>
+
           <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            id="lon-lines"
+            x={PLATE.x}
+            y={PLATE.y}
+            width={120}
+            height={PLATE.h}
             patternUnits="userSpaceOnUse"
           >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
+            <line
+              x1={0}
+              y1={0}
+              x2={0}
+              y2={PLATE.h}
+              stroke={GRID}
               strokeWidth={1}
+              strokeDasharray="2 6"
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <filter id="arc-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="b" />
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode in="b" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          <radialGradient id="finish-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={RUFOUS_HI} stopOpacity={0.9} />
+            <stop offset="100%" stopColor={RUFOUS} stopOpacity={0} />
+          </radialGradient>
+
+          <radialGradient id="start-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={BUFF} stopOpacity={0.7} />
+            <stop offset="100%" stopColor={BUFF} stopOpacity={0} />
+          </radialGradient>
         </defs>
 
-        {/* Drafting board */}
+        {/* Plate background */}
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
+          x={PLATE.x}
+          y={PLATE.y}
+          width={PLATE.w}
+          height={PLATE.h}
+          fill="url(#plate-vignette)"
         />
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
+          x={PLATE.x}
+          y={PLATE.y}
+          width={PLATE.w}
+          height={PLATE.h}
+          fill="url(#lat-lines)"
         />
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+          x={PLATE.x}
+          y={PLATE.y}
+          width={PLATE.w}
+          height={PLATE.h}
+          fill="url(#lon-lines)"
         />
 
-        {/* Inner thin border */}
+        {/* Equator emphasis */}
+        <line
+          x1={PLATE.x}
+          y1={PLATE.y + PLATE.h * 0.5}
+          x2={PLATE.x + PLATE.w}
+          y2={PLATE.y + PLATE.h * 0.5}
+          stroke={GRID_MAJOR}
+          strokeWidth={1}
+        />
+        <text
+          x={PLATE.x + 14}
+          y={PLATE.y + PLATE.h * 0.5 - 8}
+          fill={SPRAY}
+          fontFamily={inter}
+          fontSize={10}
+          letterSpacing={3}
+          fontWeight={600}
+          opacity={0.75}
+        >
+          EQUATOR
+        </text>
+
+        {/* Plate border */}
         <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
+          x={PLATE.x + 0.5}
+          y={PLATE.y + 0.5}
+          width={PLATE.w - 1}
+          height={PLATE.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#1E3A50"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner ticks — race-chart brackets */}
         {(
           [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
+            [PLATE.x, PLATE.y, 1, 1],
+            [PLATE.x + PLATE.w, PLATE.y, -1, 1],
+            [PLATE.x, PLATE.y + PLATE.h, 1, -1],
+            [PLATE.x + PLATE.w, PLATE.y + PLATE.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={RUFOUS} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
+        {/* Compass — top-left of plate */}
+        <g transform={`translate(${PLATE.x + 44}, ${PLATE.y + 52})`}>
+          <CompassN x={0} y={0} />
+        </g>
+
+        {/* Chart-local coordinate system */}
+        <g transform={`translate(${PLATE.x}, ${PLATE.y})`}>
+          {/* Coastline hints — thin arcs at the extreme corners */}
+          <path
+            d={ALASKA_COAST}
+            fill="none"
+            stroke={SPRAY}
             strokeWidth={1.2}
+            strokeOpacity={0.55}
           />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <path
+            d={TASMANIA_COAST}
+            fill="none"
+            stroke={SPRAY}
+            strokeWidth={1.2}
+            strokeOpacity={0.55}
+          />
+          {/* Continent labels — set into the shore, away from arc & type */}
+          <text
+            x={905}
+            y={80}
+            textAnchor="end"
+            fill={SPRAY}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={3.5}
+            fontWeight={600}
+          >
+            ALASKA
           </text>
-        </g>
+          <text
+            x={40}
+            y={745}
+            textAnchor="start"
+            fill={SPRAY}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={3.5}
+            fontWeight={600}
+          >
+            TASMANIA
+          </text>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+          {/* Ghost arc — full path at low opacity so composition reads before draw */}
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={SPRAY}
+            strokeOpacity={0.16}
+            strokeWidth={1.2}
+            strokeDasharray="3 8"
+          />
+
+          {/* Arc — glow underlay */}
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={RUFOUS}
+            strokeOpacity={0.35}
+            strokeWidth={9}
+            strokeLinecap="round"
+            filter="url(#arc-glow)"
+            strokeDasharray={ARC_LEN}
+            strokeDashoffset={dashOffset}
+          />
+          {/* Arc — core */}
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={RUFOUS_HI}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeDasharray={ARC_LEN}
+            strokeDashoffset={dashOffset}
+          />
+          {/* Arc — bright highlight thread */}
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={CREAM}
+            strokeOpacity={0.75}
+            strokeWidth={1}
+            strokeLinecap="round"
+            strokeDasharray={ARC_LEN}
+            strokeDashoffset={dashOffset}
+          />
+
+          {/* Split-time markers — labels pushed to the CONCAVE side
+              (NW of arc, into open ocean) so they never crowd the bird
+              or the finish, and align on a common vertical band. */}
+          {SPLITS.map((s) => {
+            const p = arcPoint(s.u);
+            const a = splitAlpha(s.u);
+            const tang = arcTangentDeg(s.u);
+            // Perpendicular pointing to the concave side (NW / upper-left)
+            let nx = Math.sin((tang * Math.PI) / 180);
+            let ny = -Math.cos((tang * Math.PI) / 180);
+            // Force NW half — flip if the perpendicular points SE.
+            if (nx > 0 || ny > 0) {
+              nx = -nx;
+              ny = -ny;
+            }
+            const off = 44;
+            const lx = p.x + nx * off;
+            const ly = p.y + ny * off;
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
+              <g key={s.day} opacity={a}>
+                {/* Short leader line from arc into label */}
+                <line
+                  x1={p.x + nx * 8}
+                  y1={p.y + ny * 8}
+                  x2={p.x + nx * 30}
+                  y2={p.y + ny * 30}
+                  stroke={CREAM}
+                  strokeWidth={1}
                   strokeOpacity={0.55}
-                  fill="none"
+                />
+                {/* Tick across the arc */}
+                <line
+                  x1={p.x - ny * 6}
+                  y1={p.y + nx * 6}
+                  x2={p.x + ny * 6}
+                  y2={p.y - nx * 6}
+                  stroke={CREAM}
+                  strokeWidth={2}
                   strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
                 />
+                <circle cx={p.x} cy={p.y} r={2.6} fill={CREAM} />
+                <text
+                  x={lx}
+                  y={ly - 2}
+                  textAnchor="middle"
+                  fill={CREAM}
+                  fontFamily={inter}
+                  fontSize={12}
+                  fontWeight={600}
+                  letterSpacing={2.6}
+                >
+                  {s.day}
+                </text>
+                <text
+                  x={lx}
+                  y={ly + 14}
+                  textAnchor="middle"
+                  fill={SPRAY}
+                  fontFamily={inter}
+                  fontSize={10}
+                  fontWeight={500}
+                  letterSpacing={2}
+                >
+                  {s.km}
+                </text>
               </g>
             );
           })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+          {/* Start marker — label pushed UP-LEFT into empty ocean space,
+              well clear of the Alaska coastline and continent label. */}
+          <g>
+            <circle
+              cx={START.x}
+              cy={START.y}
+              r={18}
+              fill="url(#start-glow)"
+            />
+            <circle
+              cx={START.x}
+              cy={START.y}
+              r={6}
+              fill={BUFF}
+              stroke={OCEAN}
+              strokeWidth={2}
             />
             <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
+              x1={START.x - 4}
+              y1={START.y - 4}
+              x2={START.x - 34}
+              y2={START.y - 34}
+              stroke={BUFF}
+              strokeOpacity={0.5}
+              strokeWidth={1}
             />
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
+              x={START.x - 36}
+              y={START.y - 42}
+              textAnchor="end"
+              fill={BUFF}
               fontFamily={inter}
               fontSize={11}
               fontWeight={600}
-              letterSpacing={3.5}
+              letterSpacing={2.6}
             >
-              TOKYO
+              START · OCT 13
             </text>
+          </g>
+
+          {/* Finish marker — label pushed DOWN-RIGHT into open ocean below
+              the arc, well clear of the Tasmania coastline and bird. */}
+          <g>
+            <circle
+              cx={END.x}
+              cy={END.y}
+              r={22 + finishFlare * 6}
+              fill="url(#finish-glow)"
+            />
+            <circle
+              cx={END.x}
+              cy={END.y}
+              r={7}
+              fill={RUFOUS_HI}
+              stroke={OCEAN}
+              strokeWidth={2}
+            />
+            <line
+              x1={END.x + 4}
+              y1={END.y + 4}
+              x2={END.x + 30}
+              y2={END.y + 30}
+              stroke={RUFOUS_HI}
+              strokeOpacity={0.55}
+              strokeWidth={1}
+            />
+            <text
+              x={END.x + 32}
+              y={END.y + 42}
+              textAnchor="start"
+              fill={RUFOUS_HI}
+              fontFamily={inter}
+              fontSize={11}
+              fontWeight={600}
+              letterSpacing={2.6}
+            >
+              FINISH · OCT 24
+            </text>
+          </g>
+
+          {/* Bird — glides at the head of the drawn arc, scaled up so
+              the silhouette reads at social-post size. */}
+          <g
+            transform={`translate(${birdP.x}, ${
+              birdP.y + settleDrift
+            }) rotate(${birdAngle}) scale(2.1)`}
+          >
+            {/* Soft under-glow */}
+            <ellipse
+              cx={-2}
+              cy={0}
+              rx={22}
+              ry={5}
+              fill={CREAM}
+              opacity={0.12}
+            />
+            <path
+              d={BIRD_PATH}
+              fill={CREAM}
+              stroke={RUFOUS}
+              strokeWidth={0.4}
+            />
+            {/* Rufous shoulder chevron — nod to breeding plumage */}
+            <path
+              d="M -4 -1 C -12 -5, -20 -6, -26 -4 C -18 -3, -10 -2, -4 -1 Z"
+              fill={RUFOUS}
+              opacity={0.55}
+            />
+            <path
+              d="M -4 1 C -12 5, -20 6, -26 4 C -18 3, -10 2, -4 1 Z"
+              fill={RUFOUS}
+              opacity={0.55}
+            />
+            <circle cx={21} cy={0} r={1.1} fill={OCEAN} />
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip beneath plate */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          transform={`translate(${PLATE.x}, ${PLATE.y + PLATE.h + 22})`}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text fill={SPRAY}>
+            FIG. 1 · SATELLITE-TRACKED FLIGHT OF GODWIT “B6”, OCT 2022
+          </text>
+          <text x={PLATE.w} textAnchor="end" fill={RUFOUS_HI} opacity={0.9}>
+            13,560 KM · 224 H · 0 STOPS
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ─────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 950,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
             [0, 1],
-            [16, 0],
+            [16, 0]
           )}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: RUFOUS_HI,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,15 +717,13 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: SPRAY, margin: "0 4px" }}>/</span>
+          <span style={{ color: CREAM, letterSpacing: 5 }}>Ultramarathoner</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: CREAM,
             fontFamily: playfair,
             fontWeight: 500,
             fontSize: 84,
@@ -632,15 +732,15 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The 224-hour
           <br />
-          city planner.
+          athlete.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#D8D3C6",
             fontFamily: inter,
             fontSize: 19,
             lineHeight: 1.4,
@@ -649,13 +749,13 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          In Oct 2022 a satellite-tagged juvenile{" "}
+          <span style={{ color: RUFOUS_HI, fontWeight: 600 }}>
+            bar-tailed godwit
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          flew 13,560 km from Alaska to Tasmania — 11 days, 1 hour, no food, no
+          water, no landing. The longest non-stop flight ever recorded for any
+          bird.
         </div>
       </div>
 
@@ -669,7 +769,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: SPRAY,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +777,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Global Flyway Network · Guinness World Records, 2022</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: RUFOUS_HI }}>●</span> Godwit “B6”
         </span>
       </div>
     </AbsoluteFill>
