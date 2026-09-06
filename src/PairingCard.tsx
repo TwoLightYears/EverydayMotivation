@@ -50,168 +50,791 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0B0F0C";
+const FOREST_DEEP = "#131A15";
+const AMBER = "#C9884A";
+const AMBER_GLOW = "#F0D48A";
+const GRAY = "#8A8478";
+const RULE = "#20291F";
+const RULE_MAJOR = "#2E3B2D";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Page ──────────────────────────────────────────────────────────────
+const W = 1080;
+const H = 1350;
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// The specimen plate — bordered area
+const PLATE = { x: 72, y: 132, w: 936, h: 720 };
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// Vertical anatomy of the plate: forest floor at the bottom, marionette
+// cross floating near the top, leaf midvein 25 cm above the floor.
+const GROUND_Y = PLATE.y + PLATE.h - 46;
+const LEAF_Y = PLATE.y + 260;
+const CROSS_Y = PLATE.y + 60;
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
+// The ant clamps upside-down onto the leaf midvein at this x. Slightly
+// left of centre so there is room on the right for the muscle inset.
+const CLAMP = { x: PLATE.x + 388, y: LEAF_Y };
 
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
+// ── Ant (silhouette, viewed from below, hanging jaw-up from a leaf) ────
+// Local coords: (0, 0) is the tip of the mandibles (i.e. on the leaf midvein).
+// Positive y goes DOWN (into the plate, away from the leaf).
+const Ant: React.FC<{ clampProgress: number }> = ({ clampProgress }) => {
+  const openDeg = interpolate(clampProgress, [0, 1], [30, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const scale = 1.55;
+  return (
+    <g transform={`translate(${CLAMP.x}, ${CLAMP.y}) scale(${scale})`}>
+      {/* Mandibles */}
+      <g strokeLinecap="round" strokeLinejoin="round" stroke={AMBER} fill="none">
+        <path
+          d={`M 0 0 Q -5 9 -12 18`}
+          strokeWidth={2.2}
+          transform={`rotate(${-openDeg} 0 0)`}
+        />
+        <path
+          d={`M 0 0 Q 5 9 12 18`}
+          strokeWidth={2.2}
+          transform={`rotate(${openDeg} 0 0)`}
+        />
+      </g>
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+      {/* Head — a rounded rectangle-ish ellipse */}
+      <ellipse cx={0} cy={26} rx={17} ry={19} fill="#181F19" stroke={AMBER} strokeWidth={1.4} />
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
+      {/* Antennae — thin, elbowed */}
+      <g fill="none" stroke={AMBER} strokeWidth={1.1} strokeLinecap="round">
+        <path d={`M -8 16 Q -24 12 -34 22 Q -40 30 -42 40`} />
+        <path d={`M 8 16 Q 24 12 34 22 Q 40 30 42 40`} />
+      </g>
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+      {/* Petiole (neck) */}
+      <path
+        d={`M -4 44 Q 0 47 4 44 L 4 52 Q 0 55 -4 52 Z`}
+        fill="#181F19"
+        stroke={AMBER}
+        strokeWidth={1.2}
+      />
+
+      {/* Mesosoma / thorax */}
+      <ellipse cx={0} cy={72} rx={15} ry={22} fill="#181F19" stroke={AMBER} strokeWidth={1.4} />
+
+      {/* Waist nodes */}
+      <circle cx={0} cy={99} r={4.5} fill="#181F19" stroke={AMBER} strokeWidth={1.2} />
+      <circle cx={0} cy={109} r={4} fill="#181F19" stroke={AMBER} strokeWidth={1.2} />
+
+      {/* Gaster (abdomen) */}
+      <ellipse cx={0} cy={144} rx={22} ry={30} fill="#181F19" stroke={AMBER} strokeWidth={1.5} />
+      {/* Faint gaster segments */}
+      <g stroke={AMBER} strokeOpacity={0.28} strokeWidth={0.8} fill="none">
+        <path d={`M -21 132 Q 0 138 21 132`} />
+        <path d={`M -22 148 Q 0 154 22 148`} />
+        <path d={`M -20 162 Q 0 168 20 162`} />
+      </g>
+
+      {/* Six legs — three-jointed, spread wider so they read as a starburst */}
+      <g fill="none" stroke={AMBER} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+        {/* Left legs (front → mid → hind) — each fanned out at a distinct angle */}
+        <path d={`M -13 60 Q -46 46 -68 34 Q -84 26 -92 18`} />
+        <path d={`M -14 78 Q -48 78 -72 92 Q -88 108 -94 132`} />
+        <path d={`M -12 96 Q -44 116 -60 148 Q -68 178 -60 198`} />
+        {/* Right legs */}
+        <path d={`M 13 60 Q 46 46 68 34 Q 84 26 92 18`} />
+        <path d={`M 14 78 Q 48 78 72 92 Q 88 108 94 132`} />
+        <path d={`M 12 96 Q 44 116 60 148 Q 68 178 60 198`} />
+      </g>
+
+      {/* A faint "brain" region inside the head (to be called-out separately) */}
+      <ellipse cx={0} cy={20} rx={7} ry={5.5} fill="none" stroke={AMBER_GLOW} strokeWidth={0.8} opacity={0.65} strokeDasharray="2 2" />
+    </g>
+  );
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// ── Fungal stroma erupting from the ant's head, curving up past the leaf,
+//    ending in a bulbous perithecial club well within the plate ─────────
+const Stroma: React.FC<{ progress: number }> = ({ progress }) => {
+  // Base at top-back of ant head; tip up-left, well above leaf but well
+  // inside the plate. Bulb fits above the leaf.
+  const scale = 1.55;
+  // Anchor slightly BEHIND the ant's head (i.e. deeper into the head volume,
+  // between the head and the leaf midvein) so the stroma reads as erupting
+  // through the head + puncturing the leaf, not as a mandible.
+  const baseX = CLAMP.x - 6 * scale;
+  const baseY = CLAMP.y + 14; // just below the leaf midvein, in head territory
+  const tipX = CLAMP.x - 96;
+  const tipY = PLATE.y + 108;
+
+  const bulbR = interpolate(progress, [0.55, 1], [0, 18], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
+  const LEN = 320;
+  const offset = LEN * (1 - clamp01(progress / 0.9));
+
+  // Control points — graceful curve rising up-left, crossing the leaf plane
+  const c1x = CLAMP.x - 12;
+  const c1y = CLAMP.y - 60;
+  const c2x = CLAMP.x - 70;
+  const c2y = CLAMP.y - 150;
+
+  return (
+    <g>
+      {/* Ambient glow */}
+      <path
+        d={`M ${baseX} ${baseY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tipX} ${tipY}`}
+        stroke={AMBER}
+        strokeWidth={12}
+        strokeOpacity={0.14}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={LEN}
+        strokeDashoffset={offset}
+      />
+      {/* Body */}
+      <path
+        d={`M ${baseX} ${baseY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tipX} ${tipY}`}
+        stroke={AMBER}
+        strokeWidth={3.4}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={LEN}
+        strokeDashoffset={offset}
+      />
+      {/* Inner highlight */}
+      <path
+        d={`M ${baseX} ${baseY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tipX} ${tipY}`}
+        stroke={AMBER_GLOW}
+        strokeWidth={1.1}
+        strokeOpacity={0.75}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={LEN}
+        strokeDashoffset={offset}
+      />
+      {/* Perithecial club */}
+      {bulbR > 0.5 && (
+        <g>
+          <ellipse cx={tipX} cy={tipY} rx={bulbR + 12} ry={bulbR * 1.4 + 12} fill={AMBER} opacity={0.16} />
+          <ellipse
+            cx={tipX}
+            cy={tipY}
+            rx={bulbR}
+            ry={bulbR * 1.3}
+            fill="#3A2B18"
+            stroke={AMBER}
+            strokeWidth={1.6}
+          />
+          {/* Perithecial ostioles (little pores dotting the club) */}
+          {Array.from({ length: 14 }).map((_, i) => {
+            const a = (i / 14) * Math.PI * 2;
+            const rr = bulbR * 0.6;
+            return (
+              <circle
+                key={i}
+                cx={tipX + Math.cos(a) * rr}
+                cy={tipY + Math.sin(a) * rr * 1.25}
+                r={1.7}
+                fill={AMBER_GLOW}
+                opacity={0.85}
+              />
+            );
+          })}
+          {/* Callout label to the right of the club */}
+          <line
+            x1={tipX + bulbR + 6}
+            y1={tipY}
+            x2={tipX + bulbR + 40}
+            y2={tipY}
+            stroke={GRAY}
+            strokeOpacity={0.75}
+            strokeWidth={0.9}
+          />
+          <text
+            x={tipX + bulbR + 46}
+            y={tipY - 4}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.4}
+            fontWeight={600}
+            fill={AMBER}
+          >
+            PERITHECIAL
+          </text>
+          <text
+            x={tipX + bulbR + 46}
+            y={tipY + 10}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.4}
+            fontWeight={500}
+            fill={GRAY}
+          >
+            CLUB
+          </text>
+        </g>
+      )}
+
+      {/* A tiny "puncture" mark where the stroma crosses the leaf plane */}
+      {progress > 0.3 && (
+        <g>
+          <ellipse
+            cx={CLAMP.x - 32}
+            cy={LEAF_Y}
+            rx={7}
+            ry={2.2}
+            fill={INK}
+            stroke={AMBER}
+            strokeOpacity={0.7}
+            strokeWidth={0.9}
+          />
+        </g>
+      )}
+    </g>
+  );
+};
+
+// ── Marionette control cross + strings that descend into the ant ───────
+const Marionette: React.FC<{ progress: number; sway: number }> = ({ progress, sway }) => {
+  const scale = 1.55;
+  const cx = CLAMP.x + 30;
+  const cy = CROSS_Y;
+
+  // Targets on the ant body — head, thorax, mid-leg tips (in absolute coords).
+  // Deliberately land on body segments (not near the mandible tips) so the
+  // strings do not tangle with the antennae and clamped jaws.
+  const targets = [
+    { x: CLAMP.x - 22, y: CLAMP.y + 46 * scale }, // left head side
+    { x: CLAMP.x + 22, y: CLAMP.y + 46 * scale }, // right head side
+    { x: CLAMP.x - 20, y: CLAMP.y + 96 * scale }, // thorax left
+    { x: CLAMP.x + 20, y: CLAMP.y + 96 * scale }, // thorax right
+    { x: CLAMP.x - 94 * scale, y: CLAMP.y + 132 * scale }, // outer-left mid-leg tip
+    { x: CLAMP.x + 94 * scale, y: CLAMP.y + 132 * scale }, // outer-right mid-leg tip
+  ];
+
+  // Anchor points along the cross
+  const anchors = [
+    { x: cx - 68, y: cy + 6 },
+    { x: cx - 40, y: cy + 6 },
+    { x: cx - 16, y: cy + 6 },
+    { x: cx + 16, y: cy + 6 },
+    { x: cx + 40, y: cy + 6 },
+    { x: cx + 68, y: cy + 6 },
+  ];
+
+  const stringOpacity = interpolate(progress, [0, 0.6, 1], [0, 0.6, 0.75], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  return (
+    <g>
+      {/* Puppeteer control-cross */}
+      <g transform={`translate(${cx}, ${cy})`} stroke={AMBER} strokeLinecap="round" fill="none">
+        <line x1={-80} y1={0} x2={80} y2={0} strokeWidth={2.6} />
+        <line x1={0} y1={-24} x2={0} y2={12} strokeWidth={2.6} />
+        <circle cx={0} cy={-30} r={4.5} strokeWidth={1.8} />
+        {/* End caps */}
+        <circle cx={-80} cy={0} r={2.4} fill={AMBER} />
+        <circle cx={80} cy={0} r={2.4} fill={AMBER} />
+      </g>
+      {/* Cross label */}
+      <text
+        x={cx + 100}
+        y={cy - 2}
+        fontFamily={inter}
+        fontSize={10}
+        letterSpacing={2.6}
+        fontWeight={600}
+        fill={AMBER}
+      >
+        CONTROL
+      </text>
+      <text
+        x={cx + 100}
+        y={cy + 12}
+        fontFamily={inter}
+        fontSize={10}
+        letterSpacing={2}
+        fontWeight={500}
+        fill={GRAY}
+      >
+        (the fungus)
+      </text>
+
+      {/* Strings — curved, hair-thin, tinted amber */}
+      {targets.map((t, i) => {
+        const a = anchors[i];
+        const wob = Math.sin(sway + i * 0.9) * 1.2;
+        const midX = (a.x + t.x) / 2 + wob;
+        const midY = (a.y + t.y) / 2 - 12;
+        return (
+          <path
+            key={i}
+            d={`M ${a.x} ${a.y} Q ${midX} ${midY} ${t.x} ${t.y}`}
+            stroke={AMBER_GLOW}
+            strokeOpacity={stringOpacity}
+            strokeWidth={0.9}
+            fill="none"
+            strokeLinecap="round"
+          />
+        );
+      })}
+
+      {/* Anchor dots */}
+      {anchors.map((a, i) => (
+        <circle
+          key={`a${i}`}
+          cx={a.x}
+          cy={a.y}
+          r={1.6}
+          fill={AMBER}
+          opacity={stringOpacity + 0.2}
+        />
+      ))}
+    </g>
+  );
+};
+
+// ── Leaf: a horizontal blade with midvein ──────────────────────────────
+const Leaf: React.FC = () => {
+  const y = LEAF_Y;
+  const x0 = PLATE.x + 90;
+  const x1 = PLATE.x + PLATE.w - 90;
+  const mx = (x0 + x1) / 2;
+  const top = `M ${x0} ${y} Q ${mx} ${y - 40}, ${x1} ${y}`;
+  const bot = `M ${x0} ${y} Q ${mx} ${y + 34}, ${x1} ${y}`;
+  return (
+    <g>
+      {/* Fill */}
+      <path
+        d={`${top} L ${x1} ${y} ${bot.replace("M ", "L ")} Z`}
+        fill="#182115"
+        stroke="none"
+      />
+      {/* Outline */}
+      <path d={top} stroke={GRAY} strokeWidth={1.1} fill="none" opacity={0.7} />
+      <path d={bot} stroke={GRAY} strokeWidth={1.1} fill="none" opacity={0.7} />
+      {/* Midvein */}
+      <line x1={x0} y1={y} x2={x1} y2={y} stroke={GRAY} strokeWidth={1.3} opacity={0.85} />
+      {/* Lateral veins */}
+      {[-0.32, -0.16, 0.16, 0.32].map((f, i) => {
+        const cx = mx + (x1 - x0) * 0.5 * f;
+        const dir = f < 0 ? -1 : 1;
+        return (
+          <g key={i} stroke={GRAY} strokeOpacity={0.32} strokeWidth={0.8} fill="none">
+            <path d={`M ${cx} ${y} Q ${cx + dir * 40} ${y - 16} ${cx + dir * 96} ${y - 30}`} />
+            <path d={`M ${cx} ${y} Q ${cx + dir * 40} ${y + 14} ${cx + dir * 96} ${y + 26}`} />
+          </g>
+        );
+      })}
+      {/* Petiole leading off the right */}
+      <path
+        d={`M ${x1} ${y} Q ${x1 + 30} ${y - 4} ${x1 + 60} ${y - 14}`}
+        stroke={GRAY}
+        strokeWidth={1.1}
+        fill="none"
+        opacity={0.55}
+      />
+    </g>
+  );
+};
+
+// ── "Brain — not invaded" callout on the ant's head ────────────────────
+const BrainCallout: React.FC<{ appear: number }> = ({ appear }) => {
+  const scale = 1.55;
+  const brainX = CLAMP.x;
+  const brainY = CLAMP.y + 20 * scale;
+  const anchorX = PLATE.x + PLATE.w - 300;
+  const anchorY = LEAF_Y - 90;
+  return (
+    <g opacity={appear}>
+      {/* Ring around the "brain" */}
+      <ellipse
+        cx={brainX}
+        cy={brainY}
+        rx={13}
+        ry={10}
+        fill="none"
+        stroke={AMBER_GLOW}
+        strokeWidth={1.1}
+        strokeDasharray="2 2"
+      />
+      {/* Leader */}
+      <path
+        d={`M ${brainX + 12} ${brainY - 4}
+            Q ${brainX + 80} ${brainY - 40}
+              ${anchorX} ${anchorY}`}
+        stroke={GRAY}
+        strokeOpacity={0.7}
+        strokeWidth={0.9}
+        fill="none"
+      />
+      <circle cx={anchorX} cy={anchorY} r={2} fill={AMBER} />
+      {/* Label block */}
+      <g
+        transform={`translate(${anchorX + 6}, ${anchorY - 6})`}
+        fontFamily={inter}
+        fill={GRAY}
+      >
+        <text
+          fontSize={10}
+          fontWeight={600}
+          letterSpacing={2.4}
+          fill={AMBER}
+        >
+          BRAIN
+        </text>
+        <text
+          y={16}
+          fontSize={10}
+          fontWeight={500}
+          letterSpacing={1.8}
+        >
+          not invaded (Fredericksen et al.)
+        </text>
+      </g>
+    </g>
+  );
+};
+
+// ── Inset diagram: muscle cross-section threaded with fungus ───────────
+const MuscleInset: React.FC<{ appear: number }> = ({ appear }) => {
+  const w = 240;
+  const h = 216;
+  const x = PLATE.x + PLATE.w - w - 30;
+  const y = PLATE.y + PLATE.h - h - 90;
+  const cx = x + w / 2;
+  const cy = y + h / 2 + 20;
+  const R = 76;
+  const clipId = "muscle-clip-2";
+  return (
+    <g opacity={appear}>
+      {/* Panel */}
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        fill={INK}
+        stroke={GRAY}
+        strokeOpacity={0.55}
+        strokeWidth={1}
+      />
+      {/* Title — split across two lines to avoid overlap */}
+      <text
+        x={x + 12}
+        y={y + 18}
+        fill={GRAY}
+        fontFamily={inter}
+        fontSize={10}
+        fontWeight={600}
+        letterSpacing={2.4}
+      >
+        FIG. 2
+      </text>
+      <text
+        x={x + w - 12}
+        y={y + 18}
+        textAnchor="end"
+        fill={AMBER}
+        fontFamily={inter}
+        fontSize={10}
+        fontWeight={600}
+        letterSpacing={2.4}
+      >
+        ×400
+      </text>
+      <text
+        x={x + 12}
+        y={y + 34}
+        fill={GRAY}
+        fontFamily={inter}
+        fontSize={10}
+        fontWeight={500}
+        letterSpacing={2}
+        opacity={0.85}
+      >
+        MANDIBULAR MUSCLE
+      </text>
+
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx={cx} cy={cy} r={R - 1} />
+        </clipPath>
+      </defs>
+
+      {/* The microscope field */}
+      <circle cx={cx} cy={cy} r={R} fill="#0F1611" stroke={GRAY} strokeOpacity={0.7} strokeWidth={0.8} />
+
+      <g clipPath={`url(#${clipId})`}>
+        {/* Muscle fibres — parallel wavy strands */}
+        {Array.from({ length: 11 }).map((_, i) => {
+          const yy = cy - R + (i * (R * 2)) / 10;
+          return (
+            <path
+              key={`fib-${i}`}
+              d={`M ${cx - R - 4} ${yy} Q ${cx} ${yy - 4} ${cx + R + 4} ${yy}`}
+              stroke={GRAY}
+              strokeOpacity={0.42}
+              strokeWidth={2.8}
+              fill="none"
+            />
+          );
+        })}
+        {/* Fungal network — connective mesh between fibres */}
+        {Array.from({ length: 42 }).map((_, i) => {
+          const a = (i / 42) * Math.PI * 2 + (i % 3) * 0.3;
+          const rr = 12 + (i % 5) * 12;
+          const px = cx + Math.cos(a) * rr;
+          const py = cy + Math.sin(a) * rr * 0.9;
+          const px2 = cx + Math.cos(a + 0.6) * (rr + 6);
+          const py2 = cy + Math.sin(a + 0.6) * (rr + 6) * 0.9;
+          return (
+            <line
+              key={`net-${i}`}
+              x1={px}
+              y1={py}
+              x2={px2}
+              y2={py2}
+              stroke={AMBER}
+              strokeOpacity={0.7}
+              strokeWidth={1}
+            />
+          );
+        })}
+        {Array.from({ length: 50 }).map((_, i) => {
+          const a = (i / 50) * Math.PI * 2 * 3;
+          const rr = 6 + ((i * 7) % 60);
+          const px = cx + Math.cos(a) * rr;
+          const py = cy + Math.sin(a) * rr * 0.85;
+          return (
+            <circle
+              key={`cell-${i}`}
+              cx={px}
+              cy={py}
+              r={1.6}
+              fill={AMBER_GLOW}
+              opacity={0.9}
+            />
+          );
+        })}
+      </g>
+
+      {/* Legend */}
+      <g fontFamily={inter} fontSize={9.5} letterSpacing={1.6} fill={GRAY}>
+        <line
+          x1={x + 12}
+          y1={y + h - 26}
+          x2={x + 32}
+          y2={y + h - 26}
+          stroke={GRAY}
+          strokeWidth={2.4}
+          strokeOpacity={0.6}
+        />
+        <text x={x + 40} y={y + h - 22}>MUSCLE FIBRE</text>
+        <circle cx={x + 22} cy={y + h - 10} r={2} fill={AMBER} />
+        <text x={x + 40} y={y + h - 6}>FUNGAL CELL NETWORK</text>
+      </g>
+    </g>
+  );
+};
+
+// ── Ground line and forest-floor hatch at the plate bottom ─────────────
+const Ground: React.FC = () => {
+  const y = GROUND_Y;
+  const x0 = PLATE.x + 30;
+  const x1 = PLATE.x + PLATE.w - 30;
+  return (
+    <g>
+      <line x1={x0} y1={y} x2={x1} y2={y} stroke={GRAY} strokeWidth={1.2} opacity={0.85} />
+      {/* Tiny hatch marks below the ground line */}
+      {Array.from({ length: 40 }).map((_, i) => {
+        const px = x0 + (i * (x1 - x0)) / 40;
+        return (
+          <line
+            key={i}
+            x1={px}
+            y1={y}
+            x2={px - 6}
+            y2={y + 10}
+            stroke={GRAY}
+            strokeOpacity={0.4}
+            strokeWidth={0.9}
+          />
+        );
+      })}
+      <text
+        x={x0 + 4}
+        y={y + 24}
+        fontFamily={inter}
+        fontSize={10}
+        letterSpacing={2.4}
+        fontWeight={600}
+        fill={GRAY}
+        opacity={0.75}
+      >
+        FOREST FLOOR
+      </text>
+    </g>
+  );
+};
+
+// ── Height rule down the left side (ground → leaf) ─────────────────────
+const HeightRule: React.FC = () => {
+  const x = PLATE.x + 40;
+  const top = LEAF_Y;
+  const bot = GROUND_Y;
+  const ticks = 4;
+  return (
+    <g stroke={GRAY} strokeWidth={1} fill={GRAY} fontFamily={inter}>
+      {/* Vertical bar */}
+      <line x1={x} y1={top} x2={x} y2={bot} strokeOpacity={0.75} />
+      {/* End caps */}
+      <line x1={x - 6} y1={top} x2={x + 6} y2={top} strokeOpacity={0.95} />
+      <line x1={x - 6} y1={bot} x2={x + 6} y2={bot} strokeOpacity={0.95} />
+      {/* Intermediate ticks */}
+      {Array.from({ length: ticks }).map((_, i) => {
+        const yy = top + ((bot - top) * (i + 1)) / (ticks + 1);
+        return <line key={i} x1={x - 3} y1={yy} x2={x + 3} y2={yy} strokeOpacity={0.45} />;
+      })}
+      {/* Top label — 25 cm (positioned to avoid the leaf's lateral vein) */}
+      <text
+        x={x + 12}
+        y={top - 16}
+        fontSize={11}
+        letterSpacing={2.4}
+        fontWeight={700}
+        stroke="none"
+        fill={AMBER}
+      >
+        ~25 CM
+      </text>
+      <text
+        x={x + 12}
+        y={top - 4}
+        fontSize={9.5}
+        letterSpacing={1.8}
+        fontWeight={500}
+        stroke="none"
+        opacity={0.72}
+      >
+        death-grip height
+      </text>
+      {/* Bottom label — 0 cm */}
+      <text
+        x={x + 12}
+        y={bot - 4}
+        fontSize={11}
+        letterSpacing={2.4}
+        fontWeight={700}
+        stroke="none"
+      >
+        0 CM
+      </text>
+    </g>
+  );
+};
+
+// ── Drifting spores near the perithecial tip ───────────────────────────
+const Spores: React.FC<{ t: number }> = ({ t }) => {
+  if (t < 0.7) return null;
+  const tipX = CLAMP.x - 74;
+  const tipY = PLATE.y + 118;
+  const localT = (t - 0.7) / 0.3;
+  return (
+    <g opacity={0.7}>
+      {Array.from({ length: 16 }).map((_, i) => {
+        const seed = (i * 47.3) % 100;
+        const rise = ((localT * 55) + i * 6.5) % 80;
+        const drift = Math.sin(seed) * 18;
+        const px = tipX + drift * 0.5 + (i % 2 === 0 ? -6 : 6);
+        const py = tipY - rise - 20;
+        const op = Math.max(0, 1 - rise / 75);
+        return (
+          <circle
+            key={i}
+            cx={px}
+            cy={py}
+            r={1.4}
+            fill={AMBER_GLOW}
+            opacity={op * 0.7}
+          />
+        );
+      })}
+    </g>
+  );
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  const growSpan = fps * 3.6;
+  const t = clamp01(Math.max(0, frame) / growSpan);
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
-    fps,
-    config: { damping: 200, mass: 0.8 },
+  const clampProgress = interpolate(frame, [4, 12], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const titleSpring = spring({
+    frame: frame - fps * 0.5,
+    fps,
+    config: { damping: 200, mass: 0.85 },
+  });
+
+  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const insetAppear = interpolate(frame, [fps * 1.6, fps * 2.4], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const brainAppear = interpolate(frame, [fps * 1.2, fps * 1.9], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const marionetteProgress = interpolate(frame, [fps * 0.6, fps * 2.0], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const sway = (frame / fps) * 1.2;
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
+      {/* Page vignette */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(circle at 50% 34%, rgba(30,42,32,0.32), rgba(11,15,12,1) 78%)",
+        }}
+      />
+
       {/* Top metadata band */}
       <div
         style={{
           position: "absolute",
-          top: 56,
+          top: 60,
           left: 80,
           right: 80,
           display: "flex",
@@ -225,366 +848,112 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: AMBER }}>2026 · 09 · 06</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Main SVG plate */}
       <svg
-        width={1080}
-        height={1350}
-        viewBox="0 0 1080 1350"
+        width={W}
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
           <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            id="plate-grid"
+            x={PLATE.x}
+            y={PLATE.y}
+            width={48}
+            height={48}
             patternUnits="userSpaceOnUse"
           >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
+            <path d={`M 48 0 L 0 0 0 48`} fill="none" stroke={RULE} strokeWidth={1} />
           </pattern>
           <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            id="plate-grid-major"
+            x={PLATE.x}
+            y={PLATE.y}
+            width={192}
+            height={192}
             patternUnits="userSpaceOnUse"
           >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
+            <path d={`M 192 0 L 0 0 0 192`} fill="none" stroke={RULE_MAJOR} strokeWidth={1} />
           </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="plate-fill" cx="50%" cy="40%" r="70%">
+            <stop offset="0%" stopColor="#1A241D" stopOpacity={1} />
+            <stop offset="100%" stopColor={FOREST_DEEP} stopOpacity={1} />
           </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Plate */}
+        <rect x={PLATE.x} y={PLATE.y} width={PLATE.w} height={PLATE.h} fill="url(#plate-fill)" />
+        <rect x={PLATE.x} y={PLATE.y} width={PLATE.w} height={PLATE.h} fill="url(#plate-grid)" />
+        <rect x={PLATE.x} y={PLATE.y} width={PLATE.w} height={PLATE.h} fill="url(#plate-grid-major)" />
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
+          x={PLATE.x + 0.5}
+          y={PLATE.y + 0.5}
+          width={PLATE.w - 1}
+          height={PLATE.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#38443A"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Crop marks */}
         {(
           [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
+            [PLATE.x, PLATE.y, 1, 1],
+            [PLATE.x + PLATE.w, PLATE.y, -1, 1],
+            [PLATE.x, PLATE.y + PLATE.h, 1, -1],
+            [PLATE.x + PLATE.w, PLATE.y + PLATE.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={AMBER} strokeWidth={1.5} fill="none">
+            <line x1={cx} y1={cy} x2={cx + sx * 24} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 24} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Height rule */}
+        <HeightRule />
+
+        {/* Ground line */}
+        <Ground />
+
+        {/* Marionette (behind everything except plate) */}
+        <Marionette progress={marionetteProgress} sway={sway} />
+
+        {/* Leaf sits above the ant so we render it first so ant hangs "under" it */}
+        <Leaf />
+
+        {/* Ant */}
+        <Ant clampProgress={clampProgress} />
+
+        {/* Fungal stroma */}
+        <Stroma progress={t} />
+
+        {/* Drifting spores */}
+        <Spores t={t} />
+
+        {/* Brain callout */}
+        <BrainCallout appear={brainAppear} />
+
+        {/* Inset diagram (bottom-right of the plate) */}
+        <MuscleInset appear={insetAppear} />
+
+        {/* Caption below plate */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
+          transform={`translate(${PLATE.x}, ${PLATE.y + PLATE.h + 24})`}
           fill={GRAY}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · O. UNILATERALIS ON CAMPONOTUS SP. · DEATH-GRIP POSTURE</text>
+          <text x={PLATE.w} textAnchor="end" fill={AMBER} opacity={0.9}>
+            FUNGAL BIOMASS ≈ 40% OF HEAD INTERIOR
           </text>
         </g>
       </svg>
@@ -595,18 +964,14 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 908,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: AMBER,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -616,9 +981,7 @@ export const PairingCard: React.FC = () => {
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>Puppeteer</span>
         </div>
 
         <div
@@ -626,36 +989,35 @@ export const PairingCard: React.FC = () => {
             color: "#F4F4F6",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
+            fontSize: 80,
+            lineHeight: 0.98,
+            letterSpacing: -1.3,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The puppeteer
           <br />
-          city planner.
+          with no brain to read.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 26,
+            color: "#C8CAC0",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          <span style={{ color: AMBER, fontWeight: 600 }}>
+            Ophiocordyceps unilateralis
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          threads a physical network of fungal cells through a carpenter ant's
+          jaw muscles — never touching its brain — and steers it to bite the
+          underside of a leaf ~25 cm above the forest floor before killing it.
         </div>
       </div>
 
@@ -665,7 +1027,7 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 46,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
@@ -677,9 +1039,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Fredericksen et al. · PNAS 114 (2017) 12590–12595</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: AMBER }}>●</span> Fungal cell
         </span>
       </div>
     </AbsoluteFill>
