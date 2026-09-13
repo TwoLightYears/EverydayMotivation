@@ -50,186 +50,206 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief (a live M. septendecim on paper)
+const PAPER = "#EFE3C6";
+const PAPER_DEEP = "#E6D8B4";
+const INK = "#0B0A08";
+const CINNABAR = "#B22222";
+const AMBER = "#E5A34A";
+const AMBER_HI = "#F4C77C";
+const SOIL = "#7A6A50";
+const SOIL_LIGHT = "#A69679";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
-
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
+const isPrime = (n: number): boolean => {
+  if (n < 2) return false;
+  if (n < 4) return true;
+  if (n % 2 === 0) return false;
+  for (let i = 3; i * i <= n; i += 2) if (n % i === 0) return false;
+  return true;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+// ── Cicada silhouette ────────────────────────────────────────────────
+// Right-facing profile. Drawn in a local coord space centred on the
+// thorax. Wings above the body, six legs below.
+type CicadaProps = {
+  wingFlap?: number; // 0..1 opens/closes wing angle a hair
+  scale?: number;
+  opacity?: number;
 };
+const Cicada: React.FC<CicadaProps> = ({
+  wingFlap = 0,
+  scale = 1,
+  opacity = 1,
+}) => {
+  const wingLift = -3 - wingFlap * 4; // subtle upward lift on flutter
+  return (
+    <g transform={`scale(${scale})`} opacity={opacity}>
+      {/* Ground shadow beneath the body */}
+      <ellipse cx={-4} cy={20} rx={62} ry={4} fill={INK} opacity={0.18} />
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+      {/* Back wing (further from viewer) */}
+      <g transform={`translate(0 ${wingLift})`}>
+        <path
+          d="M 34 -6 C 8 -34 -68 -46 -118 -30 C -108 -14 -80 -6 -60 -4 C -34 -2 -6 -2 26 -4 Z"
+          fill={AMBER}
+          fillOpacity={0.55}
+          stroke={INK}
+          strokeOpacity={0.85}
+          strokeWidth={1.2}
+        />
+        {/* Back wing venation */}
+        <path
+          d="M -100 -26 Q -60 -18 -20 -8 M -70 -32 Q -40 -20 -6 -6 M -40 -36 Q -20 -22 4 -6"
+          stroke={INK}
+          strokeOpacity={0.35}
+          strokeWidth={0.8}
+          fill="none"
+        />
+      </g>
+
+      {/* Legs — three visible in profile */}
+      <path
+        d="M 8 12 C 22 26 30 30 30 42
+           M -14 14 C -6 30 4 34 8 44
+           M -38 14 C -34 30 -30 34 -22 44"
+        stroke={INK}
+        strokeWidth={2}
+        fill="none"
+        strokeLinecap="round"
+      />
+
+      {/* Body — thorax + tapered abdomen */}
+      <path
+        d="M -70 0
+           C -74 -12 -50 -18 -30 -16
+           C 0 -14 30 -14 46 -8
+           C 56 -4 56 6 46 10
+           C 30 16 0 16 -30 14
+           C -50 12 -74 12 -70 0 Z"
+        fill={INK}
+      />
+      {/* Abdomen segments (fine hair-lines) */}
+      <path
+        d="M -60 -10 L -60 10 M -46 -14 L -46 14 M -32 -15 L -32 15 M -18 -15 L -18 15 M -4 -15 L -4 15 M 10 -14 L 10 14 M 24 -13 L 24 13"
+        stroke={PAPER}
+        strokeOpacity={0.22}
+        strokeWidth={0.9}
+      />
+      {/* A warm belly highlight for a hint of body colour */}
+      <path
+        d="M -66 6 C -30 12 20 12 44 6 C 42 12 20 14 -10 14 C -40 14 -60 12 -66 6 Z"
+        fill={CINNABAR}
+        fillOpacity={0.35}
+      />
+
+      {/* Head */}
+      <ellipse cx={54} cy={-1} rx={18} ry={14} fill={INK} />
+
+      {/* Compound eye — the hallmark red */}
+      <circle cx={64} cy={-3} r={8} fill={CINNABAR} />
+      <circle cx={66} cy={-5} r={2.2} fill={AMBER_HI} opacity={0.9} />
+
+      {/* Front wing (nearer viewer) — brighter amber, slightly more forward */}
+      <g transform={`translate(2 ${wingLift - 2})`}>
+        <path
+          d="M 30 -8 C 4 -38 -56 -50 -104 -34 C -96 -18 -70 -10 -46 -8 C -20 -6 6 -6 26 -8 Z"
+          fill={AMBER_HI}
+          fillOpacity={0.75}
+          stroke={INK}
+          strokeOpacity={0.9}
+          strokeWidth={1.2}
+        />
+        <path
+          d="M -86 -30 Q -50 -20 -14 -10 M -58 -36 Q -30 -22 2 -10 M -30 -40 Q -12 -24 14 -10 M -10 -38 Q 4 -22 22 -10"
+          stroke={INK}
+          strokeOpacity={0.4}
+          strokeWidth={0.9}
+          fill="none"
+        />
+      </g>
+    </g>
+  );
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  // ── Timing (in seconds) ────────────────────────────────────────────
+  // 0.0 → grid frame draws in
+  // 0.4 → sieve wave begins: composites strike-through, primes ignite
+  // 2.2 → cicadas fly in, alight on 13 and 17
+  // 3.0 → wing flutter breathes
+  // 3.4 → title + hook fade in
+  const gridSpring = spring({
+    frame,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.7 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const sieveT = interpolate(frame, [fps * 0.4, fps * 2.2], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const cicadaLandT = spring({
+    frame: frame - fps * 2.2,
+    fps,
+    config: { damping: 15, mass: 0.9, stiffness: 90 },
+  });
+  const titleT = spring({
+    frame: frame - fps * 3.4,
+    fps,
+    config: { damping: 200, mass: 0.7 },
+  });
+  const hookT = interpolate(frame, [fps * 3.8, fps * 4.6], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const loopPhase = ((frame - fps * 2.6) / (fps * 2.4)) % 1;
+  const flutter =
+    frame > fps * 2.6
+      ? Math.max(0, Math.sin(loopPhase * Math.PI * 2)) *
+        Math.max(0, Math.min(1, (frame - fps * 2.6) / fps))
+      : 0;
+
+  // ── Frame + grid geometry ──────────────────────────────────────────
+  const FRAME = { x: 60, y: 132, w: 960, h: 700 };
+  const GRID_TOP_PAD = 250; // room for caption + cicada specimens above the grid
+  const GRID_BOT_PAD = 30;
+  const GRID_LEFT_PAD = 44;
+  const GRID_RIGHT_PAD = 44;
+  const GRID = {
+    x: FRAME.x + GRID_LEFT_PAD,
+    y: FRAME.y + GRID_TOP_PAD,
+    w: FRAME.w - GRID_LEFT_PAD - GRID_RIGHT_PAD,
+    h: FRAME.h - GRID_TOP_PAD - GRID_BOT_PAD,
+  };
+  const CELL_W = GRID.w / 10;
+  const CELL_H = GRID.h / 10;
+
+  const cellCentre = (n: number): { cx: number; cy: number } => {
+    const col = (n - 1) % 10;
+    const row = Math.floor((n - 1) / 10);
+    return {
+      cx: GRID.x + col * CELL_W + CELL_W / 2,
+      cy: GRID.y + row * CELL_H + CELL_H / 2,
+    };
+  };
+
+  // Reveal composites with a wave across the grid (top-left → bottom-right).
+  const cellReveal = (n: number): number => {
+    const norm = (n - 1) / 99;
+    const t = (sieveT - norm * 0.8) / 0.2;
+    return Math.max(0, Math.min(1, t));
+  };
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: PAPER, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
-      <div
-        style={{
-          position: "absolute",
-          top: 56,
-          left: 80,
-          right: 80,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          color: GRAY,
-          fontFamily: inter,
-          fontSize: 13,
-          letterSpacing: 4.5,
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
-      </div>
-
-      {/* Drafting frame + map */}
+      {/* Subtle paper grain via layered radial gradients (in SVG below) */}
       <svg
         width={1080}
         height={1350}
@@ -237,425 +257,406 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="paper-vignette" cx="50%" cy="42%" r="72%">
+            <stop offset="0%" stopColor="#F4EAD1" stopOpacity={1} />
+            <stop offset="70%" stopColor={PAPER} stopOpacity={1} />
+            <stop offset="100%" stopColor={PAPER_DEEP} stopOpacity={1} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <filter id="paper-noise" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.85"
+              numOctaves="2"
+              seed="7"
+            />
+            <feColorMatrix
+              values="0 0 0 0 0.05
+                      0 0 0 0 0.04
+                      0 0 0 0 0.02
+                      0 0 0 0.06 0"
+            />
+            <feComposite in2="SourceGraphic" operator="in" />
           </filter>
+
+          {/* Cicada eye glow */}
+          <radialGradient id="eye-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={CINNABAR} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={CINNABAR} stopOpacity={0} />
+          </radialGradient>
         </defs>
 
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
+        {/* Paper ground */}
+        <rect x={0} y={0} width={1080} height={1350} fill="url(#paper-vignette)" />
+        <rect x={0} y={0} width={1080} height={1350} fill={INK} filter="url(#paper-noise)" opacity={0.35} />
 
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
+        {/* Top metadata band */}
+        <g
+          fontFamily={inter}
+          fontSize={13}
+          fontWeight={600}
+          letterSpacing={4.6}
+        >
+          <text x={80} y={82} fill={SOIL}>
+            EVERYDAY MOTIVATION · NO. 003
+          </text>
+          <text x={1000} y={82} fill={CINNABAR} textAnchor="end">
+            2026 · 09 · 13
+          </text>
+        </g>
+
+        {/* Thin rule under the metadata band */}
+        <line
+          x1={80}
+          y1={100}
+          x2={1000}
+          y2={100}
+          stroke={SOIL}
+          strokeOpacity={0.35}
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
-          </g>
-        ))}
-
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
+        {/* ── Plate frame ────────────────────────────────────────── */}
+        <g opacity={gridSpring}>
+          <rect
+            x={FRAME.x}
+            y={FRAME.y}
+            width={FRAME.w}
+            height={FRAME.h}
+            fill="none"
+            stroke={INK}
+            strokeOpacity={0.85}
+            strokeWidth={1.4}
           />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
+          {/* Inner hairline frame — plate style */}
+          <rect
+            x={FRAME.x + 10}
+            y={FRAME.y + 10}
+            width={FRAME.w - 20}
+            height={FRAME.h - 20}
+            fill="none"
+            stroke={INK}
+            strokeOpacity={0.35}
+            strokeWidth={0.8}
+          />
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
+          {/* Plate caption inside the frame */}
+          <g fontFamily={inter} fontWeight={600} letterSpacing={4}>
+            <text x={FRAME.x + 30} y={FRAME.y + 46} fill={INK} fontSize={13}>
+              PLATE III · SIEVE OF ERATOSTHENES
+            </text>
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
+              x={FRAME.x + 30}
+              y={FRAME.y + 66}
+              fill={SOIL}
               fontSize={11}
-              fontWeight={600}
               letterSpacing={3.5}
             >
-              TOKYO
+              n ≤ 100
             </text>
           </g>
+
+          {/* Sub-caption — sits to the right of the plate title */}
+          <text
+            x={FRAME.x + FRAME.w - 30}
+            y={FRAME.y + 68}
+            fill={SOIL}
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontSize={15}
+            textAnchor="end"
+          >
+            after Eratosthenes of Cyrene, c. 240 B.C.
+          </text>
+
+          {/* ── Grid ────────────────────────────────────────────── */}
+          {/* Faint grid lines */}
+          {Array.from({ length: 11 }).map((_, i) => (
+            <line
+              key={`v-${i}`}
+              x1={GRID.x + i * CELL_W}
+              y1={GRID.y}
+              x2={GRID.x + i * CELL_W}
+              y2={GRID.y + GRID.h}
+              stroke={SOIL}
+              strokeOpacity={0.18}
+              strokeWidth={0.8}
+            />
+          ))}
+          {Array.from({ length: 11 }).map((_, i) => (
+            <line
+              key={`h-${i}`}
+              x1={GRID.x}
+              y1={GRID.y + i * CELL_H}
+              x2={GRID.x + GRID.w}
+              y2={GRID.y + i * CELL_H}
+              stroke={SOIL}
+              strokeOpacity={0.18}
+              strokeWidth={0.8}
+            />
+          ))}
+
+          {/* Cells: numerals + strike-throughs */}
+          {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => {
+            const { cx, cy } = cellCentre(n);
+            const prime = isPrime(n);
+            const reveal = cellReveal(n);
+            const isPeriodic = n === 13 || n === 17;
+
+            const numColor = prime ? CINNABAR : n === 1 ? SOIL_LIGHT : SOIL;
+            const numOpacity = prime
+              ? 0.65 + 0.35 * reveal
+              : n === 1
+                ? 0.55
+                : 0.9 - 0.35 * reveal; // composites dim as they strike
+
+            return (
+              <g key={`cell-${n}`}>
+                {/* Composite strike-through — animated dash reveal */}
+                {!prime && n !== 1 && (
+                  <line
+                    x1={cx - CELL_W * 0.36}
+                    y1={cy + CELL_H * 0.28}
+                    x2={cx + CELL_W * 0.36}
+                    y2={cy - CELL_H * 0.28}
+                    stroke={SOIL}
+                    strokeWidth={1.4}
+                    strokeLinecap="round"
+                    strokeOpacity={0.75 * reveal}
+                  />
+                )}
+
+                {/* Prime — soft aura on ignition (skip on the two feature cells) */}
+                {prime && !isPeriodic && reveal > 0 && (
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={Math.min(CELL_W, CELL_H) * 0.44}
+                    fill={CINNABAR}
+                    fillOpacity={0.06 * reveal}
+                  />
+                )}
+
+                <text
+                  x={cx}
+                  y={cy + (isPeriodic ? 14 : 12)}
+                  textAnchor="middle"
+                  fontFamily={playfair}
+                  fontStyle={prime ? "italic" : "normal"}
+                  fontWeight={isPeriodic ? 600 : 500}
+                  fontSize={isPeriodic ? 40 : prime ? 34 : 30}
+                  fill={numColor}
+                  opacity={numOpacity}
+                >
+                  {n}
+                </text>
+              </g>
+            );
+          })}
+
         </g>
 
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
-        </g>
+        {/* ── Cicada specimens above the grid, tethered to 13 & 17 ── */}
+        {(() => {
+          const c13 = cellCentre(13);
+          const c17 = cellCentre(17);
+          // Where the two specimens sit inside the plate (above the grid)
+          const perch13 = { x: c13.cx, y: FRAME.y + 190 };
+          const perch17 = { x: c17.cx, y: FRAME.y + 190 };
+
+          // Cicadas fly in from off-frame and settle at their perch.
+          const land13 = Math.max(0, Math.min(1, cicadaLandT));
+          const land17 = Math.max(0, Math.min(1, cicadaLandT * 0.94));
+          const off13x = (1 - land13) * -140;
+          const off13y = (1 - land13) * -60;
+          const off17x = (1 - land17) * 160;
+          const off17y = (1 - land17) * -60;
+          const cicadaScale = 0.68;
+
+          // Highlight ring on the target cells (starts before cicada lands)
+          const ringT = Math.min(1, sieveT * 1.2);
+
+          return (
+            <>
+              {/* Highlight rings around 13 and 17 (subtle box + label tag) */}
+              {[
+                { c: c13, n: 13 },
+                { c: c17, n: 17 },
+              ].map(({ c, n }) => (
+                <g key={`hl-${n}`} opacity={ringT}>
+                  <rect
+                    x={c.cx - CELL_W * 0.44}
+                    y={c.cy - CELL_H * 0.44}
+                    width={CELL_W * 0.88}
+                    height={CELL_H * 0.88}
+                    fill={CINNABAR}
+                    fillOpacity={0.06}
+                    stroke={CINNABAR}
+                    strokeOpacity={0.55}
+                    strokeWidth={1}
+                    rx={3}
+                  />
+                </g>
+              ))}
+
+              {/* Leader lines from cicadas down to their target cells */}
+              <g opacity={Math.min(1, land13 * 0.95)}>
+                <path
+                  d={`M ${perch13.x} ${perch13.y + 42} C ${perch13.x} ${perch13.y + 60} ${c13.cx} ${c13.cy - CELL_H * 0.62} ${c13.cx} ${c13.cy - CELL_H * 0.44 - 4}`}
+                  fill="none"
+                  stroke={CINNABAR}
+                  strokeOpacity={0.7}
+                  strokeWidth={1.1}
+                />
+                <circle
+                  cx={c13.cx}
+                  cy={c13.cy - CELL_H * 0.44 - 4}
+                  r={2.4}
+                  fill={CINNABAR}
+                />
+              </g>
+              <g opacity={Math.min(1, land17 * 0.95)}>
+                <path
+                  d={`M ${perch17.x} ${perch17.y + 42} C ${perch17.x} ${perch17.y + 60} ${c17.cx} ${c17.cy - CELL_H * 0.62} ${c17.cx} ${c17.cy - CELL_H * 0.44 - 4}`}
+                  fill="none"
+                  stroke={CINNABAR}
+                  strokeOpacity={0.7}
+                  strokeWidth={1.1}
+                />
+                <circle
+                  cx={c17.cx}
+                  cy={c17.cy - CELL_H * 0.44 - 4}
+                  r={2.4}
+                  fill={CINNABAR}
+                />
+              </g>
+
+              {/* Specimen label between/near cicadas */}
+              <g
+                opacity={Math.min(1, land13 * 0.9)}
+                fontFamily={inter}
+                fontWeight={600}
+                letterSpacing={2.6}
+                fontSize={10}
+                fill={INK}
+                textAnchor="middle"
+              >
+                <text x={perch13.x} y={perch13.y - 66}>
+                  M. TREDECIM
+                </text>
+                <text
+                  x={perch13.x}
+                  y={perch13.y - 52}
+                  fill={SOIL}
+                  fontWeight={500}
+                  fontSize={9}
+                >
+                  BROOD XIX · 13-YR
+                </text>
+              </g>
+              <g
+                opacity={Math.min(1, land17 * 0.9)}
+                fontFamily={inter}
+                fontWeight={600}
+                letterSpacing={2.6}
+                fontSize={10}
+                fill={INK}
+                textAnchor="middle"
+              >
+                <text x={perch17.x} y={perch17.y - 66}>
+                  M. SEPTENDECIM
+                </text>
+                <text
+                  x={perch17.x}
+                  y={perch17.y - 52}
+                  fill={SOIL}
+                  fontWeight={500}
+                  fontSize={9}
+                >
+                  BROOD X · 17-YR
+                </text>
+              </g>
+
+              {/* Cicada 13 (faces right) */}
+              <g
+                transform={`translate(${perch13.x + off13x} ${perch13.y + off13y})`}
+                opacity={land13}
+              >
+                <Cicada scale={cicadaScale} wingFlap={flutter} />
+              </g>
+
+              {/* Cicada 17 (faces left — mirrored) */}
+              <g
+                transform={`translate(${perch17.x + off17x} ${perch17.y + off17y}) scale(-1 1)`}
+                opacity={land17}
+              >
+                <Cicada scale={cicadaScale} wingFlap={flutter * 0.85} />
+              </g>
+            </>
+          );
+        })()}
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
-          opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          top: 895,
+          opacity: titleT,
+          transform: `translateY(${interpolate(titleT, [0, 1], [14, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CINNABAR,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 20,
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: SOIL, margin: "0 6px" }}>/</span>
+          <span style={{ color: INK, letterSpacing: 5 }}>Number Theorist</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: INK,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 88,
             lineHeight: 0.96,
-            letterSpacing: -1.4,
+            letterSpacing: -1.6,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          A savant of
           <br />
-          city planner.
+          the primes.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#2A2418",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.45,
             fontWeight: 400,
-            maxWidth: 880,
-            opacity: hookOpacity,
+            maxWidth: 900,
+            opacity: hookT,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          North America's periodical cicadas emerge en masse only after{" "}
+          <span style={{ color: CINNABAR, fontWeight: 600 }}>13</span> or{" "}
+          <span style={{ color: CINNABAR, fontWeight: 600 }}>17</span> years
+          underground — both prime. A predator whose population fluctuates on
+          any 2- to 5-year rhythm cannot lock into resonance with a coprime
+          brood, so the swarm's number itself is the defence.
         </div>
       </div>
 
@@ -665,11 +666,11 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 46,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: SOIL,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,11 +678,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Goles, Schulz &amp; Markus · Complexity 6 (2001)</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: CINNABAR }}>●</span> Prime = 17 yr cycle
         </span>
       </div>
+
+      {/* Suppress unused-var warning for durationInFrames without lint noise */}
+      <div style={{ display: "none" }}>{durationInFrames}</div>
     </AbsoluteFill>
   );
 };
