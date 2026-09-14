@@ -1,12 +1,12 @@
 import React from "react";
 import {
   AbsoluteFill,
-  useCurrentFrame,
-  spring,
-  useVideoConfig,
-  interpolate,
   Easing,
+  interpolate,
+  spring,
   staticFile,
+  useCurrentFrame,
+  useVideoConfig,
 } from "remotion";
 
 const inter = "Inter, system-ui, sans-serif";
@@ -50,164 +50,111 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
+// Palette from the concept brief
+const INK = "#0B0E13";
+const GOLD = "#FFC857";
+const MAGENTA = "#E85D91";
+const TEAL = "#2FB6C8";
+const VIOLET = "#7A8CFF";
 const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+const TYPE_HI = "#F1F2F5";
+const RULE = "#1F242D";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// -- colour helpers ---------------------------------------------------------
+const hexToRgb = (h: string) => {
+  const s = h.replace("#", "");
+  return [
+    parseInt(s.slice(0, 2), 16),
+    parseInt(s.slice(2, 4), 16),
+    parseInt(s.slice(4, 6), 16),
+  ] as const;
+};
+const rgbToHex = (r: number, g: number, b: number) => {
+  const c = (n: number) => Math.max(0, Math.min(255, Math.round(n)))
+    .toString(16)
+    .padStart(2, "0");
+  return `#${c(r)}${c(g)}${c(b)}`;
+};
+const mix = (a: string, b: string, t: number) => {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  return rgbToHex(ar + (br - ar) * t, ag + (bg - ag) * t, ab + (bb - ab) * t);
+};
+const shade = (c: string, amount: number) => mix(c, INK, amount);
+const tint = (c: string, amount: number) => mix(c, "#FFFFFF", amount);
+
+// -- isometric projection --------------------------------------------------
+const ISO_C = Math.cos(Math.PI / 6); // 0.866
+const ISO_S = Math.sin(Math.PI / 6); // 0.5
+type P3 = { x: number; y: number; z: number };
+const iso = (p: P3, cx: number, cy: number) => ({
+  x: cx + (p.x - p.z) * ISO_C,
+  y: cy - p.y + (p.x + p.z) * ISO_S,
+});
+
+// -- stairs (bottom → top): outer half-side s, height range [y0,y1],
+//    top-face colour, oxide thickness (nm), reflected wavelength (nm).
+type Stair = {
+  s: number;
+  y0: number;
+  y1: number;
+  color: string;
+  t: number;
+  lambda: number;
+};
+const STAIRS: Stair[] = [
+  { s: 168, y0:   0, y1:  22, color: MAGENTA,                     t: 178, lambda: 545 },
+  { s: 148, y0:  22, y1:  44, color: mix(MAGENTA, GOLD, 0.4),     t: 152, lambda: 585 },
+  { s: 128, y0:  44, y1:  66, color: GOLD,                        t: 128, lambda: 615 },
+  { s: 108, y0:  66, y1:  88, color: tint(GOLD, 0.2),             t:  98, lambda: 575 },
+  { s:  88, y0:  88, y1: 110, color: mix(GOLD, TEAL, 0.55),       t:  82, lambda: 520 },
+  { s:  68, y0: 110, y1: 132, color: TEAL,                        t:  62, lambda: 490 },
+  { s:  48, y0: 132, y1: 154, color: mix(TEAL, VIOLET, 0.55),     t:  48, lambda: 455 },
+  { s:  28, y0: 154, y1: 176, color: VIOLET,                      t:  36, lambda: 435 },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// side faces (facing +x and +z, i.e. right and front) — darker
+const rightFaceOf = (s: Stair) => shade(s.color, 0.55);
+const frontFaceOf = (s: Stair) => shade(s.color, 0.42);
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
-
+// -- component --------------------------------------------------------------
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Total build-in: ~1.4 s for stairs, then title/hook
+  const STAIR_DELAY = 3;   // frames per stair
+  const STAIR_DUR = 12;
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 1.4,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.7 },
   });
+  const hookOpacity = interpolate(
+    frame,
+    [fps * 1.9, fps * 2.6],
+    [0, 1],
+    { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
-    easing: Easing.out(Easing.cubic),
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  // Crystal placement on the workspace plate
+  const PLATE = { x: 60, y: 130, w: 960, h: 720 };
+  const CRYSTAL_CX = 380; // inside the plate
+  const CRYSTAL_CY = 620; // baseline y — near the bottom of the plate
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Chip strip placement
+  const CHIP_X = 640;
+  const CHIP_Y0 = 226;
+  const CHIP_W = 296;
+  const CHIP_H = 68;
+  const CHIP_GAP = 16;
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* ── Top metadata band ───────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -225,11 +172,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: GOLD }}>2026 · 09 · 14</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* ── Workspace plate + crystal + chip strip ─────────────────── */}
       <svg
         width={1080}
         height={1350}
@@ -237,376 +184,363 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
+          {/* Faint drafting grid */}
+          <pattern id="grid-fine" x={PLATE.x} y={PLATE.y} width={40} height={40} patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke={RULE} strokeWidth={1} />
           </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
+          <pattern id="grid-major" x={PLATE.x} y={PLATE.y} width={160} height={160} patternUnits="userSpaceOnUse">
+            <path d="M 160 0 L 0 0 0 160" fill="none" stroke="#242A36" strokeWidth={1} />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="plate-vignette" cx="35%" cy="55%" r="80%">
+            <stop offset="0%" stopColor="#141822" stopOpacity={1} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* Ground shadow beneath the crystal */}
+          <radialGradient id="ground-shadow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#000" stopOpacity={0.55} />
+            <stop offset="60%" stopColor="#000" stopOpacity={0.18} />
+            <stop offset="100%" stopColor="#000" stopOpacity={0} />
           </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
         </defs>
 
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
+        {/* Plate + grid */}
+        <rect x={PLATE.x} y={PLATE.y} width={PLATE.w} height={PLATE.h} fill="url(#plate-vignette)" />
+        <rect x={PLATE.x} y={PLATE.y} width={PLATE.w} height={PLATE.h} fill="url(#grid-fine)" />
+        <rect x={PLATE.x} y={PLATE.y} width={PLATE.w} height={PLATE.h} fill="url(#grid-major)" />
+        <rect x={PLATE.x + 0.5} y={PLATE.y + 0.5} width={PLATE.w - 1} height={PLATE.h - 1} fill="none" stroke="#2A303B" strokeWidth={1} />
 
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
-          strokeWidth={1}
-        />
-
-        {/* Corner crop marks */}
+        {/* Corner ticks */}
         {(
           [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
+            [PLATE.x, PLATE.y, 1, 1],
+            [PLATE.x + PLATE.w, PLATE.y, -1, 1],
+            [PLATE.x, PLATE.y + PLATE.h, 1, -1],
+            [PLATE.x + PLATE.w, PLATE.y + PLATE.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={GOLD} strokeWidth={1.5} fill="none" opacity={0.9}>
+            <line x1={cx} y1={cy} x2={cx + sx * 22} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 22} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
+        {/* Fig label inside the plate */}
+        <text
+          x={PLATE.x + 24}
+          y={PLATE.y + 34}
           fill={GRAY}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
+          fontWeight={600}
           letterSpacing={3}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
+          FIG. 1 · Bi(s) HOPPER CRYSTAL — TERRACE OXIDE
+        </text>
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
+        {/* Baseline rule under the crystal */}
+        <line
+          x1={PLATE.x + 40}
+          y1={CRYSTAL_CY + 40}
+          x2={PLATE.x + 540}
+          y2={CRYSTAL_CY + 40}
+          stroke={RULE}
+          strokeWidth={1}
+        />
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+        {/* Ground shadow */}
+        <ellipse
+          cx={CRYSTAL_CX + PLATE.x - 60}
+          cy={CRYSTAL_CY + 34}
+          rx={240}
+          ry={30}
+          fill="url(#ground-shadow)"
+        />
+
+
+        {/* ── The bismuth hopper crystal ─────────────────────────────── */}
+        {(() => {
+          // origin of the crystal (world 0,0,0) in svg coords
+          const OX = PLATE.x + CRYSTAL_CX - 60;
+          const OY = CRYSTAL_CY;
+
+          return STAIRS.map((stair, i) => {
+            // Reveal per stair
+            const startFrame = i * STAIR_DELAY;
+            const local = Math.max(0, Math.min(1, (frame - startFrame) / STAIR_DUR));
+            const eased = 1 - Math.pow(1 - local, 3);
+            const yLift = (1 - eased) * 24;
+            const op = eased;
+
+            const s = stair.s;
+            const yBot = stair.y0;
+            const yTop = stair.y1;
+
+            // Corners on the TOP face
+            const A = iso({ x:  s, y: yTop, z: -s }, OX, OY); // back-right (top)
+            const B = iso({ x:  s, y: yTop, z:  s }, OX, OY); // front-right (top)
+            const C = iso({ x: -s, y: yTop, z:  s }, OX, OY); // front-left (top)
+            const D = iso({ x: -s, y: yTop, z: -s }, OX, OY); // back-left (top)
+
+            // Right side face (x = +s): from top A→B down to bottom
+            const Bb = iso({ x:  s, y: yBot, z:  s }, OX, OY);
+            const Ab = iso({ x:  s, y: yBot, z: -s }, OX, OY);
+            // Front side face (z = +s): from top C→B down to bottom
+            const Cb = iso({ x: -s, y: yBot, z:  s }, OX, OY);
+
+            const topPath = `M ${A.x} ${A.y - yLift} L ${B.x} ${B.y - yLift} L ${C.x} ${C.y - yLift} L ${D.x} ${D.y - yLift} Z`;
+            const rightPath = `M ${A.x} ${A.y - yLift} L ${B.x} ${B.y - yLift} L ${Bb.x} ${Bb.y - yLift} L ${Ab.x} ${Ab.y - yLift} Z`;
+            const frontPath = `M ${C.x} ${C.y - yLift} L ${B.x} ${B.y - yLift} L ${Bb.x} ${Bb.y - yLift} L ${Cb.x} ${Cb.y - yLift} Z`;
+
+            // Highlight rim along front edge of top face (subtle specular)
+            const rimX1 = C.x;
+            const rimY1 = C.y - yLift;
+            const rimX2 = B.x;
+            const rimY2 = B.y - yLift;
+
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+              <g key={i} opacity={op}>
+                <path d={rightPath} fill={rightFaceOf(stair)} stroke={INK} strokeWidth={1} />
+                <path d={frontPath} fill={frontFaceOf(stair)} stroke={INK} strokeWidth={1} />
+                <path d={topPath} fill={stair.color} stroke={INK} strokeWidth={1} />
+                {/* highlight along the front top-face edge */}
+                <line
+                  x1={rimX1}
+                  y1={rimY1}
+                  x2={rimX2}
+                  y2={rimY2}
+                  stroke={tint(stair.color, 0.55)}
+                  strokeWidth={1.2}
+                  opacity={0.9}
                 />
               </g>
             );
-          })}
+          });
+        })()}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
+        {/* Callouts: "Bi (s)" for the metal core, and "Bi₂O₃ FILM · d ≈ 30–250 nm"
+            for the oxide skin.  Both fade in after the crystal materialises. */}
+        {(() => {
+          const OX = PLATE.x + CRYSTAL_CX - 60;
+          const OY = CRYSTAL_CY;
+          const showFrom = fps * 1.0;
+          const op = interpolate(frame, [showFrom, showFrom + fps * 0.5], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          });
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
+          // 1) Bi(s) at top peak — leader kinks right
+          const top = iso({ x: 0, y: 176, z: 0 }, OX, OY);
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
+          // 2) Oxide film — target midpoint of the front edge of stair-2's top face.
+          //    Anchor the label inside the plate's LEFT margin so it never clips.
+          const oxideStair = STAIRS[2];
+          const target = iso(
+            { x: -oxideStair.s * 0.4, y: oxideStair.y1, z: oxideStair.s },
+            OX,
+            OY,
+          );
+          const labelX = PLATE.x + 42;
+          const kinkX = Math.max(labelX + 132, target.x - 60);
+          const kinkY = target.y - 74;
+
+          return (
+            <g opacity={op}>
+              {/* Bi(s) — top peak */}
+              <line x1={top.x} y1={top.y - 6} x2={top.x + 40} y2={top.y - 44} stroke={GRAY} strokeWidth={1} />
+              <line x1={top.x + 40} y1={top.y - 44} x2={top.x + 116} y2={top.y - 44} stroke={GRAY} strokeWidth={1} />
               <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
+                x={top.x + 124}
+                y={top.y - 40}
+                fill={GRAY}
+                fontFamily={inter}
+                fontSize={12}
+                fontWeight={600}
+                letterSpacing={3}
+              >
+                Bi (s)
+              </text>
+
+              {/* Bi₂O₃ oxide film — anchored bottom-left */}
+              <circle cx={target.x} cy={target.y} r={4.2} fill="none" stroke={GOLD} strokeWidth={1.4} />
+              <line x1={target.x - 3} y1={target.y - 3} x2={kinkX} y2={kinkY} stroke={GOLD} strokeWidth={1} />
+              <line x1={kinkX} y1={kinkY} x2={labelX + 132} y2={kinkY} stroke={GOLD} strokeWidth={1} />
+              <text
+                x={labelX}
+                y={kinkY - 4}
+                fill={GOLD}
+                fontFamily={inter}
+                fontSize={12}
+                fontWeight={600}
+                letterSpacing={3}
+              >
+                Bi₂O₃ FILM
+              </text>
+              <text
+                x={labelX}
+                y={kinkY + 14}
                 fill={GRAY}
                 fontFamily={inter}
                 fontSize={11}
                 fontWeight={500}
                 letterSpacing={2.4}
-                opacity={op}
               >
-                {l.text}
+                d ≈ 30–250 nm
               </text>
-            );
-          })}
+            </g>
+          );
+        })()}
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
+        {/* ── Chip strip (colourist's palette) ─────────────────────── */}
+        {(() => {
+          const CHIP_FROM_TOP = [
+            STAIRS[7], // violet — thinnest
+            STAIRS[5], // teal
+            STAIRS[3], // pale gold
+            STAIRS[2], // gold
+            STAIRS[0], // magenta — thickest
+          ];
+          const legendY = CHIP_Y0 - 34;
+          return (
+            <g>
+              <text
+                x={PLATE.x + CHIP_X}
+                y={legendY}
+                fill={GRAY}
+                fontFamily={inter}
+                fontSize={11}
+                fontWeight={600}
+                letterSpacing={3}
+              >
+                COLOURIST'S CHIP STRIP
+              </text>
+              <text
+                x={PLATE.x + CHIP_X}
+                y={legendY + 18}
+                fill={GRAY}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={400}
+                letterSpacing={2}
+                opacity={0.7}
+              >
+                Bi₂O₃ film thickness · reflected λ
+              </text>
 
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
+              {CHIP_FROM_TOP.map((chip, i) => {
+                const y = PLATE.y + CHIP_Y0 + i * (CHIP_H + CHIP_GAP);
+                const revealStart = 6 + i * 3;
+                const rev = interpolate(
+                  frame,
+                  [revealStart, revealStart + 14],
+                  [0, 1],
+                  { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+                );
+                const dx = (1 - rev) * 12;
+                return (
+                  <g key={i} opacity={rev} transform={`translate(${dx}, 0)`}>
+                    {/* Swatch tile */}
+                    <rect
+                      x={PLATE.x + CHIP_X}
+                      y={y}
+                      width={CHIP_H}
+                      height={CHIP_H}
+                      fill={chip.color}
+                    />
+                    {/* Metadata block */}
+                    <rect
+                      x={PLATE.x + CHIP_X + CHIP_H}
+                      y={y}
+                      width={CHIP_W - CHIP_H}
+                      height={CHIP_H}
+                      fill="#101319"
+                      stroke={RULE}
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={PLATE.x + CHIP_X + CHIP_H + 14}
+                      y={y + 26}
+                      fill={TYPE_HI}
+                      fontFamily={inter}
+                      fontSize={17}
+                      fontWeight={600}
+                      letterSpacing={0.5}
+                    >
+                      {chip.t} nm
+                    </text>
+                    <text
+                      x={PLATE.x + CHIP_X + CHIP_H + 14}
+                      y={y + 48}
+                      fill={GRAY}
+                      fontFamily={inter}
+                      fontSize={11}
+                      fontWeight={500}
+                      letterSpacing={2.4}
+                    >
+                      λ ≈ {chip.lambda} nm
+                    </text>
+                    {/* colour hex, right-aligned */}
+                    <text
+                      x={PLATE.x + CHIP_X + CHIP_W - 14}
+                      y={y + CHIP_H - 12}
+                      textAnchor="end"
+                      fill="#4A5060"
+                      fontFamily={inter}
+                      fontSize={10}
+                      fontWeight={500}
+                      letterSpacing={2}
+                    >
+                      {chip.color.toUpperCase()}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })()}
+
+        {/* Bottom caption row inside the plate */}
+        <text
+          x={PLATE.x + 24}
+          y={PLATE.y + PLATE.h - 22}
           fill={GRAY}
           fontFamily={inter}
           fontSize={11}
-          letterSpacing={3}
           fontWeight={500}
+          letterSpacing={3}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
-        </g>
+          THIN-FILM INTERFERENCE · 2 n d cos θ ≈ m λ
+        </text>
+        <text
+          x={PLATE.x + PLATE.w - 24}
+          y={PLATE.y + PLATE.h - 22}
+          textAnchor="end"
+          fill={GOLD}
+          fontFamily={inter}
+          fontSize={11}
+          fontWeight={500}
+          letterSpacing={3}
+          opacity={0.85}
+        >
+          Bi · Z = 83 · m.p. 271.4 °C · n(Bi₂O₃) ≈ 2.2
+        </text>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ─────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 900,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: GOLD,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -616,46 +550,48 @@ export const PairingCard: React.FC = () => {
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          <span style={{ color: TYPE_HI, letterSpacing: 5 }}>Colourist</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: TYPE_HI,
             fontFamily: playfair,
-            fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
             fontStyle: "italic",
+            fontWeight: 500,
+            fontSize: 88,
+            lineHeight: 0.98,
+            letterSpacing: -1.6,
           }}
         >
-          The brainless
+          The mineral
           <br />
-          city planner.
+          that paints itself.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 34,
+            color: "#C7CAD2",
             fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
+            fontSize: 20,
+            lineHeight: 1.42,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 860,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          The rainbow on a{" "}
+          <span style={{ color: GOLD, fontWeight: 600 }}>bismuth</span> hopper
+          crystal is not pigment. As the metal cools it grows a{" "}
+          <span style={{ color: TEAL, fontWeight: 600 }}>Bi₂O₃</span> skin only
+          tens to hundreds of nanometres thick — and each terrace's specific
+          thickness{" "}
+          <span style={{ color: MAGENTA, fontWeight: 600 }}>
+            cancels a specific wavelength
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          by thin-film interference. Bismuth paints itself, one nanometre at a
+          time.
         </div>
       </div>
 
@@ -665,10 +601,10 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 44,
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "baseline",
+          alignItems: "center",
           color: GRAY,
           fontFamily: inter,
           fontSize: 11,
@@ -677,9 +613,15 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
-        <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+        <span>Thin-film interference · Bi₂O₃ on Bi(s)</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 10, background: MAGENTA, display: "inline-block" }} />
+            <span style={{ width: 10, height: 10, borderRadius: 10, background: GOLD, display: "inline-block" }} />
+            <span style={{ width: 10, height: 10, borderRadius: 10, background: TEAL, display: "inline-block" }} />
+            <span style={{ width: 10, height: 10, borderRadius: 10, background: VIOLET, display: "inline-block" }} />
+          </span>
+          <span>Terrace = Swatch</span>
         </span>
       </div>
     </AbsoluteFill>
