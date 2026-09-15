@@ -50,161 +50,168 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
+// Palette — from the concept's visual brief
+const MIDNIGHT = "#07091A";
+const INDIGO = "#141A34";
+const STAR = "#F0E5B8";
+const HAZE = "#8FA3D6";
+const BRONZE = "#C88A3E";
 const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
-
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+// ─── Deterministic pseudo-random helpers ────────────────────────────────
+const mulberry32 = (a: number) => {
+  return () => {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+// ─── Milky Way band geometry ────────────────────────────────────────────
+// The band runs from lower-left to upper-right across the celestial panel.
+// Coordinates are in panel space (0..1 both axes) and mapped into the SVG.
+type Band = {
+  cx: number;      // path centre x at this arc parameter
+  cy: number;      // path centre y
+  nx: number;      // normal x
+  ny: number;      // normal y
+  s: number;       // arc param 0..1
+};
+const bandAt = (s: number): Band => {
+  // Slight arc: parabolic sag, tilted ~28°.
+  const t = s;
+  const x = 0.05 + t * 0.95;
+  const yLine = 0.86 - t * 0.62;
+  const sag = -0.055 * Math.sin(Math.PI * t); // gentle bow upward
+  const y = yLine + sag;
+  // Tangent direction (finite diff).
+  const eps = 0.001;
+  const x2 = 0.05 + (t + eps) * 0.95;
+  const y2 = (0.86 - (t + eps) * 0.62) - 0.055 * Math.sin(Math.PI * (t + eps));
+  const dx = x2 - x;
+  const dy = y2 - y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { cx: x, cy: y, nx: -dy / len, ny: dx / len, s: t };
+};
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+// Fix-point (the "star" the beetle sights). Placed at s = 0.62 along the band.
+const FIX_S = 0.62;
+
+type Star = {
+  x: number;
+  y: number;
+  r: number;
+  o: number;
+  twinkle: number;
+};
+
+const buildStars = (): { field: Star[]; band: Star[] } => {
+  const rand = mulberry32(20260915);
+  const field: Star[] = [];
+  // Background field
+  for (let i = 0; i < 220; i++) {
+    field.push({
+      x: rand(),
+      y: rand() * 0.82,
+      r: 0.4 + rand() * rand() * 2.4,
+      o: 0.15 + rand() * 0.55,
+      twinkle: rand(),
+    });
   }
-  return ((h >>> 0) % 1000) / 1000;
+  // Dense band stars
+  const band: Star[] = [];
+  const stripe = (count: number, halfWidth: number, minR: number, maxR: number, minO: number) => {
+    for (let i = 0; i < count; i++) {
+      const s = rand();
+      const b = bandAt(s);
+      const t = (rand() - 0.5) * 2 * halfWidth;
+      const x = b.cx + b.nx * t;
+      const y = b.cy + b.ny * t;
+      band.push({
+        x,
+        y,
+        r: minR + rand() * rand() * (maxR - minR),
+        o: minO + rand() * (1 - minO),
+        twinkle: rand(),
+      });
+    }
+  };
+  stripe(520, 0.11, 0.35, 1.6, 0.3);
+  stripe(240, 0.055, 0.6, 2.4, 0.55);
+  stripe(90, 0.024, 0.9, 3.6, 0.8);
+  return { field, band };
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
+const STARS = buildStars();
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// ─── Panel geometry ─────────────────────────────────────────────────────
+// The celestial panel is where the Milky Way and beetle live.
+const PANEL = { x: 60, y: 130, w: 960, h: 711 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
-    fps,
-    config: { damping: 200, mass: 0.8 },
-  });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  // Star field fade-in
+  const starsIn = interpolate(frame, [0, fps * 1.2], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Beetle rise from below the horizon
+  const beetleSpring = spring({
+    frame: frame - fps * 0.4,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+
+  // Bearing-line extension: single spring after the beetle has landed
+  const bearingT = spring({
+    frame: frame - fps * 1.4,
+    fps,
+    config: { damping: 180, mass: 0.7 },
+  });
+
+  // Title / hook fades
+  const titleSpring = spring({
+    frame: frame - fps * 0.9,
+    fps,
+    config: { damping: 200, mass: 0.8 },
+  });
+  const hookOpacity = interpolate(frame, [fps * 1.6, fps * 2.4], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // Slow band drift — represents the beetle's continuous celestial fix.
+  const drift = Math.sin((frame / fps) * 0.35) * 3.2; // degrees
+
+  // Panel → SVG helpers
+  const px = (x: number) => PANEL.x + x * PANEL.w;
+  const py = (y: number) => PANEL.y + y * PANEL.h;
+  const scaleR = (r: number) => r; // stars are in px directly
+
+  // Fix-point (position of the sighted "star" in panel coords)
+  const fixBand = bandAt(FIX_S);
+  const fixX = px(fixBand.cx);
+  const fixY = py(fixBand.cy);
+
+  // Beetle position — sits on the horizon roughly centred, a touch left
+  const beetleAnchorX = px(0.44);
+  const horizonY = py(0.905);
+  const beetleY = horizonY - 4 + (1 - beetleSpring) * 26;
+
+  // Bearing readout: interpolates while bearingT rises
+  const targetBearing = 356; // deg — "true galactic sighting"
+  const shownBearing = Math.round(
+    interpolate(bearingT, [0, 1], [12, targetBearing]),
+  );
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: MIDNIGHT, fontFamily: inter }}>
       <style>{fontCss}</style>
 
       {/* Top metadata band */}
@@ -225,11 +232,10 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: STAR }}>2026 · 09 · 15</span>
       </div>
 
-      {/* Drafting frame + map */}
       <svg
         width={1080}
         height={1350}
@@ -237,354 +243,435 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#040616" />
+            <stop offset="55%" stopColor="#0A0F26" />
+            <stop offset="100%" stopColor={INDIGO} />
+          </linearGradient>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Faint blue polarization glow along the band. */}
+          <radialGradient id="band-haze" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={HAZE} stopOpacity={0.55} />
+            <stop offset="60%" stopColor={HAZE} stopOpacity={0.14} />
+            <stop offset="100%" stopColor={HAZE} stopOpacity={0} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* Warm creamy core of the band. */}
+          <radialGradient id="band-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={STAR} stopOpacity={0.85} />
+            <stop offset="45%" stopColor={STAR} stopOpacity={0.28} />
+            <stop offset="100%" stopColor={STAR} stopOpacity={0} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          {/* Dark rift down the Milky Way's spine. */}
+          <radialGradient id="band-rift" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={MIDNIGHT} stopOpacity={0.9} />
+            <stop offset="70%" stopColor={MIDNIGHT} stopOpacity={0.1} />
+            <stop offset="100%" stopColor={MIDNIGHT} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Fix-point star bloom */}
+          <radialGradient id="fix-bloom" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.95} />
+            <stop offset="30%" stopColor={STAR} stopOpacity={0.65} />
+            <stop offset="100%" stopColor={STAR} stopOpacity={0} />
+          </radialGradient>
+
+          <filter id="soft-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode in="b" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          <clipPath id="panelClip">
+            <rect x={PANEL.x} y={PANEL.y} width={PANEL.w} height={PANEL.h} />
+          </clipPath>
         </defs>
 
-        {/* Drafting board */}
+        {/* Sky panel */}
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+          x={PANEL.x}
+          y={PANEL.y}
+          width={PANEL.w}
+          height={PANEL.h}
+          fill="url(#sky)"
         />
 
-        {/* Inner thin border */}
+        <g clipPath="url(#panelClip)">
+          <g
+            style={{
+              transform: `rotate(${drift}deg)`,
+              transformOrigin: `${PANEL.x + PANEL.w / 2}px ${PANEL.y + PANEL.h / 2}px`,
+            }}
+          >
+            {/* Milky Way — sequence of overlapping ellipses along the band */}
+            {(() => {
+              const steps = 22;
+              const els: React.ReactNode[] = [];
+              for (let i = 0; i <= steps; i++) {
+                const s = i / steps;
+                const b = bandAt(s);
+                const cx = px(b.cx);
+                const cy = py(b.cy);
+                // Band tapers slightly at the ends
+                const taper = 0.55 + 0.45 * Math.sin(Math.PI * s);
+                const angle =
+                  (Math.atan2(b.ny, b.nx) * 180) / Math.PI - 90;
+                els.push(
+                  <g
+                    key={`haze-${i}`}
+                    transform={`translate(${cx}, ${cy}) rotate(${angle})`}
+                  >
+                    <ellipse
+                      rx={260 * taper}
+                      ry={78 * taper}
+                      fill="url(#band-haze)"
+                      opacity={0.85 * starsIn}
+                    />
+                    <ellipse
+                      rx={210 * taper}
+                      ry={44 * taper}
+                      fill="url(#band-core)"
+                      opacity={0.95 * starsIn}
+                    />
+                    <ellipse
+                      rx={120 * taper}
+                      ry={9 * taper}
+                      fill="url(#band-rift)"
+                      opacity={0.7 * starsIn}
+                    />
+                  </g>,
+                );
+              }
+              return els;
+            })()}
+
+            {/* Background field stars */}
+            {STARS.field.map((s, i) => {
+              const tw =
+                0.65 +
+                0.35 *
+                  Math.sin(
+                    (frame / fps) * (0.7 + s.twinkle * 2.2) + s.twinkle * 6.28,
+                  );
+              return (
+                <circle
+                  key={`f-${i}`}
+                  cx={px(s.x)}
+                  cy={py(s.y)}
+                  r={scaleR(s.r)}
+                  fill={STAR}
+                  opacity={s.o * tw * starsIn}
+                />
+              );
+            })}
+            {/* Band stars */}
+            {STARS.band.map((s, i) => {
+              const tw =
+                0.7 +
+                0.3 *
+                  Math.sin(
+                    (frame / fps) * (0.9 + s.twinkle * 2.4) + s.twinkle * 6.28,
+                  );
+              return (
+                <circle
+                  key={`b-${i}`}
+                  cx={px(s.x)}
+                  cy={py(s.y)}
+                  r={scaleR(s.r)}
+                  fill={STAR}
+                  opacity={s.o * tw * starsIn}
+                />
+              );
+            })}
+          </g>
+
+          {/* Fix-point (not rotated with drift so bearing stays coherent
+              through the readout — this is a stylised sighting, not a
+              scientific plot) */}
+          <g opacity={interpolate(bearingT, [0, 0.15, 1], [0.35, 0.7, 1])}>
+            <circle cx={fixX} cy={fixY} r={40} fill="url(#fix-bloom)" />
+            <circle cx={fixX} cy={fixY} r={16} fill="url(#fix-bloom)" />
+            <circle cx={fixX} cy={fixY} r={3.2} fill="#FFFFFF" />
+            {/* Diffraction spikes */}
+            <g stroke="#FFFFFF" strokeWidth={1} opacity={0.85}>
+              <line x1={fixX - 22} y1={fixY} x2={fixX + 22} y2={fixY} />
+              <line x1={fixX} y1={fixY - 22} x2={fixX} y2={fixY + 22} />
+            </g>
+          </g>
+
+          {/* Veld silhouette — soft undulating horizon */}
+          {(() => {
+            const y0 = horizonY;
+            const w = PANEL.w;
+            const x0 = PANEL.x;
+            const bottom = PANEL.y + PANEL.h;
+            const pts: string[] = [];
+            const steps = 60;
+            for (let i = 0; i <= steps; i++) {
+              const t = i / steps;
+              const x = x0 + t * w;
+              const y =
+                y0 +
+                Math.sin(t * 7.2) * 3 +
+                Math.sin(t * 2.6 + 1.2) * 4 -
+                Math.max(0, 1 - Math.abs(t - 0.44) * 8) * 2;
+              pts.push(`${x} ${y}`);
+            }
+            pts.push(`${x0 + w} ${bottom}`);
+            pts.push(`${x0} ${bottom}`);
+            return (
+              <>
+                <polygon
+                  points={pts.join(" ")}
+                  fill="#03040D"
+                  opacity={0.9 * starsIn}
+                />
+                <polyline
+                  points={pts.slice(0, steps + 1).join(" ")}
+                  fill="none"
+                  stroke="#1E2545"
+                  strokeWidth={0.9}
+                  opacity={0.8 * starsIn}
+                />
+              </>
+            );
+          })()}
+
+          {/* Bearing line: beetle head → fix-point */}
+          {(() => {
+            const bx = beetleAnchorX;
+            const by = beetleY - 118; // head tip after 1.9× scale
+            const eased = bearingT;
+            const endX = bx + (fixX - bx) * eased;
+            const endY = by + (fixY - by) * eased;
+            return (
+              <g opacity={eased}>
+                {/* Subtle wide bronze glow behind the sighting line */}
+                <line
+                  x1={bx}
+                  y1={by}
+                  x2={endX}
+                  y2={endY}
+                  stroke={BRONZE}
+                  strokeWidth={3.5}
+                  opacity={0.18}
+                />
+                <line
+                  x1={bx}
+                  y1={by}
+                  x2={endX}
+                  y2={endY}
+                  stroke={BRONZE}
+                  strokeWidth={1.4}
+                  strokeDasharray="4 6"
+                />
+                {/* Crosshair at the moving tip */}
+                <g
+                  transform={`translate(${endX}, ${endY})`}
+                  opacity={interpolate(eased, [0.85, 1], [0, 1], {
+                    extrapolateLeft: "clamp",
+                    extrapolateRight: "clamp",
+                  })}
+                >
+                  <circle r={11} fill="none" stroke={BRONZE} strokeWidth={1.3} />
+                  <circle r={22} fill="none" stroke={BRONZE} strokeWidth={0.6} opacity={0.5} />
+                  <line x1={-16} y1={0} x2={-4} y2={0} stroke={BRONZE} strokeWidth={1.3} />
+                  <line x1={4} y1={0} x2={16} y2={0} stroke={BRONZE} strokeWidth={1.3} />
+                  <line x1={0} y1={-16} x2={0} y2={-4} stroke={BRONZE} strokeWidth={1.3} />
+                  <line x1={0} y1={4} x2={0} y2={16} stroke={BRONZE} strokeWidth={1.3} />
+                </g>
+              </g>
+            );
+          })()}
+
+          {/* Bearing gauge (top-right of panel) */}
+          <g
+            transform={`translate(${PANEL.x + PANEL.w - 156}, ${PANEL.y + 26})`}
+            opacity={0.85 * starsIn}
+          >
+            <text
+              fill={GRAY}
+              fontFamily={inter}
+              fontSize={10}
+              fontWeight={600}
+              letterSpacing={3}
+            >
+              BEARING
+            </text>
+            <g transform={`translate(0, 12)`}>
+              <line x1={0} y1={0} x2={130} y2={0} stroke={GRAY} strokeWidth={0.8} />
+              {Array.from({ length: 14 }, (_, i) => (
+                <line
+                  key={i}
+                  x1={i * 10}
+                  y1={0}
+                  x2={i * 10}
+                  y2={i % 5 === 0 ? 7 : 4}
+                  stroke={GRAY}
+                  strokeWidth={0.8}
+                />
+              ))}
+              <line
+                x1={interpolate(bearingT, [0, 1], [10, 118])}
+                y1={-4}
+                x2={interpolate(bearingT, [0, 1], [10, 118])}
+                y2={12}
+                stroke={BRONZE}
+                strokeWidth={1.4}
+              />
+            </g>
+            <text
+              y={40}
+              fill={BRONZE}
+              fontFamily={inter}
+              fontSize={13}
+              fontWeight={600}
+              letterSpacing={2.5}
+            >
+              {`AZ ${String(shownBearing).padStart(3, "0")}°`}
+            </text>
+          </g>
+
+          {/* Beetle + dung ball silhouette (2× scale so hero reads at a glance) */}
+          <g
+            transform={`translate(${beetleAnchorX}, ${beetleY}) scale(1.9)`}
+            opacity={beetleSpring}
+          >
+            {/* Soft ground shadow under the ball */}
+            <ellipse
+              cx={0}
+              cy={2}
+              rx={26}
+              ry={3}
+              fill="#000000"
+              opacity={0.55}
+            />
+            {/* Dung ball */}
+            <circle
+              cx={0}
+              cy={-18}
+              r={20}
+              fill="#171B2C"
+              stroke="#2A3149"
+              strokeWidth={1}
+            />
+            {/* Ball texture — irregular flecks */}
+            <g fill="#232945">
+              <circle cx={-7} cy={-25} r={2.4} />
+              <circle cx={6} cy={-14} r={1.8} />
+              <circle cx={2} cy={-28} r={1.2} />
+              <circle cx={-3} cy={-11} r={1.4} />
+              <circle cx={9} cy={-22} r={1.6} />
+            </g>
+            {/* Rim light on ball top-right */}
+            <path
+              d="M 4 -34 Q 16 -28 18 -18"
+              stroke="#3B4676"
+              strokeWidth={1.2}
+              fill="none"
+              opacity={0.8}
+            />
+
+            {/* Beetle body — sits atop the ball, oriented "up" */}
+            <g transform={`translate(0, -44)`}>
+              {/* Legs */}
+              <g
+                stroke="#0B0E1A"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                fill="none"
+              >
+                <path d="M -6 3 L -13 9 L -18 6" />
+                <path d="M 6 3 L 13 9 L 18 6" />
+                <path d="M -6 -1 L -15 -3" />
+                <path d="M 6 -1 L 15 -3" />
+                <path d="M -6 -6 L -13 -11 L -17 -15" />
+                <path d="M 6 -6 L 13 -11 L 17 -15" />
+              </g>
+              {/* Elytra body */}
+              <ellipse cx={0} cy={0} rx={8.5} ry={11} fill="#0B0E1A" />
+              {/* Elytral seam */}
+              <line
+                x1={0}
+                y1={-9}
+                x2={0}
+                y2={10}
+                stroke="#1A1E30"
+                strokeWidth={0.6}
+              />
+              {/* Pronotum */}
+              <ellipse cx={0} cy={-10} rx={6.2} ry={3.6} fill="#0B0E1A" />
+              {/* Head — clypeus with the characteristic serrated notch */}
+              <path
+                d="M -5.5 -14 Q 0 -17.5 5.5 -14 L 5 -12.5 Q 3 -13.8 1.6 -12.6 Q 0 -13.6 -1.6 -12.6 Q -3 -13.8 -5 -12.5 Z"
+                fill="#0B0E1A"
+              />
+              {/* Antennae — short, clubbed, angled up */}
+              <g stroke="#0B0E1A" strokeWidth={0.9} fill="none" strokeLinecap="round">
+                <path d="M -3.5 -15.5 L -5.5 -18" />
+                <path d="M 3.5 -15.5 L 5.5 -18" />
+              </g>
+              <circle cx={-5.5} cy={-18} r={0.9} fill="#0B0E1A" />
+              <circle cx={5.5} cy={-18} r={0.9} fill="#0B0E1A" />
+
+              {/* Bronze rim-light on carapace edge */}
+              <path
+                d="M -8.5 -2 Q 0 -12.5 8.5 -2"
+                fill="none"
+                stroke={BRONZE}
+                strokeWidth={0.75}
+                opacity={0.95}
+              />
+              {/* Star glint reflected off the head */}
+              <circle cx={0} cy={-15} r={1.1} fill={STAR} opacity={0.9} />
+            </g>
+          </g>
+        </g>
+
+        {/* Panel border + corner marks */}
         <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
+          x={PANEL.x + 0.5}
+          y={PANEL.y + 0.5}
+          width={PANEL.w - 1}
+          height={PANEL.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#20263B"
           strokeWidth={1}
         />
-
-        {/* Corner crop marks */}
         {(
           [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
+            [PANEL.x, PANEL.y, 1, 1],
+            [PANEL.x + PANEL.w, PANEL.y, -1, 1],
+            [PANEL.x, PANEL.y + PANEL.h, 1, -1],
+            [PANEL.x + PANEL.w, PANEL.y + PANEL.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={BRONZE} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Caption strip below the panel */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
+          transform={`translate(${PANEL.x}, ${PANEL.y + PANEL.h + 22})`}
           fill={GRAY}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · GALACTIC SIGHTING FROM THE SOUTH AFRICAN VELD</text>
           <text
-            x={FRAME.w}
+            x={PANEL.w}
             textAnchor="end"
-            fill={PHYSARUM}
+            fill={STAR}
             opacity={0.85}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            SCARABAEUS SATYRUS · MILKY WAY COMPASS
           </text>
         </g>
       </svg>
@@ -606,7 +693,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: STAR,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -617,7 +704,7 @@ export const PairingCard: React.FC = () => {
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Celestial Navigator
           </span>
         </div>
 
@@ -632,9 +719,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The beetle that
           <br />
-          city planner.
+          steers by the galaxy.
         </div>
 
         <div
@@ -649,13 +736,13 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          Under a planetarium sky stripped of every landmark,{" "}
+          <span style={{ color: STAR, fontWeight: 600 }}>
+            Scarabaeus satyrus
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          still rolled its dung ball in a perfectly straight line — orienting
+          to the diffuse polarized band of the Milky Way. The first animal
+          proven to use the galaxy itself as a compass.
         </div>
       </div>
 
@@ -677,9 +764,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Dacke et al. · Current Biology 23 (2013) 298–300</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: BRONZE }}>●</span> Bearing = galactic fix
         </span>
       </div>
     </AbsoluteFill>
