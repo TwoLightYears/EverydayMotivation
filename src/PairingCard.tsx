@@ -50,158 +50,96 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — drawn from the bombardier beetle's real coloration and hot quinone spray
+const INK = "#0D1116";
+const BOARD = "#12171C";
+const ELYTRA = "#1F3F2D";
+const ELYTRA_HI = "#2E5A40";
+const VERMILION = "#E5451F";
+const QUINONE = "#F0D048";
+const QUINONE_HOT = "#FDE58A";
+const CREAM = "#EFE9D8";
+const CREAM_DIM = "#8C8778";
+const GRID = "#171C21";
+const GRID_MAJOR = "#212830";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ─── SVG map (drafting-plate coord space: 1080 × 800) ─────────────────
+// The abdomen cutaway is the hero. It reads as a two-stage chemical reactor:
+// reservoir → valve → reaction chamber → nozzle.
+//   Reservoir centre : x=280, y=490
+//   Valve            : x=440, y=490
+//   Reaction chamber : x=620, y=490
+//   Nozzle throat    : x=752, y=490
+//   Nozzle exit      : x=800, y=490
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+const RES_C = { x: 280, y: 490 };
+const RC_C = { x: 620, y: 490 };
+const NOZZLE_EXIT = { x: 800, y: 490 };
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// Oscilloscope panel (top of plate)
+const OSC = { x: 80, y: 58, w: 920, h: 108 };
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
+// ─── Helpers ─────────────────────────────────────────────────────────
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const easeOut = (v: number) => 1 - Math.pow(1 - clamp01(v), 3);
 
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
+// Pulse train: a square-ish envelope sampled along the oscilloscope panel.
+// Visually reads as ~5 pulses across the width — labelled as "500 Hz".
+const pulseAt = (u: number): number => {
+  // u in [0,1] along osc width. 6 pulses across, each with a fast rise/fall.
+  const cycles = 6;
+  const phase = (u * cycles) % 1;
+  // narrow gaussian pulse
+  const g = Math.exp(-Math.pow((phase - 0.35) / 0.11, 2));
+  return g;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// Puff positions along the nozzle exit — spaced along the throw.
+const PUFF_COUNT = 10;
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Timing phases (seconds)
+  //   0.0  build small beetle icon
+  //   0.3  cutaway outline
+  //   0.6  reservoir fills
+  //   0.9  valve appears
+  //   1.1  reaction chamber ignites
+  //   1.4  nozzle spray starts, oscilloscope traces
+  //   2.0  type lockup springs in
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const cutOutT = easeOut((frame - fps * 0.25) / (fps * 0.5));
+  const resFillT = easeOut((frame - fps * 0.55) / (fps * 0.7));
+  const valveT = easeOut((frame - fps * 0.9) / (fps * 0.3));
+  const rcIgniteT = easeOut((frame - fps * 1.1) / (fps * 0.5));
+  const sprayT = easeOut((frame - fps * 1.45) / (fps * 0.6));
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 0.6,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
+  const hookOpacity = interpolate(
+    frame,
+    [fps * 1.2, fps * 2.1],
+    [0, 1],
+    {
+      easing: Easing.out(Easing.cubic),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
-    easing: Easing.out(Easing.cubic),
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
+  // Oscilloscope sweep — a marker travels along the trace
+  const oscSweep = (frame % (fps * 3.2)) / (fps * 3.2);
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
+  // Layout: drafting frame area on the page
   const FRAME = { x: 60, y: 130, w: 960, h: 711 };
   const MAP_W = 1080;
   const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const scale = FRAME.w / MAP_W;
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -217,7 +155,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: CREAM_DIM,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +163,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: VERMILION }}>2026 · 09 · 22</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Drafting frame with the technical illustration */}
       <svg
         width={1080}
         height={1350}
@@ -268,22 +206,38 @@ export const PairingCard: React.FC = () => {
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
           <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+            <stop offset="0%" stopColor="#161B22" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <radialGradient id="hot-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={QUINONE_HOT} stopOpacity={0.9} />
+            <stop offset="55%" stopColor={QUINONE} stopOpacity={0.4} />
+            <stop offset="100%" stopColor={VERMILION} stopOpacity={0} />
+          </radialGradient>
+
+          <radialGradient id="res-fill" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#F7ECD1" stopOpacity={0.9} />
+            <stop offset="100%" stopColor={CREAM} stopOpacity={0.45} />
+          </radialGradient>
+
+          <linearGradient id="chamber-hot" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={VERMILION} stopOpacity={0.9} />
+            <stop offset="60%" stopColor={QUINONE} stopOpacity={0.95} />
+            <stop offset="100%" stopColor={QUINONE_HOT} stopOpacity={1} />
+          </linearGradient>
+
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
+          </filter>
+
+          <filter id="hot-blur" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="6" />
           </filter>
         </defs>
 
@@ -309,8 +263,6 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
@@ -330,262 +282,492 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={VERMILION} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Plate title strip inside the frame — top-left */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 22}, ${FRAME.y + 28})`}
+          fill={CREAM_DIM}
           fontFamily={inter}
           fontSize={10}
           letterSpacing={3}
-          fontWeight={500}
+          fontWeight={600}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
+          <text>PLATE III · BIOLOGICAL PULSE-JET</text>
+        </g>
+        <g
+          transform={`translate(${FRAME.x + FRAME.w - 22}, ${FRAME.y + 28})`}
+          fill={CREAM_DIM}
+          fontFamily={inter}
+          fontSize={10}
+          letterSpacing={3}
+          fontWeight={600}
+          textAnchor="end"
+        >
+          <text>SUBJECT · BRACHINUS SP.</text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
+        {/* ─── Map content, mapped into the plate ───────────────── */}
         <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+          {/* ==== Oscilloscope panel (top) ==== */}
+          <g opacity={easeOut((frame - fps * 1.35) / (fps * 0.6))}>
+            {/* Frame */}
+            <rect
+              x={OSC.x}
+              y={OSC.y}
+              width={OSC.w}
+              height={OSC.h}
+              fill="#0B0F13"
+              stroke="#2A313A"
+              strokeWidth={1}
+              rx={4}
+            />
+            {/* Faint grid */}
+            {Array.from({ length: 11 }).map((_, i) => (
+              <line
+                key={`ogv-${i}`}
+                x1={OSC.x + (OSC.w * i) / 10}
+                y1={OSC.y}
+                x2={OSC.x + (OSC.w * i) / 10}
+                y2={OSC.y + OSC.h}
+                stroke="#141B21"
+                strokeWidth={1}
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
+            ))}
+            {Array.from({ length: 5 }).map((_, i) => (
+              <line
+                key={`ogh-${i}`}
+                x1={OSC.x}
+                y1={OSC.y + (OSC.h * i) / 4}
+                x2={OSC.x + OSC.w}
+                y2={OSC.y + (OSC.h * i) / 4}
+                stroke="#141B21"
+                strokeWidth={1}
+              />
+            ))}
+            {/* Zero line */}
+            <line
+              x1={OSC.x}
+              y1={OSC.y + OSC.h - 26}
+              x2={OSC.x + OSC.w}
+              y2={OSC.y + OSC.h - 26}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+              strokeDasharray="4 6"
+              opacity={0.35}
+            />
+            {/* Trace */}
+            {(() => {
+              const N = 260;
+              const baseY = OSC.y + OSC.h - 26;
+              const amp = OSC.h - 40;
+              let d = "";
+              const drawTo = Math.min(1, oscSweep);
+              for (let i = 0; i <= N; i++) {
+                const u = i / N;
+                if (u > drawTo) break;
+                const x = OSC.x + u * OSC.w;
+                const y = baseY - pulseAt(u) * amp;
+                d += (i === 0 ? "M " : "L ") + x.toFixed(1) + " " + y.toFixed(1) + " ";
               }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
               return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
+                <>
+                  <path
+                    d={d}
+                    stroke={QUINONE}
+                    strokeWidth={2.2}
+                    fill="none"
+                    filter="url(#soft-glow)"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d={d}
+                    stroke={QUINONE_HOT}
+                    strokeWidth={1}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={0.9}
+                  />
+                </>
+              );
+            })()}
+            {/* Sweep marker — just the trace dot, no full-height line */}
+            {(() => {
+              const mx = OSC.x + oscSweep * OSC.w;
+              const my =
+                OSC.y + OSC.h - 26 - pulseAt(oscSweep) * (OSC.h - 40);
+              return (
+                <g>
+                  <line
+                    x1={mx}
+                    y1={OSC.y + OSC.h - 32}
+                    x2={mx}
+                    y2={OSC.y + OSC.h - 8}
+                    stroke={VERMILION}
+                    strokeWidth={1}
                     opacity={0.35}
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
+                  <circle cx={mx} cy={my} r={4} fill={QUINONE_HOT} />
                 </g>
               );
             })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
+            {/* Labels */}
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
+              x={OSC.x + 14}
+              y={OSC.y + 24}
+              fill={CREAM}
               fontFamily={inter}
-              fontSize={11}
+              fontSize={12}
               fontWeight={600}
-              letterSpacing={3.5}
+              letterSpacing={3}
             >
-              TOKYO
+              PRESSURE · P(t)
+            </text>
+            <text
+              x={OSC.x + OSC.w - 14}
+              y={OSC.y + 24}
+              fill={QUINONE}
+              fontFamily={inter}
+              fontSize={12}
+              fontWeight={600}
+              letterSpacing={3}
+              textAnchor="end"
+            >
+              PULSE · 500 Hz
+            </text>
+            <text
+              x={OSC.x + 14}
+              y={OSC.y + OSC.h - 10}
+              fill={CREAM_DIM}
+              fontFamily={inter}
+              fontSize={10}
+              letterSpacing={2.5}
+              fontWeight={500}
+            >
+              t / 2 ms per division
             </text>
           </g>
-        </g>
 
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+          {/* ==== Abdomen cutaway (hero) ==== */}
+          <AbdomenCutaway
+            cutOutT={cutOutT}
+            resFillT={resFillT}
+            valveT={valveT}
+            rcIgniteT={rcIgniteT}
+          />
+
+          {/* ==== Pulsed spray from nozzle ==== */}
+          <g opacity={sprayT}>
+            {/* Hot halo at nozzle */}
+            <circle
+              cx={NOZZLE_EXIT.x + 2}
+              cy={NOZZLE_EXIT.y}
+              r={20 + Math.sin(frame * 0.9) * 3}
+              fill="url(#hot-glow)"
+            />
+            {/* Puffs — staccato, kept small so they read as discrete pulses */}
+            {Array.from({ length: PUFF_COUNT }).map((_, i) => {
+              const cycleLen = fps * 1.6;
+              const offset = (i / PUFF_COUNT) * cycleLen;
+              const localFrame =
+                (frame - fps * 1.45 + offset) % cycleLen;
+              if (localFrame < 0) return null;
+              const life = localFrame / cycleLen;
+              const throw_ = 220;
+              const px = NOZZLE_EXIT.x + 12 + life * throw_;
+              const jitter =
+                Math.sin((i * 7 + frame * 0.3) * 0.5) * 4 * life;
+              const py = NOZZLE_EXIT.y + jitter;
+              // Small tight core with a soft halo — visible as a "bullet"
+              const r = 4 + life * 12;
+              const halo = r + 6;
+              const op = (1 - life) * 0.9;
+              return (
+                <g key={i}>
+                  <circle
+                    cx={px}
+                    cy={py}
+                    r={halo}
+                    fill={QUINONE}
+                    opacity={op * 0.4}
+                    filter="url(#hot-blur)"
+                  />
+                  <circle
+                    cx={px}
+                    cy={py}
+                    r={r}
+                    fill={QUINONE_HOT}
+                    opacity={op * 0.85}
+                  />
+                  <circle
+                    cx={px}
+                    cy={py}
+                    r={Math.max(1.5, r * 0.4)}
+                    fill="#FFFFFF"
+                    opacity={op}
+                  />
+                </g>
+              );
+            })}
+            {/* Steam wisps */}
+            {Array.from({ length: 5 }).map((_, i) => {
+              const cycleLen = fps * 2.4;
+              const offset = (i / 5) * cycleLen;
+              const localFrame =
+                (frame - fps * 1.7 + offset) % cycleLen;
+              if (localFrame < 0) return null;
+              const life = localFrame / cycleLen;
+              const px = NOZZLE_EXIT.x + 40 + life * 220;
+              const py = NOZZLE_EXIT.y - 40 - life * 30 + i * 3;
+              const r = 10 + life * 22;
+              const op = (1 - life) * 0.28;
+              return (
+                <circle
+                  key={`s-${i}`}
+                  cx={px}
+                  cy={py}
+                  r={r}
+                  fill={CREAM}
+                  opacity={op}
+                  filter="url(#hot-blur)"
+                />
+              );
+            })}
+          </g>
+
+          {/* ==== Callout labels on the cutaway ==== */}
+          <g opacity={easeOut((frame - fps * 0.9) / (fps * 0.7))}>
+            {/* RESERVOIR — above-left */}
+            <line
+              x1={RES_C.x}
+              y1={RES_C.y - 96}
+              x2={RES_C.x}
+              y2={266}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <line
+              x1={RES_C.x}
+              y1={266}
+              x2={120}
+              y2={266}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <text
+              x={120}
+              y={258}
+              fill={CREAM}
+              fontFamily={inter}
+              fontSize={13}
+              fontWeight={600}
+              letterSpacing={3.6}
+            >
+              RESERVOIR
+            </text>
+            <text
+              x={120}
+              y={280}
+              fill={CREAM_DIM}
+              fontFamily={inter}
+              fontSize={11}
+              letterSpacing={1.8}
+              fontWeight={500}
+            >
+              hydroquinones + H₂O₂
+            </text>
+
+            {/* REACTION CHAMBER — above-right */}
+            <line
+              x1={RC_C.x}
+              y1={RC_C.y - 96}
+              x2={RC_C.x}
+              y2={266}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <line
+              x1={RC_C.x}
+              y1={266}
+              x2={960}
+              y2={266}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <text
+              x={960}
+              y={258}
+              fill={QUINONE}
+              fontFamily={inter}
+              fontSize={13}
+              fontWeight={600}
+              letterSpacing={3.6}
+              textAnchor="end"
+            >
+              REACTION CHAMBER
+            </text>
+            <text
+              x={960}
+              y={280}
+              fill={CREAM_DIM}
+              fontFamily={inter}
+              fontSize={11}
+              letterSpacing={1.8}
+              fontWeight={500}
+              textAnchor="end"
+            >
+              catalase + peroxidase · ~100 °C
+            </text>
+
+            {/* VALVE — below-left */}
+            <line
+              x1={440}
+              y1={568}
+              x2={440}
+              y2={638}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <line
+              x1={440}
+              y1={638}
+              x2={310}
+              y2={638}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <text
+              x={310}
+              y={632}
+              fill={CREAM}
+              fontFamily={inter}
+              fontSize={12}
+              fontWeight={600}
+              letterSpacing={3.2}
+              textAnchor="end"
+            >
+              ONE-WAY VALVE
+            </text>
+            <text
+              x={310}
+              y={652}
+              fill={CREAM_DIM}
+              fontFamily={inter}
+              fontSize={10}
+              letterSpacing={2}
+              fontWeight={500}
+              textAnchor="end"
+            >
+              vestibule seal, opens on discharge
+            </text>
+
+            {/* NOZZLE — below-right */}
+            <line
+              x1={NOZZLE_EXIT.x - 8}
+              y1={NOZZLE_EXIT.y + 40}
+              x2={NOZZLE_EXIT.x - 8}
+              y2={678}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <line
+              x1={NOZZLE_EXIT.x - 8}
+              y1={678}
+              x2={960}
+              y2={678}
+              stroke={CREAM_DIM}
+              strokeWidth={1}
+            />
+            <text
+              x={960}
+              y={672}
+              fill={CREAM}
+              fontFamily={inter}
+              fontSize={12}
+              fontWeight={600}
+              letterSpacing={3.2}
+              textAnchor="end"
+            >
+              REVOLVING NOZZLE
+            </text>
+            <text
+              x={960}
+              y={692}
+              fill={CREAM_DIM}
+              fontFamily={inter}
+              fontSize={10}
+              letterSpacing={2}
+              fontWeight={500}
+              textAnchor="end"
+            >
+              swivels ±180°, aimed by the beetle
+            </text>
+          </g>
+
+          {/* Frequency legend inside the puff column */}
+          <g opacity={sprayT}>
+            {/* Dimension bracket under the puff column */}
+            <line
+              x1={NOZZLE_EXIT.x + 10}
+              y1={NOZZLE_EXIT.y + 52}
+              x2={NOZZLE_EXIT.x + 220}
+              y2={NOZZLE_EXIT.y + 52}
+              stroke={QUINONE}
+              strokeWidth={1.2}
+              opacity={0.75}
+            />
+            <line
+              x1={NOZZLE_EXIT.x + 10}
+              y1={NOZZLE_EXIT.y + 46}
+              x2={NOZZLE_EXIT.x + 10}
+              y2={NOZZLE_EXIT.y + 58}
+              stroke={QUINONE}
+              strokeWidth={1.2}
+              opacity={0.75}
+            />
+            <line
+              x1={NOZZLE_EXIT.x + 220}
+              y1={NOZZLE_EXIT.y + 46}
+              x2={NOZZLE_EXIT.x + 220}
+              y2={NOZZLE_EXIT.y + 58}
+              stroke={QUINONE}
+              strokeWidth={1.2}
+              opacity={0.75}
+            />
+            <text
+              x={NOZZLE_EXIT.x + 115}
+              y={NOZZLE_EXIT.y + 76}
+              fill={QUINONE}
+              fontFamily={inter}
+              fontSize={18}
+              fontWeight={700}
+              letterSpacing={2}
+              textAnchor="middle"
+            >
+              500 Hz
+            </text>
+          </g>
+
+          {/* Bottom caption strip within plate */}
+          <g
+            transform={`translate(0, 754)`}
+            fill={CREAM_DIM}
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={2.6}
+            fontWeight={500}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
+            <text x={80}>FIG. B · ABDOMINAL REACTION APPARATUS · CROSS-SECTION</text>
+            <text x={1000} textAnchor="end" fill={VERMILION} opacity={0.85}>
+              EJECTION VELOCITY · 10 m/s
+            </text>
+          </g>
         </g>
       </svg>
 
@@ -606,7 +788,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: QUINONE,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,9 +797,9 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
+          Role <span style={{ color: CREAM_DIM, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Chemical Engineer
           </span>
         </div>
 
@@ -632,9 +814,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The five-hundred-hertz
           <br />
-          city planner.
+          chemist.
         </div>
 
         <div
@@ -643,19 +825,21 @@ export const PairingCard: React.FC = () => {
             color: "#C8CAD0",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          A{" "}
+          <span style={{ color: VERMILION, fontWeight: 600 }}>
+            bombardier beetle
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          runs a two-chamber reactor in its abdomen — hydroquinones and
+          hydrogen peroxide flashed with catalase to{" "}
+          <span style={{ color: QUINONE, fontWeight: 600 }}>~100&nbsp;°C</span>{" "}
+          and expelled in a pulse-jet at ~500 Hz. Its own body is the pressure
+          vessel, and it never blows up.
         </div>
       </div>
 
@@ -669,7 +853,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: CREAM_DIM,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,11 +861,251 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Dean et al. · Science 248 (1990) 1219–1221</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: QUINONE }}>●</span> Benzoquinone pulse
         </span>
       </div>
+
+      {/* keep the composition running the full duration */}
+      <div style={{ display: "none" }}>{durationInFrames}</div>
     </AbsoluteFill>
+  );
+};
+
+// ─── Hero abdomen cutaway ────────────────────────────────────────────
+const AbdomenCutaway: React.FC<{
+  cutOutT: number;
+  resFillT: number;
+  valveT: number;
+  rcIgniteT: number;
+}> = ({ cutOutT, resFillT, valveT, rcIgniteT }) => {
+  // Abdomen envelope: a rounded teardrop pointing right.
+  // We build it from two chamber circles joined by a smooth waist + nozzle.
+  //
+  //  reservoir (left) : cx=280, cy=490, rx=140, ry=90
+  //  reaction chamber : cx=620, cy=490, rx=130, ry=80
+  //  nozzle           : x = 750..800, tapering
+  const envelope = `
+    M 140 490
+    C 140 400, 200 400, 280 400
+    L 500 400
+    Q 490 480, 500 480
+    L 490 490
+    L 500 500
+    Q 490 500, 500 580
+    L 280 580
+    C 200 580, 140 580, 140 490
+    Z
+  `;
+
+  // Envelope trace uses stroke-dasharray to draw the outline in.
+  const envLen = 1300; // approx
+
+  return (
+    <g>
+      {/* Envelope fill (very subtle base — the abdomen shape) */}
+      <path
+        d={`
+          M 140 490
+          C 140 400, 200 400, 280 400
+          L 620 400
+          Q 720 400, 748 470
+          L 800 486
+          L 800 494
+          L 748 510
+          Q 720 580, 620 580
+          L 280 580
+          C 200 580, 140 580, 140 490
+          Z
+        `}
+        fill="#131A20"
+        stroke="none"
+        opacity={cutOutT * 0.85}
+      />
+      {/* Envelope outline */}
+      <path
+        d={`
+          M 140 490
+          C 140 400, 200 400, 280 400
+          L 620 400
+          Q 720 400, 748 470
+          L 800 486
+          L 800 494
+          L 748 510
+          Q 720 580, 620 580
+          L 280 580
+          C 200 580, 140 580, 140 490
+          Z
+        `}
+        fill="none"
+        stroke={CREAM}
+        strokeWidth={2}
+        strokeDasharray={envLen}
+        strokeDashoffset={envLen * (1 - cutOutT)}
+        strokeLinejoin="round"
+      />
+
+      {/* ==== Reservoir (left chamber) ==== */}
+      <g opacity={cutOutT}>
+        <ellipse
+          cx={280}
+          cy={490}
+          rx={130}
+          ry={78}
+          fill="url(#res-fill)"
+          opacity={0.4 * resFillT}
+        />
+        <ellipse
+          cx={280}
+          cy={490}
+          rx={130}
+          ry={78}
+          fill="none"
+          stroke={CREAM}
+          strokeWidth={1.4}
+          strokeDasharray="6 4"
+          opacity={0.75}
+        />
+        {/* Hatch pattern of small circles suggesting liquid molecules */}
+        {resFillT > 0.1 &&
+          Array.from({ length: 22 }).map((_, i) => {
+            const seed = (i * 37) % 100;
+            const angle = (seed / 100) * Math.PI * 2;
+            const r = 8 + (seed % 60);
+            const x = 280 + Math.cos(angle) * r;
+            const y = 490 + Math.sin(angle) * r * 0.55;
+            const size = 3 + (seed % 3);
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={size}
+                fill={i % 3 === 0 ? VERMILION : CREAM}
+                opacity={0.55 * resFillT}
+              />
+            );
+          })}
+      </g>
+
+      {/* ==== Waist / one-way valve ==== */}
+      <g opacity={valveT}>
+        {/* Waist walls (thicker) */}
+        <path
+          d="M 410 448 Q 440 460 470 448 L 470 532 Q 440 520 410 532 Z"
+          fill="#0F1519"
+          stroke={CREAM}
+          strokeWidth={1.6}
+        />
+        {/* Valve flap */}
+        <path
+          d="M 440 460 L 452 490 L 440 520"
+          stroke={VERMILION}
+          strokeWidth={2.4}
+          fill="none"
+          strokeLinecap="round"
+        />
+        <circle cx={440} cy={460} r={2.6} fill={VERMILION} />
+        <circle cx={440} cy={520} r={2.6} fill={VERMILION} />
+      </g>
+
+      {/* ==== Reaction chamber (right) ==== */}
+      <g opacity={cutOutT}>
+        {/* Thick reinforced wall */}
+        <ellipse
+          cx={620}
+          cy={490}
+          rx={120}
+          ry={72}
+          fill="none"
+          stroke={CREAM}
+          strokeWidth={3.2}
+          opacity={0.85}
+        />
+        <ellipse
+          cx={620}
+          cy={490}
+          rx={114}
+          ry={66}
+          fill="none"
+          stroke={CREAM_DIM}
+          strokeWidth={1}
+          opacity={0.5}
+        />
+        {/* Hot fill */}
+        <ellipse
+          cx={620}
+          cy={490}
+          rx={110 * rcIgniteT}
+          ry={62 * rcIgniteT}
+          fill="url(#chamber-hot)"
+          opacity={0.75 * rcIgniteT}
+        />
+        {/* Turbulent hot puff inside */}
+        {rcIgniteT > 0.2 &&
+          Array.from({ length: 14 }).map((_, i) => {
+            const seed = (i * 53 + 7) % 100;
+            const angle = (seed / 100) * Math.PI * 2;
+            const r = 10 + (seed % 55);
+            const x = 620 + Math.cos(angle) * r;
+            const y = 490 + Math.sin(angle) * r * 0.55;
+            const size = 4 + (seed % 4);
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={size}
+                fill={i % 2 === 0 ? QUINONE_HOT : "#FFFFFF"}
+                opacity={0.7 * rcIgniteT}
+              />
+            );
+          })}
+      </g>
+
+      {/* ==== Nozzle throat ==== */}
+      <g opacity={cutOutT}>
+        <path
+          d="M 740 468 L 800 484 L 800 496 L 740 512 Z"
+          fill="#0F1519"
+          stroke={CREAM}
+          strokeWidth={1.8}
+        />
+        <path
+          d="M 745 482 L 795 486 L 795 494 L 745 498 Z"
+          fill={rcIgniteT > 0.5 ? QUINONE : "#141B21"}
+          opacity={rcIgniteT}
+        />
+      </g>
+
+      {/* Ghost Roman-numeral watermarks inside each chamber */}
+      <g opacity={cutOutT}>
+        <text
+          x={200}
+          y={520}
+          fill={CREAM}
+          fontFamily={playfair}
+          fontStyle="italic"
+          fontSize={62}
+          fontWeight={500}
+          opacity={0.14}
+        >
+          I
+        </text>
+        <text
+          x={555}
+          y={520}
+          fill={CREAM}
+          fontFamily={playfair}
+          fontStyle="italic"
+          fontSize={62}
+          fontWeight={500}
+          opacity={0.14 + 0.10 * rcIgniteT}
+        >
+          II
+        </text>
+      </g>
+    </g>
   );
 };
