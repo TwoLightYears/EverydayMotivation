@@ -2,8 +2,8 @@ import React from "react";
 import {
   AbsoluteFill,
   useCurrentFrame,
-  spring,
   useVideoConfig,
+  spring,
   interpolate,
   Easing,
   staticFile,
@@ -50,637 +50,577 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// ── Palette (from the concept's visual brief) ────────────────────────────
+const INK = "#0B0E14";
+const CREAM = "#E7D9B5";
+const AMBER = "#D9A03E";
+const EYE = "#C43420";
+const OLIVE = "#5D6152";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+const PRIMES = new Set([2, 3, 5, 7, 11, 13, 17]);
+const YEARS = Array.from({ length: 17 }, (_, i) => i + 1);
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// Stylised Magicicada silhouette, drawn in a 400×260 local box (top-down),
+// wings swept backward like a resting cicada (tent-form), tighter than a moth.
+const CicadaSilhouette: React.FC<{
+  opacity: number;
+  color: string;
+  eye: string;
+}> = ({ opacity, color, eye }) => {
+  return (
+    <g opacity={opacity} transform="translate(0,0)">
+      {/* Left forewing — long, tapered, swept back-down */}
+      <path
+        d="M 198 95
+           C 155 92, 100 115, 60 175
+           C 45 200, 55 215, 90 218
+           C 135 218, 175 175, 200 140
+           Z"
+        fill={color}
+        opacity={0.92}
+      />
+      {/* Right forewing — mirrored */}
+      <path
+        d="M 202 95
+           C 245 92, 300 115, 340 175
+           C 355 200, 345 215, 310 218
+           C 265 218, 225 175, 200 140
+           Z"
+        fill={color}
+        opacity={0.92}
+      />
+      {/* Prominent amber wing venation — the diagnostic cicada wing */}
+      <g stroke={AMBER} strokeWidth={1.4} fill="none" opacity={0.85}>
+        {/* Left wing veins */}
+        <path d="M 198 100 C 165 105, 120 130, 80 190" />
+        <path d="M 195 115 C 155 125, 115 155, 95 200" />
+        <path d="M 190 128 C 155 140, 120 175, 110 208" />
+        <path d="M 195 100 Q 155 145, 140 205" opacity={0.55} />
+        {/* Right wing veins */}
+        <path d="M 202 100 C 235 105, 280 130, 320 190" />
+        <path d="M 205 115 C 245 125, 285 155, 305 200" />
+        <path d="M 210 128 C 245 140, 280 175, 290 208" />
+        <path d="M 205 100 Q 245 145, 260 205" opacity={0.55} />
+      </g>
+      {/* Thorax */}
+      <ellipse cx={200} cy={108} rx={22} ry={32} fill={color} />
+      {/* Abdomen — tapered, showing under the tent of wings */}
+      <path
+        d="M 182 130
+           C 184 175, 192 220, 200 240
+           C 208 220, 216 175, 218 130
+           Z"
+        fill={color}
+      />
+      {/* Segmentation bands */}
+      <g stroke={INK} strokeWidth={1.6} fill="none" opacity={0.65}>
+        <path d="M 186 152 Q 200 162 214 152" />
+        <path d="M 188 175 Q 200 184 212 175" />
+        <path d="M 191 196 Q 200 204 209 196" />
+        <path d="M 194 215 Q 200 220 206 215" />
+      </g>
+      {/* Head — squarer than a moth's */}
+      <path
+        d="M 178 74
+           Q 200 60, 222 74
+           Q 222 94, 200 92
+           Q 178 94, 178 74 Z"
+        fill={color}
+      />
+      {/* Compound eyes — the diagnostic Magicicada red, set wide */}
+      <circle cx={182} cy={76} r={8} fill={eye} />
+      <circle cx={218} cy={76} r={8} fill={eye} />
+      <circle cx={180} cy={73} r={2.2} fill="#F7E9C6" opacity={0.9} />
+      <circle cx={216} cy={73} r={2.2} fill="#F7E9C6" opacity={0.9} />
+      {/* Short antennae */}
+      <path
+        d="M 190 62 Q 186 54 182 50"
+        stroke={color}
+        strokeWidth={1.8}
+        fill="none"
+        strokeLinecap="round"
+      />
+      <path
+        d="M 210 62 Q 214 54 218 50"
+        stroke={color}
+        strokeWidth={1.8}
+        fill="none"
+        strokeLinecap="round"
+      />
+    </g>
+  );
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // 17 years tally in the first ~2.4s, primes glow, then 17 releases the
+  // hero glyph + cicada + hook. Loop cleanly at the end.
+  const startupPad = fps * 0.35;
+  const tallyStart = startupPad;
+  const tallyDur = fps * 2.4;
+  const perTick = tallyDur / YEARS.length; // ~4.2 frames per year at 30fps
+  const releaseFrame = tallyStart + tallyDur + fps * 0.15;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Small helpers
+  const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
-    fps,
-    config: { damping: 200, mass: 0.8 },
-  });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
-    easing: Easing.out(Easing.cubic),
+  // Metadata band and role tag arrivals
+  const metaOpacity = interpolate(frame, [0, fps * 0.6], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Hero glyph & cicada release
+  const releaseT = clamp((frame - releaseFrame) / (fps * 0.9));
+  const releaseEase = 1 - Math.pow(1 - releaseT, 3);
+  const heroSpring = spring({
+    frame: frame - releaseFrame,
+    fps,
+    config: { damping: 200, mass: 0.9, stiffness: 90 },
+  });
+
+  // Hook and role text
+  const roleOpacity = interpolate(
+    frame,
+    [releaseFrame + fps * 0.15, releaseFrame + fps * 0.9],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const titleOpacity = interpolate(
+    frame,
+    [releaseFrame + fps * 0.35, releaseFrame + fps * 1.1],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const hookOpacity = interpolate(
+    frame,
+    [releaseFrame + fps * 0.7, releaseFrame + fps * 1.5],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // Ground line / soil glow bloom
+  const groundGlow = interpolate(
+    frame,
+    [releaseFrame, releaseFrame + fps * 0.9],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // Layout constants (1080 × 1350 portrait)
+  const W = 1080;
+  const H = 1350;
+
+  // Left rail
+  const RAIL_X = 108;
+  const RAIL_TOP = 210;
+  const RAIL_BOT = 900;
+  const RAIL_SPAN = RAIL_BOT - RAIL_TOP;
+  const YEAR_STEP = RAIL_SPAN / (YEARS.length - 1);
+
+  // Hero glyph
+  const HERO_CX = 700;
+  const HERO_CY = 540;
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
-      <div
-        style={{
-          position: "absolute",
-          top: 56,
-          left: 80,
-          right: 80,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          color: GRAY,
-          fontFamily: inter,
-          fontSize: 13,
-          letterSpacing: 4.5,
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
-      </div>
-
-      {/* Drafting frame + map */}
+      {/* Subtle radial vignette on background */}
       <svg
-        width={1080}
-        height={1350}
-        viewBox="0 0 1080 1350"
+        width={W}
+        height={H}
+        viewBox={`0 0 ${W} ${H}`}
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="bg-vignette" cx="65%" cy="45%" r="70%">
+            <stop offset="0%" stopColor="#131722" stopOpacity={1} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
           </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          <radialGradient id="soil-glow" cx="50%" cy="100%" r="60%">
+            <stop offset="0%" stopColor={AMBER} stopOpacity={0.55} />
+            <stop offset="60%" stopColor={EYE} stopOpacity={0.15} />
+            <stop offset="100%" stopColor={INK} stopOpacity={0} />
           </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <filter
+            id="amber-glow"
+            x="-30%"
+            y="-30%"
+            width="160%"
+            height="160%"
+          >
+            <feGaussianBlur stdDeviation="3.5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          <filter
+            id="hero-glow"
+            x="-30%"
+            y="-30%"
+            width="160%"
+            height="160%"
+          >
+            <feGaussianBlur stdDeviation="9" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <linearGradient id="hero-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={EYE} />
+            <stop offset="100%" stopColor="#8A2312" />
+          </linearGradient>
+          <clipPath id="hero-clip">
+            <path d="M 380 220 L 1020 220 L 1020 900 L 380 900 Z" />
+          </clipPath>
         </defs>
 
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
+        <rect x={0} y={0} width={W} height={H} fill="url(#bg-vignette)" />
 
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
+        {/* Faint horizontal ground line (soil surface) */}
+        <line
+          x1={80}
+          y1={912}
+          x2={1000}
+          y2={912}
+          stroke={OLIVE}
+          strokeOpacity={0.55}
           strokeWidth={1}
         />
-
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
-          </g>
-        ))}
-
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+        {/* Ground-line ticks (hatching, right of the rail) */}
+        <g stroke={OLIVE} strokeOpacity={0.35} strokeWidth={1}>
+          {Array.from({ length: 40 }, (_, i) => (
+            <line
+              key={i}
+              x1={80 + i * 23}
+              y1={912}
+              x2={80 + i * 23 - 8}
+              y2={922}
+            />
+          ))}
         </g>
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+        {/* Soil glow that rises on release */}
+        <rect
+          x={0}
+          y={720}
+          width={W}
+          height={220}
+          fill="url(#soil-glow)"
+          opacity={groundGlow}
+        />
+
+        {/* ── Left rail: 17 year ticks ─────────────────────────────── */}
+        {/* Rail spine */}
+        <line
+          x1={RAIL_X}
+          y1={RAIL_TOP - 8}
+          x2={RAIL_X}
+          y2={RAIL_BOT + 8}
+          stroke={OLIVE}
+          strokeOpacity={0.7}
+          strokeWidth={1}
+        />
+        {/* Rail label */}
+        <text
+          x={RAIL_X - 14}
+          y={RAIL_TOP - 34}
+          fill={OLIVE}
           fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
+          fontSize={11}
+          letterSpacing={3.2}
+          fontWeight={600}
+          textAnchor="start"
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          YEARS UNDERGROUND
+        </text>
+
+        {YEARS.map((n) => {
+          const y = RAIL_TOP + (n - 1) * YEAR_STEP;
+          const arriveFrame = tallyStart + (n - 1) * perTick;
+          const arrive = clamp((frame - arriveFrame) / (perTick * 1.6));
+          const arriveEase = 1 - Math.pow(1 - arrive, 3);
+          const isPrime = PRIMES.has(n);
+          const is17 = n === 17;
+          const active = arrive > 0.01;
+          const tickLen = isPrime ? 34 : 22;
+          const stroke = isPrime ? AMBER : OLIVE;
+          const strokeOp = active ? (isPrime ? 0.95 : 0.55) : 0;
+          const tickX2 = RAIL_X + tickLen * arriveEase;
+
+          // Prime flash — quick pulse when the tick arrives
+          const flashT = clamp(
+            (frame - arriveFrame) / (perTick * 1.2),
+            0,
+            1,
+          );
+          const flashOp = isPrime
+            ? (1 - Math.pow(1 - flashT, 2)) * (1 - flashT) * 0.9
+            : 0;
+
+          return (
+            <g key={n}>
+              {isPrime && (
+                <circle
+                  cx={RAIL_X}
+                  cy={y}
+                  r={12 + flashT * 10}
+                  fill={is17 ? EYE : AMBER}
+                  opacity={flashOp * (is17 ? 1.1 : 0.6)}
+                  filter="url(#amber-glow)"
+                />
+              )}
+              <line
+                x1={RAIL_X}
+                y1={y}
+                x2={tickX2}
+                y2={y}
+                stroke={stroke}
+                strokeOpacity={strokeOp}
+                strokeWidth={isPrime ? 2.4 : 1.5}
+                strokeLinecap="round"
+              />
+              {/* Year number to the right of long primes only */}
+              {isPrime && (
+                <text
+                  x={tickX2 + 10}
+                  y={y + 4}
+                  fill={is17 ? EYE : AMBER}
+                  fontFamily={inter}
+                  fontSize={is17 ? 18 : 15}
+                  fontWeight={600}
+                  letterSpacing={1.5}
+                  opacity={arriveEase}
+                >
+                  {n}
+                </text>
+              )}
+              {/* Node dot on the rail */}
+              <circle
+                cx={RAIL_X}
+                cy={y}
+                r={isPrime ? 3.5 : 2}
+                fill={isPrime ? (is17 ? EYE : AMBER) : OLIVE}
+                opacity={active ? 1 : 0}
+              />
+            </g>
+          );
+        })}
+
+        {/* ── Hero glyph: colossal italic 17 ───────────────────────── */}
+        <g
+          transform={`translate(${HERO_CX}, ${HERO_CY}) scale(${
+            0.94 + heroSpring * 0.06
+          })`}
+          opacity={releaseEase}
+          filter="url(#hero-glow)"
+        >
+          <text
+            x={0}
+            y={0}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontWeight={500}
+            fontSize={620}
+            fill="url(#hero-fill)"
+            style={{ letterSpacing: -18 }}
+          >
+            17
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
+        {/* Secondary "13" whisper — upper right, clear of the cicada wing */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
+          transform={`translate(985, 190)`}
+          opacity={interpolate(
+            frame,
+            [tallyStart + perTick * 12, tallyStart + perTick * 14],
+            [0, 0.65],
+            { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+          )}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
           <text
-            x={FRAME.w}
+            x={0}
+            y={0}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            dominantBaseline="middle"
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontWeight={500}
+            fontSize={78}
+            fill={AMBER}
+            style={{ letterSpacing: -2 }}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            13
+          </text>
+          <text
+            x={-4}
+            y={46}
+            textAnchor="end"
+            fontFamily={inter}
+            fontSize={9.5}
+            fill={AMBER}
+            fontWeight={600}
+            letterSpacing={2.6}
+            opacity={0.9}
+          >
+            SOUTHERN BROOD
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Cicada silhouette perched on top of the hero glyph ──── */}
       <div
         style={{
           position: "absolute",
-          left: 80,
-          right: 80,
-          top: 905,
-          opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          left: HERO_CX - 200,
+          top: HERO_CY - 100,
+          width: 400,
+          height: 260,
+          opacity: releaseEase,
+          transform: `translateY(${(1 - heroSpring) * 40}px)`,
         }}
       >
-        <div
-          style={{
-            color: PHYSARUM,
-            fontFamily: inter,
-            fontSize: 13,
-            letterSpacing: 6,
-            textTransform: "uppercase",
-            marginBottom: 18,
-            fontWeight: 600,
-          }}
-        >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
-        </div>
-
-        <div
-          style={{
-            color: "#F4F4F6",
-            fontFamily: playfair,
-            fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
-            fontStyle: "italic",
-          }}
-        >
-          The brainless
-          <br />
-          city planner.
-        </div>
-
-        <div
-          style={{
-            marginTop: 30,
-            color: "#C8CAD0",
-            fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
-            fontWeight: 400,
-            maxWidth: 880,
-            opacity: hookOpacity,
-          }}
-        >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
-        </div>
+        <svg width={400} height={260} viewBox="0 0 400 260">
+          <CicadaSilhouette
+            opacity={1}
+            color={CREAM}
+            eye={EYE}
+          />
+        </svg>
       </div>
 
-      {/* Footer */}
+      {/* ── Top metadata band ─────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
+          top: 62,
           left: 80,
           right: 80,
-          bottom: 50,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: OLIVE,
           fontFamily: inter,
-          fontSize: 11,
-          letterSpacing: 3,
+          fontSize: 13,
+          letterSpacing: 4.5,
           textTransform: "uppercase",
           fontWeight: 500,
+          opacity: metaOpacity,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
-        <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
-        </span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: AMBER }}>2026 · 09 · 23</span>
+      </div>
+
+      {/* Little horizontal rule under metadata */}
+      <div
+        style={{
+          position: "absolute",
+          top: 96,
+          left: 80,
+          width: 60,
+          height: 1,
+          backgroundColor: AMBER,
+          opacity: metaOpacity * 0.7,
+        }}
+      />
+
+      {/* ── Type block (lower-left, asymmetric) ─────────────────── */}
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          top: 970,
+          right: 80,
+          color: CREAM,
+        }}
+      >
+        {/* Role tag */}
+        <div
+          style={{
+            fontFamily: inter,
+            fontSize: 13,
+            letterSpacing: 5.5,
+            color: AMBER,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            opacity: roleOpacity,
+          }}
+        >
+          Magicicada &nbsp;·&nbsp; Cryptographer
+        </div>
+
+        {/* Display title */}
+        <div
+          style={{
+            fontFamily: playfair,
+            fontStyle: "italic",
+            fontWeight: 500,
+            fontSize: 108,
+            lineHeight: 1.02,
+            color: CREAM,
+            marginTop: 18,
+            letterSpacing: -1.5,
+            opacity: titleOpacity,
+            transform: `translateY(${(1 - titleOpacity) * 12}px)`,
+          }}
+        >
+          Coded in Primes.
+        </div>
+
+        {/* Hook line */}
+        <div
+          style={{
+            fontFamily: inter,
+            fontWeight: 400,
+            fontSize: 22,
+            lineHeight: 1.42,
+            color: CREAM,
+            marginTop: 30,
+            maxWidth: 820,
+            opacity: hookOpacity,
+            transform: `translateY(${(1 - hookOpacity) * 10}px)`,
+          }}
+        >
+          Periodical cicadas spend&nbsp;
+          <span style={{ color: AMBER, fontWeight: 500 }}>13</span>
+          &nbsp;or&nbsp;
+          <span style={{ color: EYE, fontWeight: 500 }}>17</span>
+          &nbsp;years underground — both prime, so no short-cycle predator
+          ever locks onto the brood.
+        </div>
+      </div>
+
+      {/* ── Footer signature ─────────────────────────────────────── */}
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          bottom: 44,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          color: OLIVE,
+          fontFamily: inter,
+          fontSize: 11,
+          letterSpacing: 3.5,
+          textTransform: "uppercase",
+          fontWeight: 500,
+          opacity: metaOpacity * 0.85,
+        }}
+      >
+        <span>Brood X · Magicicada septendecim</span>
+        <span>The Prime Cipher</span>
       </div>
     </AbsoluteFill>
   );
