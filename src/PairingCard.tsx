@@ -50,158 +50,179 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from concept visual brief (real F. pardalis coloration)
+const INK = "#0B1024";
+const BOARD = "#111634";
+const BOARD_2 = "#0D1128";
+const CYAN = "#0FB5D8";
+const EMERALD = "#1E9E5B";
+const GOLD = "#F5C842";
+const ORANGE = "#E5622A";
+const BONE = "#F0E8D2";
+const DUST = "#7E86A6"; // cool secondary type
+const GRID = "#1A2049";
+const GRID_MAJOR = "#232B5D";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// Spectrum spans left (tight lattice, cyan) → right (loose lattice, orange)
+const SPECTRUM: Array<{ pos: number; color: string }> = [
+  { pos: 0.0, color: CYAN },
+  { pos: 0.28, color: "#3ECEA5" },
+  { pos: 0.5, color: EMERALD },
+  { pos: 0.7, color: GOLD },
+  { pos: 1.0, color: ORANGE },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+const lerpNum = (a: number, b: number, t: number): number => a + (b - a) * t;
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+const hexToRgb = (hex: string): [number, number, number] => {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
+const rgbToHex = (r: number, g: number, b: number): string =>
+  "#" +
+  [r, g, b]
+    .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0"))
+    .join("");
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const sampleSpectrum = (t: number): string => {
+  const x = Math.max(0, Math.min(1, t));
+  for (let i = 0; i < SPECTRUM.length - 1; i++) {
+    const a = SPECTRUM[i];
+    const b = SPECTRUM[i + 1];
+    if (x >= a.pos && x <= b.pos) {
+      const k = (x - a.pos) / (b.pos - a.pos);
+      const [ar, ag, ab] = hexToRgb(a.color);
+      const [br, bg, bb] = hexToRgb(b.color);
+      return rgbToHex(
+        lerpNum(ar, br, k),
+        lerpNum(ag, bg, k),
+        lerpNum(ab, bb, k),
+      );
+    }
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return SPECTRUM[SPECTRUM.length - 1].color;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// A small emblematic curled-tail glyph (top-right corner of the plate)
+// — a chameleon signature without a full silhouette that would fight
+// the lattice for attention. Coordinates in a ~120 × 120 box.
+const TAIL_GLYPH =
+  "M 100 20 " +
+  "C 60 20 30 46 30 84 " +
+  "C 30 108 46 116 62 108 " +
+  "C 74 102 76 90 68 84 " +
+  "C 60 80 54 88 58 96";
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
+  // ── Timing ─────────────────────────────────────────────────────────
+  // 0.0s → lattice grows in left→right
+  // ~1.6s → reflected-light columns fan up in spectrum order
+  // ~2.6s → chameleon silhouette fades in
+  // ~3.0s → title springs
+  // ~3.8s → hook fades
+  const growSpan = fps * 2.4;
   const t = Math.max(0, frame) / growSpan;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const beamOpen = interpolate(frame, [fps * 1.4, fps * 2.6], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const silhouetteOpacity = interpolate(
+    frame,
+    [fps * 2.4, fps * 3.4],
+    [0, 1],
+    {
+      easing: Easing.out(Easing.cubic),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 2.8,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 3.4, fps * 4.2], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
+  // Sweeping focus playhead — a moving vertical scan across the plate
+  // that highlights which reflected wavelength is "current."
+  const scan = interpolate(
+    frame,
+    [fps * 3.2, fps * 5.8],
+    [0, 1],
+    {
+      easing: Easing.inOut(Easing.cubic),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
+
+  // ── Layout ─────────────────────────────────────────────────────────
+  // Metadata band       : 56..90
+  // Plate (frame)       : 130..841 (h 711, w 960)
+  // Caption strip       : 861..
+  // Type lockup         : 905..
+  // Footer              : 1290
   const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+
+  // Plate internal coord system (1080 × 800)
+  const PLATE_W = 1080;
+  const PLATE_H = 800;
+  const scale = FRAME.w / PLATE_W;
+
+  // Lattice geometry (inside plate coords)
+  const LATTICE = { x: 90, y: 360, w: 900, h: 240 };
+  const ROWS = 6;
+  const COLS = 28;
+  // Column x positions — spacing widens dramatically from left (tight)
+  // to right (loose): a visible "stretched lattice."
+  const STRETCH_MIN = 0.55; // narrow spacing on the left
+  const STRETCH_MAX = 1.55; // wide spacing on the right
+  const colXPositions: number[] = (() => {
+    const widths: number[] = [];
+    for (let k = 0; k < COLS; k++) {
+      const n = k / (COLS - 1);
+      widths.push(STRETCH_MIN + (STRETCH_MAX - STRETCH_MIN) * n);
+    }
+    const totalW = widths.reduce((a, b) => a + b, 0);
+    const positions: number[] = [];
+    let acc = 0;
+    for (let k = 0; k < COLS; k++) {
+      const centered = acc + widths[k] / 2;
+      positions.push(LATTICE.x + (centered / totalW) * LATTICE.w);
+      acc += widths[k];
+    }
+    return positions;
+  })();
+  const colX = (i: number): number => colXPositions[i];
+  const rowY = (r: number): number =>
+    LATTICE.y + (LATTICE.h * r) / (ROWS - 1);
+
+  // Wavelength labels along top of lattice (each = a column subset)
+  const WAVELENGTH_TICKS: Array<{ i: number; label: string }> = [
+    { i: 0, label: "λ 470" },
+    { i: Math.floor(COLS * 0.28), label: "λ 510" },
+    { i: Math.floor(COLS * 0.5), label: "λ 555" },
+    { i: Math.floor(COLS * 0.72), label: "λ 590" },
+    { i: COLS - 1, label: "λ 630 nm" },
+  ];
+
+  // Spacing labels along bottom of lattice
+  const SPACING_TICKS: Array<{ i: number; label: string }> = [
+    { i: 0, label: "d 128" },
+    { i: Math.floor(COLS * 0.5), label: "d 150" },
+    { i: COLS - 1, label: "d 172 nm" },
+  ];
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -217,7 +238,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: DUST,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +246,10 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: CYAN }}>2026 · 09 · 26</span>
       </div>
 
-      {/* Drafting frame + map */}
       <svg
         width={1080}
         height={1350}
@@ -268,22 +288,26 @@ export const PairingCard: React.FC = () => {
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <linearGradient id="board-bg" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={BOARD} />
+            <stop offset="100%" stopColor={BOARD_2} />
+          </linearGradient>
+
+          {/* Spectrum gradient used for the reflected-light band + labels */}
+          <linearGradient id="spectrum" x1="0" x2="1" y1="0" y2="0">
+            {SPECTRUM.map((s, i) => (
+              <stop key={i} offset={`${s.pos * 100}%`} stopColor={s.color} />
+            ))}
+          </linearGradient>
+
+          {/* Soft glow for lattice dots */}
+          <radialGradient id="dot-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={BONE} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={BONE} stopOpacity={0} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <filter id="beam-blur" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="6" />
           </filter>
         </defs>
 
@@ -293,7 +317,7 @@ export const PairingCard: React.FC = () => {
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#board-bg)"
         />
         <rect
           x={FRAME.x}
@@ -317,7 +341,7 @@ export const PairingCard: React.FC = () => {
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#2B325E"
           strokeWidth={1}
         />
 
@@ -330,261 +354,316 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={CYAN} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Chameleon signature glyph (upper-right of frame) */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
+          transform={`translate(${FRAME.x + FRAME.w - 88}, ${
+            FRAME.y + 22
+          }) scale(0.44)`}
+          opacity={silhouetteOpacity}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
+          <path
+            d={TAIL_GLYPH}
+            fill="none"
+            stroke={CYAN}
+            strokeOpacity={0.7}
+            strokeWidth={2.4}
+            strokeLinecap="round"
           />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
         </g>
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
+        {/* ── Plate content ─────────────────────────────────────────── */}
         <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
+          {/* Reflected-light beams — vertical columns emerging up from the lattice */}
+          <g opacity={beamOpen}>
+            {Array.from({ length: COLS }).map((_, i) => {
+              const x = colX(i);
+              const c = sampleSpectrum(i / (COLS - 1));
+              const yTop = 90; // beams start below the wavelength axis labels
+              const yBottom = LATTICE.y - 16;
+              // Beam width scales with local column spacing so tight-lattice
+              // beams read as narrow, loose-lattice beams as broad.
+              const prev = i > 0 ? colX(i - 1) : colX(i);
+              const next = i < COLS - 1 ? colX(i + 1) : colX(i);
+              const localSpacing = Math.max(
+                Math.abs(x - prev),
+                Math.abs(next - x),
               );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
+              const halfW = Math.min(18, Math.max(6, localSpacing * 0.42));
+              const coreW = Math.max(2, halfW * 0.32);
               return (
-                <g opacity={fadeIn}>
+                <g key={`beam-${i}`}>
+                  {/* Soft blurred backing */}
+                  <rect
+                    x={x - halfW}
+                    y={yTop}
+                    width={halfW * 2}
+                    height={yBottom - yTop}
+                    fill={c}
+                    opacity={0.14}
+                    filter="url(#beam-blur)"
+                  />
+                  {/* Core beam */}
+                  <rect
+                    x={x - coreW / 2}
+                    y={yTop}
+                    width={coreW}
+                    height={yBottom - yTop}
+                    fill={c}
+                    opacity={0.72}
+                  />
+                  {/* Emerging tip glow (where it leaves the lattice) */}
                   <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
+                    cx={x}
+                    cy={yBottom - 6}
+                    r={halfW * 0.9}
+                    fill={c}
                     opacity={0.35}
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
                 </g>
               );
-            })()}
+            })}
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
+            {/* Top wavelength axis line */}
+            <line
+              x1={LATTICE.x}
+              y1={72}
+              x2={LATTICE.x + LATTICE.w}
+              y2={72}
+              stroke={DUST}
+              strokeOpacity={0.45}
+              strokeWidth={1}
+            />
+            {WAVELENGTH_TICKS.map((tk, i) => {
+              const x = colX(tk.i);
+              return (
+                <g key={`wl-${i}`}>
+                  <line
+                    x1={x}
+                    y1={70}
+                    x2={x}
+                    y2={80}
+                    stroke={DUST}
+                    strokeOpacity={0.7}
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={x}
+                    y={60}
+                    fill={DUST}
+                    fontFamily={inter}
+                    fontSize={13}
+                    fontWeight={500}
+                    letterSpacing={2}
+                    textAnchor="middle"
+                  >
+                    {tk.label}
+                  </text>
+                </g>
+              );
+            })}
+            {/* Axis role label */}
+            <text
+              x={LATTICE.x}
+              y={32}
+              fill={BONE}
+              fontFamily={inter}
+              fontSize={12}
+              fontWeight={600}
+              letterSpacing={4}
+              opacity={0.75}
+            >
+              REFLECTED WAVELENGTH
+            </text>
+          </g>
+
+          {/* Lattice — the guanine nanocrystal grid */}
+          <g>
+            {Array.from({ length: ROWS }).map((_, r) => (
+              <g key={`row-${r}`}>
+                {Array.from({ length: COLS }).map((_, c) => {
+                  const x = colX(c);
+                  const y = rowY(r);
+                  const col = sampleSpectrum(c / (COLS - 1));
+                  // Grow left → right with per-column delay
+                  const delay = c / COLS;
+                  const localT = (t - delay * 0.6) * 6;
+                  const grow = Math.max(0, Math.min(1, localT));
+                  // Focus scan — brightens whichever column is under the playhead
+                  const scanX =
+                    LATTICE.x + LATTICE.w * scan;
+                  const focus =
+                    scan > 0
+                      ? Math.max(0, 1 - Math.abs(x - scanX) / 60)
+                      : 0;
+                  const dotR = 4.2 + focus * 2.5;
+                  return (
+                    <g key={`dot-${r}-${c}`} opacity={grow}>
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={dotR * 2.6}
+                        fill="url(#dot-glow)"
+                        opacity={0.6 + focus * 0.4}
+                      />
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={dotR}
+                        fill={col}
+                        opacity={0.85 + focus * 0.15}
+                      />
+                      <circle
+                        cx={x - dotR * 0.35}
+                        cy={y - dotR * 0.4}
+                        r={Math.max(0.6, dotR * 0.35)}
+                        fill={BONE}
+                        opacity={0.55}
+                      />
+                    </g>
+                  );
+                })}
+              </g>
+            ))}
+          </g>
+
+          {/* Enclosing lattice bracket — a subtle dashed rectangle */}
+          <g stroke={DUST} strokeOpacity={0.35} fill="none">
+            <rect
+              x={LATTICE.x - 22}
+              y={LATTICE.y - 22}
+              width={LATTICE.w + 44}
+              height={LATTICE.h + 44}
+              strokeWidth={1}
+              strokeDasharray="3 6"
+            />
+          </g>
+
+
+          {/* Bottom d-spacing axis line */}
+          <line
+            x1={LATTICE.x}
+            y1={LATTICE.y + LATTICE.h + 44}
+            x2={LATTICE.x + LATTICE.w}
+            y2={LATTICE.y + LATTICE.h + 44}
+            stroke={DUST}
+            strokeOpacity={0.45}
+            strokeWidth={1}
+          />
+          {SPACING_TICKS.map((tk, i) => {
+            const x = colX(tk.i);
+            const y = LATTICE.y + LATTICE.h + 44;
             return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
+              <g key={`sp-${i}`} opacity={Math.min(1, t * 1.4)}>
+                <line
+                  x1={x}
+                  y1={y - 5}
+                  x2={x}
+                  y2={y + 5}
+                  stroke={DUST}
+                  strokeOpacity={0.7}
+                  strokeWidth={1}
                 />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
+                <text
+                  x={x}
+                  y={y + 24}
+                  fill={DUST}
+                  fontFamily={inter}
+                  fontSize={13}
+                  fontWeight={500}
+                  letterSpacing={2}
+                  textAnchor="middle"
+                >
+                  {tk.label}
+                </text>
               </g>
             );
           })}
+          {/* Bottom axis role labels — RELAXED left, EXCITED right */}
+          <text
+            x={LATTICE.x}
+            y={LATTICE.y + LATTICE.h + 84}
+            fill={CYAN}
+            fontFamily={inter}
+            fontSize={12}
+            fontWeight={600}
+            letterSpacing={4}
+          >
+            RELAXED
+          </text>
+          <text
+            x={LATTICE.x + LATTICE.w}
+            y={LATTICE.y + LATTICE.h + 84}
+            fill={ORANGE}
+            fontFamily={inter}
+            fontSize={12}
+            fontWeight={600}
+            letterSpacing={4}
+            textAnchor="end"
+          >
+            EXCITED
+          </text>
+          {/* Long thin arrow between them, in-plate */}
+          <line
+            x1={LATTICE.x + 82}
+            y1={LATTICE.y + LATTICE.h + 79}
+            x2={LATTICE.x + LATTICE.w - 82}
+            y2={LATTICE.y + LATTICE.h + 79}
+            stroke={DUST}
+            strokeOpacity={0.5}
+            strokeWidth={1}
+          />
+          <polygon
+            points={`${LATTICE.x + LATTICE.w - 82},${LATTICE.y + LATTICE.h + 79} ${LATTICE.x + LATTICE.w - 92},${LATTICE.y + LATTICE.h + 74} ${LATTICE.x + LATTICE.w - 92},${LATTICE.y + LATTICE.h + 84}`}
+            fill={ORANGE}
+            opacity={0.85}
+          />
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
+          {/* Scanning playhead — a thin vertical bar traversing the plate */}
+          {scan > 0 && (
+            <g opacity={0.75}>
+              <line
+                x1={LATTICE.x + LATTICE.w * scan}
+                y1={82}
+                x2={LATTICE.x + LATTICE.w * scan}
+                y2={LATTICE.y + LATTICE.h + 12}
+                stroke={BONE}
+                strokeOpacity={0.28}
+                strokeWidth={1.2}
+                strokeDasharray="3 5"
+              />
+              <circle
+                cx={LATTICE.x + LATTICE.w * scan}
+                cy={72}
+                r={4}
+                fill={BONE}
+              />
+            </g>
+          )}
         </g>
 
         {/* Caption strip just below the drafting frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={DUST}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · GUANINE NANOCRYSTAL LATTICE, DORSAL IRIDOPHORE</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={CYAN}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            FURCIFER PARDALIS · STRUCTURAL COLOR
           </text>
         </g>
       </svg>
@@ -606,7 +685,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CYAN,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,15 +694,15 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
+          Role <span style={{ color: DUST, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Nanotechnologist
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: BONE,
             fontFamily: playfair,
             fontWeight: 500,
             fontSize: 84,
@@ -632,9 +711,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The lizard who
           <br />
-          city planner.
+          tunes a crystal.
         </div>
 
         <div
@@ -645,17 +724,23 @@ export const PairingCard: React.FC = () => {
             fontSize: 19,
             lineHeight: 1.4,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 900,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          The panther chameleon does not shift color by moving pigment. It
+          actively stretches a two-layer lattice of{" "}
+          <span style={{ color: CYAN, fontWeight: 600 }}>
+            ~130 nm guanine nanocrystals
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          inside its skin, tuning which wavelength of light is reflected —
+          from{" "}
+          <span style={{ color: CYAN, fontWeight: 600 }}>470 nm blue</span>{" "}
+          to{" "}
+          <span style={{ color: ORANGE, fontWeight: 600 }}>
+            630 nm orange
+          </span>{" "}
+          — a photonic crystal it can retune at will.
         </div>
       </div>
 
@@ -669,7 +754,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: DUST,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +762,10 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Teyssier et al. · Nature Communications 6 (2015) 6368</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: CYAN }}>●</span> tight lattice ·{" "}
+          <span style={{ color: ORANGE }}>●</span> loose lattice
         </span>
       </div>
     </AbsoluteFill>
