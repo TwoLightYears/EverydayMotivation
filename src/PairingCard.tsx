@@ -50,140 +50,217 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// ── Palette — drawn from real Magicicada septendecim coloration ──────────
+const PAPER = "#F1EAD6";
+const PAPER_DEEP = "#E7DEC5";
+const INK = "#1A140E";
+const INK_SOFT = "#3A2E20";
+const EYE_RED = "#D8351B";
+const WING_AMBER = "#E8912A";
+const UMBER = "#7A6A55";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+const YEARS = 17;
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// ────────────────────────────────────────────────────────────────────────
+// Cicada — dorsal view. Coordinates live in a 700×620 local box centred
+// on (350, 310), rendered inside a <g transform=…> from the parent SVG.
+// ────────────────────────────────────────────────────────────────────────
+const Cicada: React.FC<{ eyeGlow: number }> = ({ eyeGlow }) => {
+  // Wing venation — hand-tuned polylines fanning from the wing base.
+  const forewingRight = [
+    "M 350 240 Q 420 210 540 235 T 690 320 Q 660 355 560 360 T 400 340 Z",
+  ];
+  const forewingLeft = [
+    "M 350 240 Q 280 210 160 235 T 10 320 Q 40 355 140 360 T 300 340 Z",
+  ];
+  const hindwingRight = [
+    "M 360 260 Q 440 260 540 310 T 640 400 Q 580 420 500 400 T 380 355 Z",
+  ];
+  const hindwingLeft = [
+    "M 340 260 Q 260 260 160 310 T 60 400 Q 120 420 200 400 T 320 355 Z",
+  ];
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+  return (
+    <g>
+      {/* Cast shadow beneath the specimen */}
+      <ellipse cx={350} cy={585} rx={230} ry={14} fill={INK} opacity={0.09} />
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
+      {/* ── Hindwings (behind forewings) ─────────────────────── */}
+      {[hindwingRight[0], hindwingLeft[0]].map((d, i) => (
+        <g key={`hw-${i}`}>
+          <path d={d} fill={WING_AMBER} opacity={0.22} />
+          <path d={d} stroke={INK_SOFT} strokeWidth={1.1} fill="none" opacity={0.65} />
+        </g>
+      ))}
 
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
+      {/* ── Forewings ────────────────────────────────────────── */}
+      {[forewingRight[0], forewingLeft[0]].map((d, i) => (
+        <g key={`fw-${i}`}>
+          <path d={d} fill={WING_AMBER} opacity={0.32} />
+          <path d={d} stroke={INK} strokeWidth={1.4} fill="none" />
+        </g>
+      ))}
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
+      {/* Wing venation — right forewing */}
+      <g stroke={INK_SOFT} strokeWidth={0.9} fill="none" opacity={0.75}>
+        <path d="M 358 245 Q 440 245 540 260 T 685 320" />
+        <path d="M 360 258 Q 445 268 545 285 T 680 335" />
+        <path d="M 362 272 Q 450 288 550 310 T 670 348" />
+        <path d="M 366 288 Q 460 310 555 335 T 655 358" />
+        <path d="M 372 302 Q 470 328 555 350 T 630 360" />
+        {/* Cross-veins */}
+        <path d="M 430 245 Q 435 275 445 305" />
+        <path d="M 490 250 Q 500 285 512 320" />
+        <path d="M 555 260 Q 568 300 578 340" />
+        <path d="M 615 285 Q 620 320 620 350" />
+      </g>
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+      {/* Wing venation — left forewing (mirror) */}
+      <g stroke={INK_SOFT} strokeWidth={0.9} fill="none" opacity={0.75}>
+        <path d="M 342 245 Q 260 245 160 260 T 15 320" />
+        <path d="M 340 258 Q 255 268 155 285 T 20 335" />
+        <path d="M 338 272 Q 250 288 150 310 T 30 348" />
+        <path d="M 334 288 Q 240 310 145 335 T 45 358" />
+        <path d="M 328 302 Q 230 328 145 350 T 70 360" />
+        <path d="M 270 245 Q 265 275 255 305" />
+        <path d="M 210 250 Q 200 285 188 320" />
+        <path d="M 145 260 Q 132 300 122 340" />
+        <path d="M 85 285 Q 80 320 80 350" />
+      </g>
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
+      {/* ── Legs (6 total) ──────────────────────────────────── */}
+      <g stroke={INK} strokeWidth={2.2} fill="none" strokeLinecap="round" opacity={0.9}>
+        {/* Foreleg pair */}
+        <path d="M 328 245 Q 300 260 285 285 L 275 305" />
+        <path d="M 372 245 Q 400 260 415 285 L 425 305" />
+        {/* Midleg pair */}
+        <path d="M 322 285 Q 285 310 265 340 L 260 365" />
+        <path d="M 378 285 Q 415 310 435 340 L 440 365" />
+        {/* Hindleg pair */}
+        <path d="M 320 335 Q 275 370 255 415 L 258 440" />
+        <path d="M 380 335 Q 425 370 445 415 L 442 440" />
+      </g>
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
+      {/* ── Body: abdomen (segmented, blunt oval) ───────────── */}
+      <g>
+        <path
+          d="M 316 300
+             Q 316 360 322 400
+             Q 328 445 340 475
+             Q 350 490 360 475
+             Q 372 445 378 400
+             Q 384 360 384 300 Z"
+          fill={INK}
+        />
+        {/* Segment ridges */}
+        {[320, 340, 360, 380, 400, 420, 445].map((y, i) => {
+          const inset = i * 0.9;
+          const w = 34 - i * 1.6;
+          return (
+            <path
+              key={`seg-${i}`}
+              d={`M ${350 - w + inset} ${y} Q 350 ${y + 4} ${350 + w - inset} ${y}`}
+              stroke={PAPER}
+              strokeWidth={0.9}
+              fill="none"
+              opacity={0.55}
+            />
+          );
+        })}
+        {/* Warm amber midline (real cicadas show orange abdominal bands) */}
+        <path
+          d="M 350 300 L 350 480"
+          stroke={WING_AMBER}
+          strokeWidth={1.1}
+          opacity={0.4}
+        />
+      </g>
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+      {/* ── Thorax (mesonotum) — the Magicicada W-marking ──── */}
+      <g>
+        <ellipse cx={350} cy={260} rx={44} ry={38} fill={INK} />
+        {/* Signature amber "W" / cross-marking */}
+        <path
+          d="M 320 250 L 335 275 L 350 255 L 365 275 L 380 250"
+          stroke={WING_AMBER}
+          strokeWidth={2.4}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.75}
+        />
+      </g>
+
+      {/* ── Pronotum (behind head) ──────────────────────────── */}
+      <ellipse cx={350} cy={220} rx={46} ry={22} fill={INK} />
+      <path
+        d="M 310 218 Q 350 232 390 218"
+        stroke={WING_AMBER}
+        strokeWidth={1.2}
+        fill="none"
+        opacity={0.55}
+      />
+
+      {/* ── Head ────────────────────────────────────────────── */}
+      <ellipse cx={350} cy={195} rx={40} ry={18} fill={INK} />
+
+      {/* Eyes — the diagnostic Magicicada red */}
+      <g>
+        <ellipse
+          cx={318}
+          cy={197}
+          rx={12}
+          ry={10}
+          fill={EYE_RED}
+          opacity={0.9 + 0.1 * eyeGlow}
+        />
+        <ellipse cx={318} cy={197} rx={5} ry={4} fill="#FFB199" opacity={0.7 * eyeGlow + 0.2} />
+        <ellipse
+          cx={382}
+          cy={197}
+          rx={12}
+          ry={10}
+          fill={EYE_RED}
+          opacity={0.9 + 0.1 * eyeGlow}
+        />
+        <ellipse cx={382} cy={197} rx={5} ry={4} fill="#FFB199" opacity={0.7 * eyeGlow + 0.2} />
+
+        {/* Eye halo when eyeGlow is high */}
+        {eyeGlow > 0.05 && (
+          <>
+            <circle cx={318} cy={197} r={22} fill={EYE_RED} opacity={0.18 * eyeGlow} />
+            <circle cx={382} cy={197} r={22} fill={EYE_RED} opacity={0.18 * eyeGlow} />
+          </>
+        )}
+      </g>
+
+      {/* Antennae — very short bristles (cicadas have short antennae) */}
+      <g stroke={INK} strokeWidth={1.4} fill="none" strokeLinecap="round">
+        <path d="M 330 187 Q 322 178 315 174" />
+        <path d="M 370 187 Q 378 178 385 174" />
+      </g>
+    </g>
+  );
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  // Plate reveal
+  const plateSpring = spring({
+    frame,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.9 },
+    durationInFrames: 30,
+  });
+
+  // Title reveal (slightly after plate)
+  const titleSpring = spring({
+    frame: frame - fps * 0.5,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+    durationInFrames: 30,
   });
 
   const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
@@ -192,494 +269,420 @@ export const PairingCard: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // 17-year timeline — starts revealing at ~1.0s. 8 frames per tick.
+  const timelineStart = fps * 1.0;
+  const framesPerYear = 5;
+  const yearFloat = (frame - timelineStart) / framesPerYear;
+
+  // Eye glow ramps up as we approach year 17
+  const yearProgress = Math.max(0, Math.min(1, yearFloat / YEARS));
+  const eyeIgnite = interpolate(
+    yearFloat,
+    [YEARS - 1, YEARS, YEARS + 4],
+    [0, 1, 0.85],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // ── Layout — 1080 × 1350 portrait ───────────────────────────────
+  const M = 80; // outer margin
+  const plateTop = 140;
+  const plateBottom = 820;
+  const plateW = 1080 - M * 2; // 920
+  const plateH = plateBottom - plateTop; // 680
+
+  // Cicada renders in 700×620 local box, centred at plate mid-left
+  const cicX = 90; // x offset inside plate
+  const cicY = 40; // y offset inside plate
+  const cicScale = 0.92;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: PAPER, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* Faint paper grain */}
+      <svg
+        width={1080}
+        height={1350}
+        style={{ position: "absolute", inset: 0 }}
+      >
+        <defs>
+          <radialGradient id="paper-vignette" cx="50%" cy="45%" r="75%">
+            <stop offset="0%" stopColor={PAPER} stopOpacity={0} />
+            <stop offset="100%" stopColor={PAPER_DEEP} stopOpacity={0.5} />
+          </radialGradient>
+          <pattern id="dots" x="0" y="0" width={6} height={6} patternUnits="userSpaceOnUse">
+            <circle cx={1} cy={1} r={0.4} fill={UMBER} opacity={0.28} />
+          </pattern>
+        </defs>
+        <rect x={0} y={0} width={1080} height={1350} fill="url(#paper-vignette)" />
+      </svg>
+
+      {/* ── Top metadata band ─────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
-          top: 56,
-          left: 80,
-          right: 80,
+          top: 60,
+          left: M,
+          right: M,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: UMBER,
           fontFamily: inter,
-          fontSize: 13,
-          letterSpacing: 4.5,
+          fontSize: 12,
+          letterSpacing: 4.6,
           textTransform: "uppercase",
-          fontWeight: 500,
+          fontWeight: 600,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span>2026 · 09 · 30</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Hairline under metadata */}
+      <div
+        style={{
+          position: "absolute",
+          top: 96,
+          left: M,
+          right: M,
+          borderTop: `1px solid ${UMBER}`,
+          opacity: 0.35,
+        }}
+      />
+
+      {/* Specimen taxon */}
+      <div
+        style={{
+          position: "absolute",
+          top: 108,
+          left: M,
+          color: INK_SOFT,
+          fontFamily: playfair,
+          fontStyle: "italic",
+          fontSize: 15,
+          letterSpacing: 0.4,
+        }}
+      >
+        Magicicada septendecim · Linnaeus, 1758
+      </div>
+
+      {/* ── Main plate: cicada + numeral 17 ───────────────────────── */}
       <svg
         width={1080}
         height={1350}
         viewBox="0 0 1080 1350"
-        style={{ position: "absolute", inset: 0 }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: plateSpring,
+        }}
       >
-        <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
+        {/* Large serif numeral 17 sitting behind/beside the cicada as
+           the cryptographer's "key". */}
+        <g opacity={0.9}>
+          <text
+            x={870}
+            y={520}
+            textAnchor="end"
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontWeight={500}
+            fontSize={520}
+            fill={INK}
+            opacity={0.06}
           >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
+            17
+          </text>
+          {/* Small tick label above */}
+          <text
+            x={640}
+            y={225}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={4}
+            fontWeight={600}
+            fill={UMBER}
           >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
+            BROOD X · YEAR
+          </text>
+          <line x1={640} y1={238} x2={870} y2={238} stroke={UMBER} strokeWidth={0.8} opacity={0.55} />
+          <text
+            x={870}
+            y={370}
+            textAnchor="end"
+            fontFamily={playfair}
+            fontStyle="italic"
+            fontWeight={500}
+            fontSize={260}
+            fill={INK}
+          >
+            17
+          </text>
+          <text
+            x={640}
+            y={410}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={4}
+            fontWeight={500}
+            fill={UMBER}
+          >
+            YEARS · PRIME
+          </text>
+        </g>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
+        {/* Cicada plate (translated into position) */}
+        <g
+          transform={`translate(${M + cicX}, ${plateTop + cicY}) scale(${cicScale})`}
+          style={{
+            transform: `translate(${M + cicX}px, ${plateTop + cicY}px) scale(${cicScale})`,
+          }}
+        >
+          <Cicada eyeGlow={eyeIgnite} />
+        </g>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
+        {/* Single specimen pin mark on the pronotum (naturalist-plate convention) */}
+        <g stroke={UMBER} fill="none" opacity={0.6}>
+          <circle
+            cx={M + cicX + 350 * cicScale}
+            cy={plateTop + cicY + 220 * cicScale}
+            r={3}
+          />
+        </g>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
-          strokeWidth={1}
-        />
-
-        {/* Corner crop marks */}
+        {/* Corner ticks framing the plate */}
         {(
           [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
+            [M, plateTop, 1, 1],
+            [M + plateW, plateTop, -1, 1],
+            [M, plateTop + plateH, 1, -1],
+            [M + plateW, plateTop + plateH, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
+          <g key={i} stroke={UMBER} strokeWidth={1} fill="none" opacity={0.7}>
+            <line x1={cx} y1={cy} x2={cx + sx * 22} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 22} />
           </g>
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
+        {/* ── 17-year timeline ──────────────────────────────────── */}
+        <g>
+          {(() => {
+            const tlY = 870;
+            const tlLeftX = M + 20;
+            const tlRightX = M + plateW - 20;
+            const span = tlRightX - tlLeftX;
+            const step = span / (YEARS - 1);
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+              <>
+                {/* Baseline */}
+                <line
+                  x1={tlLeftX}
+                  y1={tlY}
+                  x2={tlRightX}
+                  y2={tlY}
+                  stroke={UMBER}
+                  strokeWidth={1}
+                  opacity={0.6}
                 />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
+                {/* Progressive filled line */}
+                <line
+                  x1={tlLeftX}
+                  y1={tlY}
+                  x2={tlLeftX + span * Math.min(1, yearProgress)}
+                  y2={tlY}
                   stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
+                  strokeWidth={2}
                 />
-              </g>
+
+                {/* Ticks */}
+                {Array.from({ length: YEARS }).map((_, i) => {
+                  const year = i + 1;
+                  const x = tlLeftX + i * step;
+                  const activated = yearFloat >= i;
+                  const isLast = year === YEARS;
+                  const pop = spring({
+                    frame: frame - (timelineStart + i * framesPerYear),
+                    fps,
+                    config: { damping: 12, mass: 0.4, stiffness: 180 },
+                    durationInFrames: 20,
+                  });
+                  const scale = activated ? pop : 0;
+                  const color = isLast && activated ? EYE_RED : INK;
+                  const tickH = isLast ? 22 : 14;
+                  return (
+                    <g key={`tick-${i}`}>
+                      <line
+                        x1={x}
+                        y1={tlY - tickH * scale}
+                        x2={x}
+                        y2={tlY}
+                        stroke={color}
+                        strokeWidth={isLast ? 2.5 : 1.6}
+                        opacity={activated ? 1 : 0.25}
+                      />
+                      {/* Year label — only 1, 5, 10, 15, 17 to keep it clean */}
+                      {[1, 5, 10, 15, 17].includes(year) && (
+                        <text
+                          x={x}
+                          y={tlY + 26}
+                          textAnchor="middle"
+                          fontFamily={inter}
+                          fontSize={11}
+                          letterSpacing={2}
+                          fontWeight={isLast ? 700 : 500}
+                          fill={isLast && activated ? EYE_RED : UMBER}
+                          opacity={activated || year !== YEARS ? 0.9 : 0.5}
+                        >
+                          {year.toString().padStart(2, "0")}
+                        </text>
+                      )}
+                      {/* Emergence flare at year 17 */}
+                      {isLast && activated && (
+                        <>
+                          <circle
+                            cx={x}
+                            cy={tlY - tickH}
+                            r={12 * eyeIgnite}
+                            fill={EYE_RED}
+                            opacity={0.28 * eyeIgnite}
+                          />
+                          <circle
+                            cx={x}
+                            cy={tlY - tickH}
+                            r={4}
+                            fill={EYE_RED}
+                          />
+                        </>
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* Axis labels flanking the timeline */}
+                <text
+                  x={tlLeftX}
+                  y={tlY - 28}
+                  fontFamily={inter}
+                  fontSize={10}
+                  letterSpacing={3}
+                  fontWeight={600}
+                  fill={UMBER}
+                >
+                  DORMANT · UNDERGROUND
+                </text>
+                <text
+                  x={tlRightX}
+                  y={tlY - 28}
+                  textAnchor="end"
+                  fontFamily={inter}
+                  fontSize={10}
+                  letterSpacing={3}
+                  fontWeight={700}
+                  fill={eyeIgnite > 0.3 ? EYE_RED : UMBER}
+                >
+                  EMERGENCE
+                </text>
+              </>
             );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
+          })()}
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ───────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
-          left: 80,
-          right: 80,
-          top: 905,
+          left: M,
+          right: M,
+          top: 950,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [14, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: EYE_RED,
             fontFamily: inter,
-            fontSize: 13,
+            fontSize: 12,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
-            fontWeight: 600,
+            fontWeight: 700,
+            marginBottom: 16,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role
+          <span style={{ color: UMBER, margin: "0 10px" }}>/</span>
+          <span style={{ color: INK, letterSpacing: 5 }}>Cryptographer</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: INK,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
+            fontSize: 78,
+            lineHeight: 0.98,
+            letterSpacing: -1.2,
             fontStyle: "italic",
+            maxWidth: 820,
           }}
         >
-          The brainless
+          Seventeen quiet years,
           <br />
-          city planner.
+          then a chorus.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 26,
+            color: INK_SOFT,
             fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
+            fontSize: 18,
+            lineHeight: 1.45,
             fontWeight: 400,
             maxWidth: 880,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          Every brood of{" "}
+          <span style={{ color: INK, fontWeight: 600 }}>
+            Magicicada septendecim
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          emerges on a{" "}
+          <span style={{ color: EYE_RED, fontWeight: 600 }}>
+            prime-numbered cycle
+          </span>{" "}
+          — 13 or 17 years — so its generations share no common factor with any
+          predator that reproduces on a 2-, 3-, 4-, 5- or 6-year rhythm. A
+          number-theoretic key, encoded into a life history.
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ────────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
-          left: 80,
-          right: 80,
-          bottom: 50,
+          left: M,
+          right: M,
+          bottom: 46,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: UMBER,
           fontFamily: inter,
-          fontSize: 11,
+          fontSize: 10.5,
           letterSpacing: 3,
           textTransform: "uppercase",
-          fontWeight: 500,
+          fontWeight: 600,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Goles, Schulz & Markus · Complexity 6 · 2001</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: EYE_RED }}>●</span> Prime year = safe emergence
         </span>
       </div>
     </AbsoluteFill>
