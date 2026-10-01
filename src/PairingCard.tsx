@@ -50,158 +50,257 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// ── Palette (from the horseshoe crab + its hemolymph) ────────────────
+const INK = "#07111F";
+const PANEL = "#0D1A2A";
+const BRONZE = "#3C2A1A";
+const BRONZE_EDGE = "#5A4027";
+const SAND = "#8A6E42";
+const SHORE = "#D9C19A";
+const COBALT = "#2E8BC9";
+const COBALT_GLOW = "#9ED2F2";
+const GRAY = "#6E7889";
+const GRID = "#13202F";
+const GRID_MAJOR = "#1A2A3E";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
-
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+// ── Deterministic seeded RNG (mulberry32) ─────────────────────────────
+const rng = (seed: number) => {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+// ── Coagulation thread graph ──────────────────────────────────────────
+// Seeded dendritic growth from the cardiac sinus. Each thread is a
+// quadratic path from (x0,y0) → (x1,y1) with a slight bend.
+type Thread = {
+  d: string;
+  len: number;
+  delay: number; // 0..1
+  width: number;
+  branchOf: number; // -1 primary, else index of parent
+};
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+// Sinus sits on the opisthosoma midline — the pericardial membrane,
+// which is where phlebotomists actually insert the needle on Limulus.
+const SINUS = { x: 540, y: 584 };
+// Frame crop for the coagulation field (keep it inside the lab plate):
+const FIELD = { x: 95, y: 150, w: 890, h: 700 };
+
+const inField = (x: number, y: number): boolean =>
+  x >= FIELD.x && x <= FIELD.x + FIELD.w && y >= FIELD.y && y <= FIELD.y + FIELD.h;
+
+const buildThreads = (): Thread[] => {
+  const r = rng(20261001);
+  const threads: Thread[] = [];
+  const PRIMARIES = 56;
+
+  const pushThread = (
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    bendAmt: number,
+    delay: number,
+    width: number,
+    branchOf: number,
+  ) => {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const len = Math.hypot(dx, dy);
+    if (len < 6) return null;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const mx = (x0 + x1) / 2 + nx * bendAmt;
+    const my = (y0 + y1) / 2 + ny * bendAmt;
+    const t: Thread = {
+      d: `M ${x0.toFixed(2)} ${y0.toFixed(2)} Q ${mx.toFixed(2)} ${my.toFixed(2)} ${x1.toFixed(2)} ${y1.toFixed(2)}`,
+      len,
+      delay,
+      width,
+      branchOf,
+    };
+    threads.push(t);
+    return t;
+  };
+
+  for (let i = 0; i < PRIMARIES; i++) {
+    // Avoid cardinal clusters by jittered uniform angles.
+    const base = (i / PRIMARIES) * Math.PI * 2;
+    const theta = base + (r() - 0.5) * 0.14;
+    // Slight downward bias to catch the empty bottom quadrant, but keep
+    // the field feeling radial.
+    const southness = Math.sin(theta); // −1 up … +1 down
+    const length = 170 + r() * 230 + Math.max(0, southness) * 100;
+    let x1 = SINUS.x + Math.cos(theta) * length;
+    let y1 = SINUS.y + Math.sin(theta) * length;
+    // Keep inside field
+    if (!inField(x1, y1)) {
+      const scale = Math.min(
+        Math.abs((FIELD.x + 20 - SINUS.x) / Math.max(1e-6, Math.cos(theta))),
+        Math.abs((FIELD.x + FIELD.w - 20 - SINUS.x) / Math.max(1e-6, Math.cos(theta))),
+        Math.abs((FIELD.y + 20 - SINUS.y) / Math.max(1e-6, Math.sin(theta))),
+        Math.abs((FIELD.y + FIELD.h - 20 - SINUS.y) / Math.max(1e-6, Math.sin(theta))),
+      );
+      x1 = SINUS.x + Math.cos(theta) * scale;
+      y1 = SINUS.y + Math.sin(theta) * scale;
+    }
+    const bend = (r() - 0.5) * length * 0.22;
+    const delay = 0.08 + r() * 0.35;
+    const w = 1.1 + r() * 0.9;
+    const primary = pushThread(SINUS.x, SINUS.y, x1, y1, bend, delay, w, -1);
+
+    if (!primary) continue;
+
+    // 3-5 sub-branches sprouting mid-thread, with grand-children
+    const nSubs = 3 + Math.floor(r() * 3);
+    for (let s = 0; s < nSubs; s++) {
+      const tStart = 0.35 + r() * 0.5;
+      const sx = SINUS.x + (x1 - SINUS.x) * tStart;
+      const sy = SINUS.y + (y1 - SINUS.y) * tStart;
+      const branchAngle = theta + (r() - 0.5) * 1.3;
+      const subLen = 30 + r() * 110;
+      let bx = sx + Math.cos(branchAngle) * subLen;
+      let by = sy + Math.sin(branchAngle) * subLen;
+      if (!inField(bx, by)) {
+        bx = sx + Math.cos(branchAngle) * subLen * 0.4;
+        by = sy + Math.sin(branchAngle) * subLen * 0.4;
+      }
+      const subBend = (r() - 0.5) * subLen * 0.3;
+      const subDelay = delay + 0.08 + r() * 0.18;
+      const subW = Math.max(0.6, w * (0.55 + r() * 0.25));
+      pushThread(sx, sy, bx, by, subBend, subDelay, subW, threads.length - 1 - s);
+    }
   }
-  return ((h >>> 0) % 1000) / 1000;
+
+  return threads;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
+const THREADS = buildThreads();
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// ── Horseshoe crab silhouette (Limulus polyphemus, dorsal view) ──────
+// Simple, legible, in proportion:
+//   full body width ≈ 500 px, prosoma depth ≈ 340, opisthosoma visible
+//   depth ≈ 136, telson length ≈ 230. Carapace centre (540, 420).
 
+// Prosoma — a smooth, closed horseshoe dome. The characteristic cornual
+// spines are hinted at with a small inward sweep at the back corners,
+// not drawn as separate projections.
+const PROSOMA_D =
+  "M 310 542 " +
+  "C 290 448, 304 322, 380 262 " +
+  "C 438 218, 498 208, 540 208 " +
+  "C 582 208, 642 218, 700 262 " +
+  "C 776 322, 790 448, 770 542 " +
+  "Z";
+
+// Opisthosoma — hexagonal plate (top portion hidden under prosoma back)
+const OPISTHOSOMA_D =
+  "M 384 528 " +
+  "L 384 592 " +
+  "L 418 644 " +
+  "L 468 672 " +
+  "L 540 684 " +
+  "L 612 672 " +
+  "L 662 644 " +
+  "L 696 592 " +
+  "L 696 528 " +
+  "Z";
+
+// Movable spines (small backward-pointing nubs on opisthosoma margins).
+// Keep them small and clearly on the visible plate, not at the hinge.
+const SPINE_POINTS: Array<[number, number, number]> = [
+  [386, 568, 8],
+  [388, 588, 8],
+  [398, 610, 8],
+  [416, 634, 8],
+  [694, 568, -8],
+  [692, 588, -8],
+  [682, 610, -8],
+  [664, 634, -8],
+];
+
+// Telson (long tapering tail spike)
+const TELSON_D =
+  "M 528 684 " +
+  "L 552 684 " +
+  "L 544 882 " +
+  "L 540 898 " +
+  "L 536 882 " +
+  "Z";
+
+// Compound eyes — vertical ovals on the lateral ridges, no rotation
+const EYE_LEFT = { cx: 390, cy: 346, rx: 9, ry: 16 };
+const EYE_RIGHT = { cx: 690, cy: 346, rx: 9, ry: 16 };
+const OCELLI = [
+  { cx: 533, cy: 258, r: 2.6 },
+  { cx: 547, cy: 258, r: 2.6 },
+];
+
+// Dorsal ridge/midline on prosoma (subtle highlight line)
+const RIDGE_D = "M 540 212 C 538 300, 542 420, 540 528";
+
+// ── Component ─────────────────────────────────────────────────────────
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Timings ────────────────────────────────────────────────────────
+  const T_GRID = fps * 0.0;
+  const T_CRAB = fps * 0.3;
+  const T_SINUS = fps * 1.0;
+  const T_WEB = fps * 1.4;
+  const T_TITLE = fps * 1.1;
+  const T_HOOK = fps * 1.9;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
-    fps,
-    config: { damping: 200, mass: 0.8 },
+  const gridOp = interpolate(frame, [T_GRID, T_GRID + fps * 0.6], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const crabOp = interpolate(frame, [T_CRAB, T_CRAB + fps * 0.9], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
+  const crabY = interpolate(frame, [T_CRAB, T_CRAB + fps * 1.0], [12, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
+  });
+
+  const sinusSpring = spring({
+    frame: frame - T_SINUS,
+    fps,
+    config: { damping: 10, stiffness: 160, mass: 0.6 },
+  });
+
+  const webTime = Math.max(0, frame - T_WEB) / (fps * 2.6);
+
+  const titleSpring = spring({
+    frame: frame - T_TITLE,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+
+  const hookOpacity = interpolate(frame, [T_HOOK, T_HOOK + fps * 1.0], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Subtle sinus pulse (continuous)
+  const pulse = 0.5 + 0.5 * Math.sin((frame / fps) * Math.PI * 1.4);
+
+  // ── Page layout ───────────────────────────────────────────────────
+  const FRAME = { x: 60, y: 130, w: 960, h: 790 };
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -225,11 +324,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: COBALT }}>2026 · 10 · 01</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Specimen plate */}
       <svg
         width={1080}
         height={1350}
@@ -241,12 +340,12 @@ export const PairingCard: React.FC = () => {
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={40}
+            height={40}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d="M 40 0 L 0 0 0 40"
               fill="none"
               stroke={GRID}
               strokeWidth={1}
@@ -256,59 +355,88 @@ export const PairingCard: React.FC = () => {
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={160}
+            height={160}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d="M 160 0 L 0 0 0 160"
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="panel-vignette" cx="50%" cy="42%" r="78%">
+            <stop offset="0%" stopColor="#102033" stopOpacity={1} />
+            <stop offset="100%" stopColor={PANEL} stopOpacity={1} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          <radialGradient id="dish" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={COBALT} stopOpacity={0.18} />
+            <stop offset="55%" stopColor={COBALT} stopOpacity={0.05} />
+            <stop offset="100%" stopColor={COBALT} stopOpacity={0} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <linearGradient id="carapace" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={BRONZE_EDGE} />
+            <stop offset="55%" stopColor={BRONZE} />
+            <stop offset="100%" stopColor="#2A1C10" />
+          </linearGradient>
+
+          <radialGradient id="sinus-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={COBALT_GLOW} stopOpacity={1} />
+            <stop offset="30%" stopColor={COBALT} stopOpacity={0.75} />
+            <stop offset="100%" stopColor={COBALT} stopOpacity={0} />
+          </radialGradient>
+
+          <filter id="thread-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          <filter id="soft-blur">
+            <feGaussianBlur stdDeviation="2" />
+          </filter>
+
+          <clipPath id="plate-clip">
+            <rect
+              x={FRAME.x + 1}
+              y={FRAME.y + 1}
+              width={FRAME.w - 2}
+              height={FRAME.h - 2}
+              rx={2}
+            />
+          </clipPath>
         </defs>
 
-        {/* Drafting board */}
+        {/* Lab plate */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#panel-vignette)"
         />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
+        <g opacity={gridOp}>
+          <rect
+            x={FRAME.x}
+            y={FRAME.y}
+            width={FRAME.w}
+            height={FRAME.h}
+            fill="url(#grid)"
+          />
+          <rect
+            x={FRAME.x}
+            y={FRAME.y}
+            width={FRAME.w}
+            height={FRAME.h}
+            fill="url(#grid-major)"
+          />
+        </g>
 
         {/* Inner thin border */}
         <rect
@@ -317,7 +445,7 @@ export const PairingCard: React.FC = () => {
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#1D2A3B"
           strokeWidth={1}
         />
 
@@ -330,283 +458,416 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={SAND} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Specimen tag — upper-left of plate */}
         <g
           transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
           fill={GRAY}
           fontFamily={inter}
           fontWeight={600}
           fontSize={11}
-          letterSpacing={3}
+          letterSpacing={3.4}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text textAnchor="start">PLATE III · DORSAL</text>
         </g>
 
-        {/* Scale bar */}
+        {/* Scale bar — bottom right */}
         <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
+          transform={`translate(${FRAME.x + FRAME.w - 180}, ${
             FRAME.y + FRAME.h - 28
           })`}
-          stroke={GRAY}
-          fill={GRAY}
+          stroke={SAND}
+          fill={SAND}
           fontFamily={inter}
           fontSize={10}
           letterSpacing={3}
           fontWeight={500}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
+          <line x1={0} y1={0} x2={120} y2={0} strokeWidth={1.2} />
           <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <line x1={60} y1={-3} x2={60} y2={3} strokeWidth={1.2} />
+          <line x1={120} y1={-5} x2={120} y2={5} strokeWidth={1.2} />
+          <text x={130} y={4} stroke="none">
+            25 CM
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
+        {/* Everything inside the plate is clipped */}
+        <g clipPath="url(#plate-clip)">
+          {/* Faint petri-dish reference circle behind the crab */}
+          <g opacity={gridOp * 0.9}>
+            <circle
+              cx={540}
+              cy={510}
+              r={400}
+              fill="url(#dish)"
+            />
+            <circle
+              cx={540}
+              cy={510}
+              r={400}
+              fill="none"
+              stroke={COBALT}
+              strokeOpacity={0.08}
+              strokeWidth={1}
+            />
+            <circle
+              cx={540}
+              cy={510}
+              r={330}
+              fill="none"
+              stroke={COBALT}
+              strokeOpacity={0.06}
+              strokeWidth={1}
+              strokeDasharray="2 6"
+            />
+          </g>
+
+          {/* ── Coagulation threads (grow outward from sinus) ──── */}
+          <g filter="url(#thread-glow)">
+            {THREADS.map((t, i) => {
+              const localT = (webTime - t.delay) / 0.55;
+              const grow = Math.max(0, Math.min(1, localT));
+              const eased = 1 - Math.pow(1 - grow, 2.6);
+              const offset = t.len * (1 - eased);
+              return (
+                <path
+                  key={`thread-${i}`}
+                  d={t.d}
+                  stroke={COBALT}
+                  strokeWidth={t.width}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={t.len}
+                  strokeDashoffset={offset}
+                  strokeOpacity={0.78 * eased}
+                />
+              );
+            })}
+          </g>
+          {/* Threads bright core */}
+          {THREADS.map((t, i) => {
+            const localT = (webTime - t.delay) / 0.55;
             const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+            const eased = 1 - Math.pow(1 - grow, 2.6);
+            const offset = t.len * (1 - eased);
             return (
               <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
+                key={`thread-core-${i}`}
+                d={t.d}
+                stroke={COBALT_GLOW}
+                strokeWidth={Math.max(0.5, t.width * 0.42)}
                 fill="none"
                 strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+                strokeDasharray={t.len}
+                strokeDashoffset={offset}
+                strokeOpacity={0.6 * eased}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
+          {/* ── Horseshoe crab ─────────────────────────────────── */}
+          <g
+            opacity={crabOp}
+            transform={`translate(0, ${crabY})`}
+          >
+            {/* Soft underbody shadow */}
+            <ellipse
+              cx={540}
+              cy={895}
+              rx={230}
+              ry={10}
+              fill="#000"
+              opacity={0.4}
+              filter="url(#soft-blur)"
+            />
+
+            {/* Telson */}
+            <path d={TELSON_D} fill={BRONZE} stroke={BRONZE_EDGE} strokeWidth={1} />
+            <line
+              x1={540}
+              y1={678}
+              x2={540}
+              y2={890}
+              stroke={SAND}
+              strokeWidth={0.9}
+              strokeOpacity={0.3}
+            />
+
+            {/* Opisthosoma — drawn BEFORE prosoma so prosoma back covers the hinge */}
+            <path
+              d={OPISTHOSOMA_D}
+              fill={BRONZE}
+              stroke={BRONZE_EDGE}
+              strokeWidth={1.3}
+            />
+            {/* Soft cast shadow of prosoma onto opisthosoma for depth */}
+            <ellipse
+              cx={540}
+              cy={548}
+              rx={150}
+              ry={10}
+              fill="#000"
+              opacity={0.32}
+              filter="url(#soft-blur)"
+            />
+            {/* Opisthosoma segmentation (6 somites, visible below prosoma hinge) */}
+            {[552, 570, 588, 606, 624, 642].map((y) => {
+              // Narrow the lines near the pointed bottom
+              const taper = Math.max(0, (y - 620) * 1.4);
               return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
+                <line
+                  key={`seg-${y}`}
+                  x1={400 + taper}
+                  y1={y}
+                  x2={680 - taper}
+                  y2={y}
+                  stroke={BRONZE_EDGE}
+                  strokeOpacity={0.55}
+                  strokeWidth={0.9}
+                />
               );
-            })()}
+            })}
+            {/* Opisthosoma dorsal midline ridge */}
+            <line
+              x1={540}
+              y1={548}
+              x2={540}
+              y2={670}
+              stroke={BRONZE_EDGE}
+              strokeOpacity={0.55}
+              strokeWidth={0.9}
+            />
+            {/* Movable spines */}
+            {SPINE_POINTS.map(([x, y, s], i) => (
+              <path
+                key={`sp-${i}`}
+                d={`M ${x} ${y} l ${s} 5 l 0 -10 Z`}
+                fill={BRONZE_EDGE}
+              />
+            ))}
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
+            {/* Prosoma (cephalothorax) — on top of opisthosoma hinge */}
+            <path
+              d={PROSOMA_D}
+              fill="url(#carapace)"
+              stroke={BRONZE_EDGE}
+              strokeWidth={1.6}
+            />
+            {/* Prosoma dorsal ridge (highlight) */}
+            <path
+              d={RIDGE_D}
+              stroke={SAND}
+              strokeWidth={1.2}
+              strokeOpacity={0.55}
+              fill="none"
+            />
+            {/* Prosoma rim highlight (just inside outline) */}
+            <path
+              d="M 312 536 C 294 442, 310 322, 384 266 C 440 224, 500 214, 540 214 C 580 214, 640 224, 696 266 C 770 322, 786 442, 768 536"
+              fill="none"
+              stroke={SAND}
+              strokeOpacity={0.3}
+              strokeWidth={1.1}
+            />
+            {/* Secondary lateral ridges (two swept arcs on the carapace) */}
+            <path
+              d="M 400 530 C 384 420, 436 290, 540 262"
+              fill="none"
+              stroke={SAND}
+              strokeOpacity={0.22}
+              strokeWidth={0.9}
+            />
+            <path
+              d="M 680 530 C 696 420, 644 290, 540 262"
+              fill="none"
+              stroke={SAND}
+              strokeOpacity={0.22}
+              strokeWidth={0.9}
+            />
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
+            {/* Compound eyes — vertical ovals, no highlight */}
+            {[EYE_LEFT, EYE_RIGHT].map((e, i) => (
+              <ellipse
+                key={`eye-${i}`}
+                cx={e.cx}
+                cy={e.cy}
+                rx={e.rx}
+                ry={e.ry}
+                fill="#1A0D05"
+                stroke={BRONZE_EDGE}
+                strokeOpacity={0.6}
+                strokeWidth={0.8}
+              />
+            ))}
+            {/* Median ocelli (tiny simple eyes on the midline) */}
+            {OCELLI.map((o, i) => (
+              <circle
+                key={`oc-${i}`}
+                cx={o.cx}
+                cy={o.cy}
+                r={o.r}
+                fill="#120A05"
+              />
+            ))}
+
+            {/* Cardiac sinus annotation — leader exits via the right
+                opisthosoma margin into the free field, not through
+                any shell structure. */}
+            <g
+              opacity={interpolate(frame, [T_SINUS, T_SINUS + fps * 0.6], [0, 1], {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+              })}
+            >
+              <line
+                x1={SINUS.x + 6}
+                y1={SINUS.y + 2}
+                x2={760}
+                y2={706}
+                stroke={COBALT}
+                strokeWidth={1}
+                strokeOpacity={0.6}
+              />
+              <line
+                x1={760}
+                y1={706}
+                x2={930}
+                y2={706}
+                stroke={COBALT}
+                strokeWidth={1}
+                strokeOpacity={0.6}
+              />
+              {/* Legibility chip behind callout text */}
+              <rect
+                x={760}
+                y={684}
+                width={176}
+                height={38}
+                fill={INK}
+                opacity={0.78}
+                rx={1}
+              />
               <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
+                x={930}
+                y={700}
+                textAnchor="end"
+                fill={COBALT_GLOW}
                 fontFamily={inter}
                 fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
+                letterSpacing={2.8}
+                fontWeight={600}
               >
-                {l.text}
+                CARDIAC SINUS
               </text>
-            );
-          })}
+              <text
+                x={930}
+                y={716}
+                textAnchor="end"
+                fill={SHORE}
+                fontFamily={inter}
+                fontSize={10}
+                letterSpacing={2.2}
+                fontWeight={500}
+              >
+                Cu-HAEMOCYANIN · pH 7.4
+              </text>
+            </g>
+          </g>
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+          {/* ── Sinus droplet (cobalt pulse) ───────────────────── */}
+          <g>
+            <circle
+              cx={SINUS.x}
+              cy={SINUS.y}
+              r={28 + pulse * 10}
+              fill="url(#sinus-glow)"
+              opacity={0.55 * sinusSpring}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+            <circle
+              cx={SINUS.x}
+              cy={SINUS.y}
+              r={10 + pulse * 1.5}
+              fill={COBALT}
+              opacity={sinusSpring}
             />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
+            <circle
+              cx={SINUS.x - 2}
+              cy={SINUS.y - 3}
+              r={3.4}
+              fill={COBALT_GLOW}
+              opacity={sinusSpring}
             />
+          </g>
+
+          {/* Caption on plate */}
+          <g
+            transform={`translate(${FRAME.x + 26}, ${FRAME.y + FRAME.h - 28})`}
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={3}
+            fontWeight={500}
+          >
+            <text>
+              FIG. 1 · <tspan fill={SHORE}>LIMULUS POLYPHEMUS</tspan> · DORSAL VIEW
+            </text>
+          </g>
+
+          {/* Right-side callout: LAL assay */}
+          <g
+            opacity={interpolate(frame, [T_WEB + fps * 0.4, T_WEB + fps * 1.4], [0, 1], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+            })}
+          >
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
+              x={FRAME.x + FRAME.w - 26}
+              y={FRAME.y + 56}
+              textAnchor="end"
+              fill={COBALT_GLOW}
               fontFamily={inter}
               fontSize={11}
+              letterSpacing={3.4}
               fontWeight={600}
-              letterSpacing={3.5}
             >
-              TOKYO
+              LAL ASSAY · GEL-CLOT
+            </text>
+            <text
+              x={FRAME.x + FRAME.w - 26}
+              y={FRAME.y + 72}
+              textAnchor="end"
+              fill={SAND}
+              fontFamily={inter}
+              fontSize={10}
+              letterSpacing={2.6}
+              fontWeight={500}
+            >
+              DETECTION LIMIT ≈ 10⁻¹² g · mL⁻¹
             </text>
           </g>
         </g>
-
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
-        </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ───────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 970,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: COBALT,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -617,7 +878,7 @@ export const PairingCard: React.FC = () => {
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Clinical Pathologist
           </span>
         </div>
 
@@ -626,36 +887,40 @@ export const PairingCard: React.FC = () => {
             color: "#F4F4F6",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 82,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The ancient doctor
           <br />
-          city planner.
+          in your medicine.
         </div>
 
         <div
           style={{
-            marginTop: 30,
+            marginTop: 28,
             color: "#C8CAD0",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
             maxWidth: 880,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          The horseshoe crab's copper-based blue blood clots in the presence
+          of about{" "}
+          <span style={{ color: COBALT_GLOW, fontWeight: 600 }}>
+            10⁻¹² g of bacterial endotoxin per millilitre
+          </span>
+          . Since the FDA cleared the{" "}
+          <span style={{ color: COBALT_GLOW, fontWeight: 600 }}>
+            LAL assay
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          in 1977, every injectable drug and every vaccine has had to pass
+          this 450-million-year-old animal before it reaches a human arm.
         </div>
       </div>
 
@@ -677,9 +942,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Levin & Bang · Bull. Johns Hopkins Hosp. 115 (1964)</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: COBALT }}>●</span> Hemocyanin · Cu(II)
         </span>
       </div>
     </AbsoluteFill>
