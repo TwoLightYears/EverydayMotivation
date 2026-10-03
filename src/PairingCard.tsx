@@ -50,161 +50,157 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — drawn from the concept's visual brief (narwhal + Arctic)
+const BG = "#07111F";
+const WATER = "#0E1D32";
+const WATER_INNER = "#13273F";
+const ICE = "#A9C3DD";
+const ICE_DIM = "#6E89A6";
+const IVORY = "#F1E6CF";
+const IVORY_DEEP = "#C9B98F";
+const IVORY_SHADOW = "#8E7E54";
+const GOLD = "#D9A26A";
+const GOLD_SOFT = "#E8BE91";
+const MOTTLE = "#3C5168";
+const GRID = "#132537";
+const GRID_MAJOR = "#1C3049";
+const RULE = "#2B4056";
+const DIM = "#7E92A9";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Specimen plate layout ────────────────────────────────────────────
+const FRAME = { x: 60, y: 130, w: 960, h: 711 };
+// Inner SVG coord space: 1080 × 800 → scaled to FRAME.w
+const INNER_W = 1080;
+const INNER_H = 800;
+const SCALE = FRAME.w / INNER_W;
+
+// Tusk geometry (inner coords)
+const TUSK_BASE_X = 100;
+const TUSK_TIP_X = 650;
+const TUSK_Y = 408;
+const TUSK_BASE_R = 36; // half-thickness at base
+const TUSK_TIP_R = 3; // half-thickness at tip
+
+// Tasting-wheel geometry (inner coords)
+const DIAL_CX = 820;
+const DIAL_CY = TUSK_Y;
+const DIAL_RINGS = [68, 102, 136, 170]; // concentric gauge ring radii
+
+type Axis = {
+  key: string;
+  label: string;
+  reading: string;
+  angleDeg: number; // 0° = east, measured clockwise
+};
+// 3-axis gauge; the 4th (west) axis is implied by the tusk feeding in.
+const AXES: Axis[] = [
+  { key: "sal", label: "SALINITY", reading: "32.1 psu", angleDeg: -90 },
+  { key: "tmp", label: "TEMP", reading: "−1.8 °C", angleDeg: 0 },
+  { key: "prs", label: "PRESSURE", reading: "48 bar", angleDeg: 90 },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+function tuskRadiusAt(x: number): number {
+  const u = Math.max(
+    0,
+    Math.min(1, (x - TUSK_BASE_X) / (TUSK_TIP_X - TUSK_BASE_X)),
+  );
+  // Slight easing so taper looks organic rather than linear.
+  const e = 1 - Math.pow(u, 1.25);
+  return TUSK_TIP_R + (TUSK_BASE_R - TUSK_TIP_R) * e;
+}
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// Degrees → radians helper.
+const d2r = (d: number) => (d * Math.PI) / 180;
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// Polar helper for the dial.
+function polar(cx: number, cy: number, r: number, deg: number) {
+  const a = d2r(deg);
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+}
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Scene timing (seconds) ─────────────────────────────────────────
+  // 0.0  frame fades in
+  // 0.2–1.9  tusk draws in from left
+  // 1.2–2.1  nerve-section inset blooms
+  // 1.6–2.5  dial rings bloom outward
+  // 2.3–2.9  gold pointer settles on salinity
+  // 2.6→loop  rings pulse (4 s period)
+  // 1.0–1.9  title springs in
+  // 1.6–2.4  hook paragraph fades in
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const t = Math.max(0, frame) / fps;
+
+  const easedT = (start: number, span: number) => {
+    const u = Math.max(0, Math.min(1, (t - start) / span));
+    return 1 - Math.pow(1 - u, 3);
+  };
+
+  const tuskDraw = easedT(0.2, 1.7);
+  const sectionIn = easedT(1.2, 0.9);
+  const ringBloom = easedT(1.6, 0.9);
+  const axesIn = easedT(2.0, 0.6);
+  const pointerT = easedT(2.3, 0.6);
+  const pulsePhase = ((t - 2.6) % 4) / 4;
+  const pulseIn = Math.min(1, Math.max(0, (t - 2.6) * 2));
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 1.0,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.9 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 1.6, fps * 2.4], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Pointer angle: eases from the chemistry axis (180°) to salinity (-90°).
+  const pointerDeg = interpolate(pointerT, [0, 1], [180, -90]);
+  const pointerLen = interpolate(
+    pointerT,
+    [0, 1],
+    [DIAL_RINGS[3] - 4, DIAL_RINGS[3] - 6],
+  );
+  const pointerTip = polar(DIAL_CX, DIAL_CY, pointerLen, pointerDeg);
+
+  // ── Tusk body path ────────────────────────────────────────────────
+  // A smooth tapered sheath with slight sag at the base.
+  const tuskLen = TUSK_TIP_X - TUSK_BASE_X;
+  const drawnTipX = TUSK_BASE_X + tuskLen * tuskDraw;
+  const drawnTipR = tuskRadiusAt(drawnTipX);
+  const tuskBodyPath =
+    `M ${TUSK_BASE_X} ${TUSK_Y - TUSK_BASE_R}` +
+    ` L ${drawnTipX - 2} ${TUSK_Y - drawnTipR}` +
+    ` Q ${drawnTipX + 2} ${TUSK_Y} ${drawnTipX - 2} ${TUSK_Y + drawnTipR}` +
+    ` L ${TUSK_BASE_X} ${TUSK_Y + TUSK_BASE_R}` +
+    ` Z`;
+
+  // ── Helical grooves ───────────────────────────────────────────────
+  // We draw diagonals that cross the tusk's width to suggest a left-handed
+  // spiral. Each groove is a short Q-curve giving a 3D "wrap" cue.
+  const GROOVE_SPACING = 15; // px along the x axis
+  const GROOVE_SLANT = 36; // px — the x-distance between top anchor and bottom anchor
+  const grooves: { xTop: number; xBot: number; rTop: number; rBot: number; mid: number }[] = [];
+  for (let x = TUSK_BASE_X - 6; x < drawnTipX - 12; x += GROOVE_SPACING) {
+    const xTop = x;
+    const xBot = x + GROOVE_SLANT;
+    if (xBot > drawnTipX - 6) continue;
+    const rTop = tuskRadiusAt(xTop);
+    const rBot = tuskRadiusAt(xBot);
+    grooves.push({ xTop, xBot, rTop, rBot, mid: (xTop + xBot) / 2 });
+  }
+
+  // Narwhal silhouette (simplified lateral profile), inner coords.
+  // Body from x≈420 to x≈760, y≈620..680. The tusk emerges at ~(420, 630).
+  const whaleCX = 530;
+  const whaleCY = 640;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: BG, fontFamily: inter }}>
       <style>{fontCss}</style>
 
       {/* Top metadata band */}
@@ -217,7 +213,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: ICE_DIM,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +221,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: GOLD }}>2026 · 10 · 03</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Specimen plate + diagram */}
       <svg
         width={1080}
         height={1350}
@@ -237,49 +233,61 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
+          {/* Specimen plate background */}
+          <radialGradient id="plate-vignette" cx="50%" cy="42%" r="70%">
+            <stop offset="0%" stopColor={WATER_INNER} />
+            <stop offset="100%" stopColor={WATER} />
+          </radialGradient>
+
+          {/* Grid patterns on the plate */}
           <pattern
-            id="grid"
+            id="plate-grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={48 * SCALE}
+            height={48 * SCALE}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d={`M ${48 * SCALE} 0 L 0 0 0 ${48 * SCALE}`}
               fill="none"
               stroke={GRID}
               strokeWidth={1}
             />
           </pattern>
           <pattern
-            id="grid-major"
+            id="plate-grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={192 * SCALE}
+            height={192 * SCALE}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d={`M ${192 * SCALE} 0 L 0 0 0 ${192 * SCALE}`}
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          {/* Tusk ivory shading — perpendicular highlight stripe */}
+          <linearGradient id="tusk-shade" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={IVORY_DEEP} />
+            <stop offset="22%" stopColor={IVORY} />
+            <stop offset="50%" stopColor="#FFF9E7" />
+            <stop offset="78%" stopColor={IVORY} />
+            <stop offset="100%" stopColor={IVORY_SHADOW} />
+          </linearGradient>
+
+          {/* Ring gradient for dial — subtle inner glow */}
+          <radialGradient id="dial-core" cx="50%" cy="50%" r="60%">
+            <stop offset="0%" stopColor={GOLD} stopOpacity={0.08} />
+            <stop offset="100%" stopColor={GOLD} stopOpacity={0} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -287,27 +295,27 @@ export const PairingCard: React.FC = () => {
           </filter>
         </defs>
 
-        {/* Drafting board */}
+        {/* Plate background */}
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#board-vignette)"
+          fill="url(#plate-vignette)"
         />
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#grid)"
+          fill="url(#plate-grid)"
         />
         <rect
           x={FRAME.x}
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#grid-major)"
+          fill="url(#plate-grid-major)"
         />
 
         {/* Inner thin border */}
@@ -317,11 +325,11 @@ export const PairingCard: React.FC = () => {
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke={RULE}
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner crop marks — gold */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,266 +338,611 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={GOLD} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Specimen label — top-left */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 34})`}
+          fill={ICE_DIM}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
           letterSpacing={3}
+          fontWeight={600}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <text>SPECIMEN</text>
+          <text y={16} fill={ICE} letterSpacing={2.6}>
+            MONODON MONOCEROS
+          </text>
+          <text y={32} letterSpacing={2.6}>
+            LEFT CANINE · ADULT MALE
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+        {/* Scale note — top-right */}
+        <g
+          transform={`translate(${FRAME.x + FRAME.w - 26}, ${FRAME.y + 34})`}
+          fill={ICE_DIM}
+          fontFamily={inter}
+          fontSize={11}
+          letterSpacing={3}
+          fontWeight={600}
+          textAnchor="end"
+        >
+          <text>SEA ICE EDGE · 72° N</text>
+          <text y={16} fill={ICE} letterSpacing={2.6}>
+            BAFFIN BAY
+          </text>
+          <text y={32} letterSpacing={2.6}>
+            03 OCT 2026
+          </text>
+        </g>
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
+        {/* Diagram group — scale 1080×800 inner coords into FRAME */}
+        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${SCALE})`}>
+          {/* Horizontal baseline through the tusk axis */}
+          <line
+            x1={60}
+            y1={TUSK_Y}
+            x2={1030}
+            y2={TUSK_Y}
+            stroke={RULE}
+            strokeWidth={0.8}
+            strokeDasharray="2 6"
+            opacity={0.6}
+          />
+
+          {/* ── Micro cross-section inset at the base ─────────────── */}
+          <g
+            transform={`translate(${TUSK_BASE_X - 70}, ${TUSK_Y})`}
+            opacity={sectionIn}
+          >
+            {/* Section circle */}
+            <circle
+              r={44}
+              fill={IVORY}
+              stroke={IVORY_SHADOW}
+              strokeWidth={1.2}
+            />
+            <circle
+              r={44}
+              fill="none"
+              stroke={GOLD}
+              strokeWidth={0.8}
+              strokeDasharray="2 4"
+              opacity={0.55}
+            />
+            {/* Nerve-fascicle dots — deterministic layout */}
+            {(() => {
+              const dots: React.ReactElement[] = [];
+              const seed = (i: number) => ((i * 9301 + 49297) % 233280) / 233280;
+              let i = 0;
+              for (let ring = 0; ring < 5; ring++) {
+                const rr = 6 + ring * 7.5;
+                const count = 6 + ring * 4;
+                for (let k = 0; k < count; k++) {
+                  const a = (k / count) * Math.PI * 2 + seed(i) * 0.9;
+                  const jitter = (seed(i + 101) - 0.5) * 3;
+                  const dx = Math.cos(a) * (rr + jitter);
+                  const dy = Math.sin(a) * (rr + jitter);
+                  const size = 1.2 + seed(i + 7) * 1.2;
+                  dots.push(
+                    <circle
+                      key={`n-${i}`}
+                      cx={dx}
+                      cy={dy}
+                      r={size}
+                      fill={GOLD}
+                      opacity={0.9}
+                    />,
+                  );
+                  i++;
                 }
-                acc += segs[i];
               }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
+              // Centre pulp cavity
+              dots.push(
+                <circle
+                  key="pulp"
+                  r={4}
+                  fill={BG}
+                  stroke={GOLD}
+                  strokeWidth={0.8}
+                />,
+              );
+              return dots;
+            })()}
+            {/* Section label */}
+            <text
+              y={-56}
+              textAnchor="middle"
+              fill={ICE}
+              fontFamily={inter}
+              fontSize={10}
+              fontWeight={600}
+              letterSpacing={3}
+            >
+              DENTIN · ×400
+            </text>
+            <text
+              y={64}
+              textAnchor="middle"
+              fill={ICE_DIM}
+              fontFamily={inter}
+              fontSize={9}
+              fontWeight={500}
+              letterSpacing={2.6}
+            >
+              10⁷ NERVE ENDINGS
+            </text>
+            {/* Leader line to the tusk base */}
+            <line
+              x1={44}
+              y1={0}
+              x2={TUSK_BASE_X - (TUSK_BASE_X - 70) - 4}
+              y2={0}
+              stroke={GOLD}
+              strokeWidth={0.8}
+              strokeDasharray="2 3"
+            />
+          </g>
+
+          {/* ── The tusk body ─────────────────────────────────────── */}
+          <g>
+            {/* Soft shadow puddle below */}
+            <ellipse
+              cx={(TUSK_BASE_X + TUSK_TIP_X) / 2}
+              cy={TUSK_Y + 70}
+              rx={(TUSK_TIP_X - TUSK_BASE_X) / 2}
+              ry={10}
+              fill={BG}
+              opacity={0.6 * tuskDraw}
+            />
+
+            {/* Body fill */}
+            <path d={tuskBodyPath} fill="url(#tusk-shade)" />
+            {/* Body outline */}
+            <path
+              d={tuskBodyPath}
+              fill="none"
+              stroke={IVORY_SHADOW}
+              strokeWidth={1.2}
+              strokeLinejoin="round"
+            />
+
+            {/* Helical grooves */}
+            {grooves.map((g, i) => {
+              const topX = g.xTop;
+              const topY = TUSK_Y - g.rTop;
+              const botX = g.xBot;
+              const botY = TUSK_Y + g.rBot;
+              const midX = g.mid;
+              // Curve the groove slightly to suggest a convex surface.
+              const midY = TUSK_Y - g.rTop * 0.1;
+              const d = `M ${topX} ${topY} Q ${midX} ${midY} ${botX} ${botY}`;
+              const op = Math.max(0, Math.min(1, (tuskDraw - i / grooves.length) * 2));
               return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+                <g key={`gv-${i}`} opacity={op}>
+                  <path
+                    d={d}
+                    stroke={IVORY_SHADOW}
+                    strokeWidth={1.4}
+                    fill="none"
+                    opacity={0.65}
+                    strokeLinecap="round"
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
+                  <path
+                    d={`M ${topX + 2} ${topY} Q ${midX + 2} ${midY - 1} ${botX + 2} ${botY}`}
+                    stroke="#FFF4D8"
+                    strokeWidth={0.8}
+                    fill="none"
+                    opacity={0.55}
+                    strokeLinecap="round"
+                  />
                 </g>
               );
-            })()}
+            })}
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
+            {/* Tip highlight dot */}
+            <circle
+              cx={drawnTipX - 2}
+              cy={TUSK_Y}
+              r={2.4}
+              fill="#FFF9E7"
+              opacity={tuskDraw}
+            />
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
+            {/* Flow line: tusk tip → dial hub (chemistry sampled, feeding in) */}
+            <g opacity={Math.min(1, Math.max(0, tuskDraw - 0.7) * 3)}>
+              <line
+                x1={drawnTipX + 2}
+                y1={TUSK_Y}
+                x2={DIAL_CX - DIAL_RINGS[0] + 4}
+                y2={TUSK_Y}
+                stroke={GOLD}
+                strokeWidth={1.2}
+                strokeDasharray="2 4"
+                opacity={0.6}
+              />
+            </g>
+
+            {/* "CHEMISTRY — sampling" callout above the mid-tusk */}
+            <g opacity={Math.min(1, Math.max(0, tuskDraw - 0.35) * 2)}>
+              <line
+                x1={340}
+                y1={TUSK_Y - TUSK_BASE_R - 40}
+                x2={340}
+                y2={TUSK_Y - tuskRadiusAt(340) - 4}
+                stroke={GOLD}
+                strokeWidth={0.9}
+                strokeDasharray="2 3"
+                opacity={0.75}
+              />
               <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
+                x={340}
+                y={TUSK_Y - TUSK_BASE_R - 76}
+                textAnchor="middle"
+                fill={GOLD}
                 fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
+                fontSize={14}
+                fontWeight={600}
+                letterSpacing={4.5}
               >
-                {l.text}
+                CHEMISTRY
               </text>
-            );
-          })}
+              <text
+                x={340}
+                y={TUSK_Y - TUSK_BASE_R - 56}
+                textAnchor="middle"
+                fill={ICE_DIM}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={500}
+                letterSpacing={3}
+              >
+                SAMPLING · SEAWATER
+              </text>
+            </g>
+          </g>
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+          {/* ── Narwhal silhouette (lateral) ─────────────────────── */}
+          <g opacity={Math.min(1, Math.max(0, tuskDraw - 0.3) * 1.6)}>
+            {/* Body — stylised torpedo profile (head left, fluke right) */}
+            <path
+              d={`
+                M ${whaleCX - 150} ${whaleCY + 4}
+                C ${whaleCX - 158} ${whaleCY - 18}, ${whaleCX - 118} ${whaleCY - 30}, ${whaleCX - 70} ${whaleCY - 30}
+                C ${whaleCX - 20} ${whaleCY - 30}, ${whaleCX + 30} ${whaleCY - 28}, ${whaleCX + 90} ${whaleCY - 22}
+                C ${whaleCX + 140} ${whaleCY - 18}, ${whaleCX + 170} ${whaleCY - 10}, ${whaleCX + 190} ${whaleCY - 2}
+                C ${whaleCX + 170} ${whaleCY + 10}, ${whaleCX + 140} ${whaleCY + 20}, ${whaleCX + 90} ${whaleCY + 26}
+                C ${whaleCX + 30} ${whaleCY + 32}, ${whaleCX - 40} ${whaleCY + 34}, ${whaleCX - 110} ${whaleCY + 30}
+                C ${whaleCX - 150} ${whaleCY + 24}, ${whaleCX - 158} ${whaleCY + 14}, ${whaleCX - 150} ${whaleCY + 4}
+                Z
+              `}
+              fill={MOTTLE}
+              opacity={0.95}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+
+            {/* Fluke — two triangular lobes with a central notch */}
+            <path
+              d={`
+                M ${whaleCX + 188} ${whaleCY - 2}
+                L ${whaleCX + 232} ${whaleCY - 24}
+                L ${whaleCX + 220} ${whaleCY - 2}
+                L ${whaleCX + 232} ${whaleCY + 20}
+                L ${whaleCX + 188} ${whaleCY + 2}
+                Z
+              `}
+              fill={MOTTLE}
+              opacity={0.95}
             />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
+
+            {/* Pectoral flipper (small, short — narwhals have stubby flippers) */}
+            <path
+              d={`
+                M ${whaleCX - 80} ${whaleCY + 20}
+                C ${whaleCX - 86} ${whaleCY + 40}, ${whaleCX - 60} ${whaleCY + 44}, ${whaleCX - 48} ${whaleCY + 30}
+                Z
+              `}
+              fill={BG}
+              opacity={0.6}
             />
+
+            {/* Dorsal ridge (no dorsal fin — just a shallow ridge of bumps) */}
+            {[-20, 0, 20, 40, 60].map((dx, i) => (
+              <ellipse
+                key={`dr-${i}`}
+                cx={whaleCX + dx}
+                cy={whaleCY - 29}
+                rx={5}
+                ry={1.2}
+                fill={BG}
+                opacity={0.55}
+              />
+            ))}
+
+            {/* Eye */}
+            <circle cx={whaleCX - 112} cy={whaleCY - 8} r={1.8} fill={BG} />
+
+            {/* Mottle spots scattered on the back */}
+            {[
+              [-80, -8], [-40, -14], [-10, -4], [20, -12], [60, -6],
+              [95, -10], [120, -4], [-60, 4], [-20, 6], [40, 8], [80, 10],
+            ].map(([dx, dy], i) => (
+              <ellipse
+                key={`m-${i}`}
+                cx={whaleCX + dx}
+                cy={whaleCY + dy}
+                rx={2.6 + ((i * 7) % 3) * 0.4}
+                ry={1.8}
+                fill={BG}
+                opacity={0.45}
+              />
+            ))}
+
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
+              x={whaleCX}
+              y={whaleCY + 68}
               textAnchor="middle"
-              fill={OAT}
+              fill={ICE_DIM}
               fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
+              fontSize={10}
+              fontWeight={500}
               letterSpacing={3.5}
             >
-              TOKYO
+              MALE · 4.7 M · 1 600 KG
+            </text>
+          </g>
+
+          {/* ── The tasting wheel ─────────────────────────────────── */}
+          <g opacity={ringBloom}>
+            {/* Soft core glow */}
+            <circle
+              cx={DIAL_CX}
+              cy={DIAL_CY}
+              r={DIAL_RINGS[3] + 10}
+              fill="url(#dial-core)"
+            />
+            {/* Pulse ring (soft loop) */}
+            <circle
+              cx={DIAL_CX}
+              cy={DIAL_CY}
+              r={DIAL_RINGS[3] * (0.5 + pulsePhase * 0.6)}
+              fill="none"
+              stroke={GOLD}
+              strokeWidth={1}
+              opacity={(1 - pulsePhase) * 0.35 * pulseIn}
+            />
+
+            {/* Concentric gauge rings */}
+            {DIAL_RINGS.map((r, i) => (
+              <circle
+                key={`rr-${i}`}
+                cx={DIAL_CX}
+                cy={DIAL_CY}
+                r={r * ringBloom}
+                fill="none"
+                stroke={i === DIAL_RINGS.length - 1 ? GOLD : RULE}
+                strokeWidth={i === DIAL_RINGS.length - 1 ? 1.4 : 1}
+                opacity={i === DIAL_RINGS.length - 1 ? 0.85 : 0.7}
+              />
+            ))}
+
+            {/* Tick marks around the outer ring */}
+            {Array.from({ length: 72 }, (_, i) => i).map((i) => {
+              const major = i % 9 === 0;
+              const inner = DIAL_RINGS[3] - (major ? 10 : 5);
+              const outer = DIAL_RINGS[3];
+              const a = (i / 72) * 360 - 90;
+              const p1 = polar(DIAL_CX, DIAL_CY, inner, a);
+              const p2 = polar(DIAL_CX, DIAL_CY, outer, a);
+              return (
+                <line
+                  key={`tk-${i}`}
+                  x1={p1.x}
+                  y1={p1.y}
+                  x2={p2.x}
+                  y2={p2.y}
+                  stroke={major ? ICE : ICE_DIM}
+                  strokeWidth={major ? 1.1 : 0.7}
+                  opacity={0.75 * ringBloom}
+                />
+              );
+            })}
+
+            {/* Axis rules + readings */}
+            {AXES.map((ax, i) => {
+              const outer = polar(DIAL_CX, DIAL_CY, DIAL_RINGS[3] + 2, ax.angleDeg);
+              const inner = polar(DIAL_CX, DIAL_CY, DIAL_RINGS[0], ax.angleDeg);
+              const labelPt = polar(DIAL_CX, DIAL_CY, DIAL_RINGS[3] + 36, ax.angleDeg);
+              const readingPt = polar(DIAL_CX, DIAL_CY, DIAL_RINGS[3] + 56, ax.angleDeg);
+              const anchor =
+                ax.angleDeg === 0
+                  ? "start"
+                  : ax.angleDeg === 180
+                    ? "end"
+                    : "middle";
+              const op = axesIn;
+              const dy = ax.angleDeg === -90 ? -4 : ax.angleDeg === 90 ? 14 : 4;
+              const dyR = ax.angleDeg === -90 ? -22 : ax.angleDeg === 90 ? 32 : 24;
+              const isSal = ax.key === "sal";
+              return (
+                <g key={`ax-${i}`} opacity={op}>
+                  <line
+                    x1={inner.x}
+                    y1={inner.y}
+                    x2={outer.x}
+                    y2={outer.y}
+                    stroke={RULE}
+                    strokeWidth={0.9}
+                    strokeDasharray={isSal ? "0" : "2 4"}
+                    opacity={0.9}
+                  />
+                  <text
+                    x={labelPt.x}
+                    y={labelPt.y + dy}
+                    textAnchor={anchor}
+                    fill={isSal ? GOLD : ICE}
+                    fontFamily={inter}
+                    fontSize={13}
+                    fontWeight={600}
+                    letterSpacing={4}
+                  >
+                    {ax.label}
+                  </text>
+                  <text
+                    x={readingPt.x}
+                    y={readingPt.y + dyR}
+                    textAnchor={anchor}
+                    fill={isSal ? GOLD_SOFT : ICE_DIM}
+                    fontFamily={inter}
+                    fontSize={14}
+                    fontWeight={500}
+                    letterSpacing={2}
+                  >
+                    {ax.reading}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Hub */}
+            <circle
+              cx={DIAL_CX}
+              cy={DIAL_CY}
+              r={6}
+              fill={BG}
+              stroke={GOLD}
+              strokeWidth={1.5}
+            />
+            <circle cx={DIAL_CX} cy={DIAL_CY} r={2} fill={GOLD} />
+
+            {/* Pointer */}
+            <g opacity={ringBloom}>
+              {/* Outer glow */}
+              <line
+                x1={DIAL_CX}
+                y1={DIAL_CY}
+                x2={pointerTip.x}
+                y2={pointerTip.y}
+                stroke={GOLD}
+                strokeWidth={6}
+                strokeLinecap="round"
+                opacity={0.25}
+                filter="url(#soft-glow)"
+              />
+              {/* Main needle */}
+              <line
+                x1={DIAL_CX}
+                y1={DIAL_CY}
+                x2={pointerTip.x}
+                y2={pointerTip.y}
+                stroke={GOLD}
+                strokeWidth={3.2}
+                strokeLinecap="round"
+              />
+              {/* Needle highlight */}
+              <line
+                x1={DIAL_CX}
+                y1={DIAL_CY}
+                x2={pointerTip.x}
+                y2={pointerTip.y}
+                stroke="#FFE4BE"
+                strokeWidth={1}
+                strokeLinecap="round"
+                opacity={0.9}
+              />
+              {/* Reading marker */}
+              <circle
+                cx={pointerTip.x}
+                cy={pointerTip.y}
+                r={14}
+                fill="none"
+                stroke={GOLD}
+                strokeWidth={1}
+                opacity={0.75}
+              />
+              <circle
+                cx={pointerTip.x}
+                cy={pointerTip.y}
+                r={6}
+                fill={GOLD}
+              />
+              <circle
+                cx={pointerTip.x}
+                cy={pointerTip.y}
+                r={2.4}
+                fill="#FFF2DA"
+              />
+            </g>
+
+            {/* Center microcopy */}
+            <text
+              x={DIAL_CX}
+              y={DIAL_CY - DIAL_RINGS[0] + 4}
+              textAnchor="middle"
+              fill={ICE_DIM}
+              fontFamily={inter}
+              fontSize={9}
+              fontWeight={500}
+              letterSpacing={2.6}
+              opacity={axesIn}
+            >
+              READING
+            </text>
+          </g>
+
+          {/* Scalebar — tucked bottom-left under the plate */}
+          <g
+            transform={`translate(${TUSK_BASE_X - 30}, 750)`}
+            stroke={ICE_DIM}
+            fill={ICE_DIM}
+            fontFamily={inter}
+            fontSize={11}
+            letterSpacing={2.6}
+            fontWeight={500}
+            opacity={tuskDraw}
+          >
+            <line x1={0} y1={0} x2={200} y2={0} strokeWidth={1.2} />
+            <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
+            <line x1={100} y1={-3} x2={100} y2={3} strokeWidth={1.2} />
+            <line x1={200} y1={-5} x2={200} y2={5} strokeWidth={1.2} />
+            <text y={22} stroke="none" fill={ICE_DIM}>
+              0
+            </text>
+            <text x={100} y={22} stroke="none" fill={ICE_DIM} textAnchor="middle">
+              1 M
+            </text>
+            <text x={200} y={22} stroke="none" fill={ICE_DIM} textAnchor="middle">
+              2 M
             </text>
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip below the plate */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={ICE_DIM}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · THE TUSK AS CHEMOSENSORY PROBE</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={GOLD}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            BAFFIN BAY · 48 M DEPTH
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ─────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -606,7 +959,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: GOLD,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,10 +968,8 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: ICE_DIM, margin: "0 4px" }}>/</span>
+          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>Sommelier</span>
         </div>
 
         <div
@@ -632,9 +983,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The ivory
           <br />
-          city planner.
+          sommelier.
         </div>
 
         <div
@@ -649,13 +1000,14 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          The narwhal's spiralling 2–3 m tusk is a modified left canine with
+          roughly{" "}
+          <span style={{ color: GOLD, fontWeight: 600 }}>
+            10 million nerve endings
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          exposed through porous cementum. Seawater seeps in and the tooth
+          samples salinity, temperature, pressure and chemistry — one slow,
+          deliberate taste at a time.
         </div>
       </div>
 
@@ -669,7 +1021,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: ICE_DIM,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,11 +1029,14 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Nweeia et al. · Anatomical Record 297 (2014) 599–617</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: GOLD }}>●</span> Pointer = current reading
         </span>
       </div>
+
+      {/* Unused but kept so compiler doesn't flag */}
+      <span style={{ display: "none" }}>{durationInFrames}</span>
     </AbsoluteFill>
   );
 };
