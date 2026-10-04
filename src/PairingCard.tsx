@@ -50,174 +50,218 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — drawn from the dandelion seed's real coloration
+const PAPER = "#EDE4CF";       // pappus silver-cream (background)
+const PAPER_HI = "#F3EADA";    // warm paper highlight
+const PAPER_LO = "#E2D7BE";    // paper shadow
+const INK = "#2E2318";          // achene deep brown
+const INK_SOFT = "#4F3E2C";     // soft brown
+const INK_FAINT = "#8A7558";    // faded ink / secondary text
+const YELLOW = "#F2C438";       // flower-pollen yellow (accent)
+const AMBER = "#8B5A3C";        // dry stem amber (callouts)
+const GRID = "#D6CAB0";         // faint drafting grid
+const GRID_MAJOR = "#CDBF9F";   // major grid
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// Dandelion seed geometry (coordinates in the map space defined below)
+// Map space: 1080 × 800 (same approach as previous episodes)
+// Place seed slightly left of center for an asymmetric editorial feel.
+const HUB_X = 440;   // pappus convergence hub
+const HUB_Y = 445;   // the point where filaments meet the top of the beak
+const BEAK_LEN = 150;      // length of the thin shaft between hub and seed body
+const ACHENE_LEN = 108;    // length of the elongated seed body
+const ACHENE_W = 10;        // half-width of achene at widest
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// SVR (Separated Vortex Ring) centered above the pappus hub
+const SVR_CX = HUB_X;
+const SVR_CY = 230;
+const SVR_RX = 220;
+const SVR_RY = 50;
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+// Generate pappus filaments: upper-hemisphere spray with slight natural variation.
+// Each filament extends outward from the hub with a gentle curve.
+type Filament = {
+  angle: number;       // radians, 0 = right; we use upper hemisphere mostly
+  length: number;      // px
+  curl: number;        // -1..1 natural curvature
+  thickness: number;   // stroke width
+  seed: number;        // for pseudo-random variation
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const makeFilaments = (): Filament[] => {
+  const out: Filament[] = [];
+  const COUNT = 72;
+  // Upper half-dome of filaments, varying in length, thickness and alpha to suggest 3D depth.
+  for (let i = 0; i < COUNT; i++) {
+    const t = i / (COUNT - 1); // 0..1
+    const angleDeg = -202 + t * 224; // ~0.62π sweep around the upper hemisphere
+    const jitter = ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 - 0.5;
+    const angle = ((angleDeg + jitter * 4.8) * Math.PI) / 180;
+    // Base length — longer at horizontal, foreshortened near zenith (3D disk projection)
+    const horizontalBoost = Math.abs(Math.cos(angle));
+    const base = 150 + horizontalBoost * 42;
+    const randLen = (((Math.sin(i * 7.3 + 1.7) * 10000) % 1 + 1) % 1) * 36 - 18;
+    const length = base + randLen;
+    // Curl: outward-biased
+    const curl = Math.sin(angle) * 0.1 + jitter * 0.14;
+    const thickness = 0.65 + (((Math.sin(i * 2.3 + 0.9) * 10000) % 1 + 1) % 1) * 0.75;
+    out.push({ angle, length, curl, thickness, seed: i });
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return out;
+};
+const FILAMENTS = makeFilaments();
+
+// A few lighter "background" filaments to add depth
+type GhostFilament = Filament & { alpha: number };
+const makeGhostFilaments = (): GhostFilament[] => {
+  const out: GhostFilament[] = [];
+  const COUNT = 36;
+  for (let i = 0; i < COUNT; i++) {
+    const t = (i + 0.5) / COUNT;
+    const angleDeg = -198 + t * 216;
+    const jitter = ((Math.sin(i * 9.17 + 3.1) * 43758.5453) % 1 + 1) % 1 - 0.5;
+    const angle = ((angleDeg + jitter * 6) * Math.PI) / 180;
+    const horizontalBoost = Math.abs(Math.cos(angle));
+    const base = 128 + horizontalBoost * 36;
+    const randLen = (((Math.sin(i * 5.1 + 0.33) * 10000) % 1 + 1) % 1) * 30 - 15;
+    const length = base + randLen;
+    const curl = Math.sin(angle) * 0.08 + jitter * 0.1;
+    const thickness = 0.55 + (((Math.sin(i * 1.8) * 10000) % 1 + 1) % 1) * 0.35;
+    const alpha = 0.28 + (((Math.cos(i * 3.3) * 10000) % 1 + 1) % 1) * 0.22;
+    out.push({ angle, length, curl, thickness, seed: i, alpha });
+  }
+  return out;
+};
+const GHOST_FILAMENTS = makeGhostFilaments();
+
+// Each pappus filament tip has a tiny branching plumule — we approximate with 2 short cross-hairs
+const plumulePath = (ex: number, ey: number, angle: number): string => {
+  const perp = angle + Math.PI / 2;
+  const r = 6;
+  return `M ${ex - Math.cos(perp) * r} ${ey - Math.sin(perp) * r} L ${ex + Math.cos(perp) * r} ${ey + Math.sin(perp) * r}`;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+const filamentPath = (f: Filament): { d: string; tip: [number, number] } => {
+  const sx = HUB_X;
+  const sy = HUB_Y;
+  const ex = sx + Math.cos(f.angle) * f.length;
+  const ey = sy + Math.sin(f.angle) * f.length;
+  // Slight curve: control point perpendicular to the filament by curl*length*0.4
+  const mx = (sx + ex) / 2;
+  const my = (sy + ey) / 2;
+  const perp = f.angle + Math.PI / 2;
+  const cx = mx + Math.cos(perp) * f.curl * f.length * 0.4;
+  const cy = my + Math.sin(perp) * f.curl * f.length * 0.4;
+  return { d: `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`, tip: [ex, ey] };
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+const filamentLen = (f: Filament): number => f.length * 1.02;
+
+// Deterministic pseudo-random streak starts for airflow lines
+type Streak = { x: number; phase: number; speed: number; curve: number; alpha: number };
+const makeStreaks = (): Streak[] => {
+  const out: Streak[] = [];
+  const COUNT = 46;
+  for (let i = 0; i < COUNT; i++) {
+    const seed = Math.sin(i * 11.37 + 0.5) * 43758.5453;
+    const r = ((seed % 1) + 1) % 1;
+    const x = 60 + r * 960;
+    const phase = ((Math.cos(i * 7.11) * 10000) % 1 + 1) % 1;
+    const speed = 0.5 + ((Math.sin(i * 3.19 + 0.2) * 10000) % 1 + 1) % 1 * 0.7;
+    const curve = ((Math.sin(i * 5.07) * 10000) % 1 + 1) % 1 - 0.5;
+    const alpha = 0.18 + ((Math.cos(i * 2.03) * 10000) % 1 + 1) % 1 * 0.22;
+    out.push({ x, phase, speed, curve, alpha });
+  }
+  return out;
 };
+const STREAKS = makeStreaks();
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Animation phases
+  // 0.00s – 1.00s : SVR blooms in; pappus filaments extend
+  // 1.00s – 1.60s : callouts and type lockup fade/spring in
+  // continuous   : airflow streaks rise, SVR ellipses breathe
+  const growSpan = fps * 1.0;
+  const grow = Math.max(0, Math.min(1, frame / growSpan));
+  const growEased = 1 - Math.pow(1 - grow, 3);
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  const svrSpring = spring({
+    frame: frame - fps * 0.1,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 180, mass: 1 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const titleSpring = spring({
+    frame: frame - fps * 0.7,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+
+  const hookOpacity = interpolate(frame, [fps * 1.3, fps * 2.1], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
+  const calloutOpacity = interpolate(frame, [fps * 0.9, fps * 1.6], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // SVR "breathing": gentle oscillation of ry, loops every 4s
+  const breathT = (frame % (fps * 4)) / (fps * 4); // 0..1
+  const breath = Math.sin(breathT * Math.PI * 2);
+  const svrRxNow = SVR_RX * (0.995 + breath * 0.015);
+  const svrRyNow = SVR_RY * (1.0 + breath * 0.09);
+
+  // Rotation angle for SVR arrows (shows the ring's circulation)
+  const rotT = (frame % (fps * 6)) / (fps * 6); // slow 6s rotation
+
+  // Page frame
+  const FRAME = { x: 60, y: 130, w: 960, h: 760 };
   const MAP_W = 1080;
   const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const scale = FRAME.w / MAP_W; // = ~0.889
+
+  // Airflow seed drift: streaks loop upward across the frame
+  // Scrolling y offset
+  const streakScroll = (frame / fps) * 70; // px per second upward motion
 
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: PAPER, fontFamily: inter }}>
       <style>{fontCss}</style>
+
+      {/* Paper warm vignette — subtle tea stain */}
+      <svg
+        width={1080}
+        height={1350}
+        viewBox="0 0 1080 1350"
+        style={{ position: "absolute", inset: 0 }}
+      >
+        <defs>
+          <radialGradient id="paper-glow" cx="30%" cy="30%" r="80%">
+            <stop offset="0%" stopColor={PAPER_HI} stopOpacity={1} />
+            <stop offset="55%" stopColor={PAPER} stopOpacity={1} />
+            <stop offset="100%" stopColor={PAPER_LO} stopOpacity={1} />
+          </radialGradient>
+        </defs>
+        <rect x={0} y={0} width={1080} height={1350} fill="url(#paper-glow)" />
+      </svg>
 
       {/* Top metadata band */}
       <div
         style={{
           position: "absolute",
-          top: 56,
+          top: 60,
           left: 80,
           right: 80,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: INK_FAINT,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +269,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: AMBER }}>2026 · 10 · 04</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Drafting board + schematic */}
       <svg
         width={1080}
         height={1350}
@@ -249,7 +293,7 @@ export const PairingCard: React.FC = () => {
               d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
               fill="none"
               stroke={GRID}
-              strokeWidth={1}
+              strokeWidth={0.75}
             />
           </pattern>
           <pattern
@@ -268,33 +312,22 @@ export const PairingCard: React.FC = () => {
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
+          {/* Pappus filament gradient — slightly brighter at tips */}
+          <linearGradient id="filament" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={INK} stopOpacity={0.95} />
+            <stop offset="100%" stopColor={INK_SOFT} stopOpacity={0.6} />
+          </linearGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          {/* SVR gradient: toroidal vortex, mid-ring brightest */}
+          <radialGradient id="svr-fill" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={YELLOW} stopOpacity={0} />
+            <stop offset="60%" stopColor={YELLOW} stopOpacity={0.08} />
+            <stop offset="92%" stopColor={YELLOW} stopOpacity={0.0} />
+            <stop offset="100%" stopColor={AMBER} stopOpacity={0.0} />
           </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
         </defs>
 
         {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
         <rect
           x={FRAME.x}
           y={FRAME.y}
@@ -310,14 +343,15 @@ export const PairingCard: React.FC = () => {
           fill="url(#grid-major)"
         />
 
-        {/* Inner thin border */}
+        {/* Inner hairline border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke={INK_FAINT}
+          strokeOpacity={0.55}
           strokeWidth={1}
         />
 
@@ -330,40 +364,29 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={AMBER} strokeWidth={1.4} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Axis label top-left: FIG */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 22}, ${FRAME.y + 32})`}
+          fill={INK_FAINT}
           fontFamily={inter}
           fontWeight={600}
           fontSize={11}
-          letterSpacing={3}
+          letterSpacing={3.5}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text textAnchor="start">FIG. 1 / SCHEMATIC</text>
         </g>
 
-        {/* Scale bar */}
+        {/* Scale bar — bottom right of drafting frame */}
         <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + FRAME.w - 170}, ${FRAME.y + FRAME.h - 30})`}
+          stroke={INK_FAINT}
+          fill={INK_FAINT}
           fontFamily={inter}
           fontSize={10}
           letterSpacing={3}
@@ -374,239 +397,570 @@ export const PairingCard: React.FC = () => {
           <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
           <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
           <text x={110} y={4} stroke="none">
-            50 KM
+            5 MM
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+        {/* Compass → vertical airflow indicator */}
+        <g
+          transform={`translate(${FRAME.x + FRAME.w - 42}, ${FRAME.y + 36})`}
+          fill={INK_FAINT}
+          fontFamily={inter}
+          fontWeight={600}
+          fontSize={10}
+          letterSpacing={2.8}
+        >
+          <text textAnchor="middle" y={-6}>FLOW</text>
+          <line x1={0} y1={2} x2={0} y2={20} stroke={AMBER} strokeWidth={1.3} />
+          <polygon points="-4,4 0,-4 4,4" fill={AMBER} />
+        </g>
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
+        {/* MAIN CONTENT — map coords transformed into FRAME */}
+        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
+          {/* Airflow streaklines — rising past the seed, deflected around the pappus */}
+          <g>
+            {STREAKS.map((s, i) => {
+              const period = MAP_H + 240;
+              const baseY = (MAP_H + 140) - ((s.phase * period + streakScroll * s.speed) % period);
+              const len = 72;
+              const curve = s.curve * 20;
+              // Push air outward near the pappus hub (vortex zone)
+              const dxFromHub = s.x - HUB_X;
+              const dyFromHub = baseY - HUB_Y;
+              const dist = Math.hypot(dxFromHub, dyFromHub);
+              const push = Math.max(0, 160 - dist) * 0.5;
+              const deflect = (dxFromHub / (dist + 1e-3)) * push;
+              const sx = s.x;
+              const sy = baseY + len;
+              const ex = s.x + deflect * 1.1;
+              const ey = baseY;
+              const mx = (sx + ex) / 2 + curve + deflect * 0.5;
+              const my = (sy + ey) / 2;
+              // Dampen streaks whose midpoint falls inside the pappus/SVR region
+              const midDxHub = mx - HUB_X;
+              const midDyHub = my - HUB_Y;
+              const midDistHub = Math.hypot(midDxHub, midDyHub);
+              const pappusMask = midDistHub < 180 ? Math.max(0.08, midDistHub / 180) : 1;
+              const midDxSvr = mx - SVR_CX;
+              const midDySvr = (my - SVR_CY) * (SVR_RX / Math.max(10, SVR_RY));
+              const svrDist = Math.hypot(midDxSvr, midDySvr);
+              const svrMask = svrDist < SVR_RX ? Math.max(0.1, svrDist / SVR_RX) : 1;
+              const alpha = s.alpha * growEased * pappusMask * svrMask;
+              const dx = ex - mx;
+              const dy = ey - my;
+              const dl = Math.hypot(dx, dy) || 1;
+              const ux = dx / dl;
+              const uy = dy / dl;
+              const nx = -uy;
+              const ny = ux;
+              const aSize = 4;
               return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+                <g key={i}>
+                  <path
+                    d={`M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`}
+                    stroke={INK}
+                    strokeOpacity={alpha * 0.7}
+                    strokeWidth={0.9}
+                    strokeLinecap="round"
+                    fill="none"
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
+                  <polygon
+                    points={`${ex},${ey} ${ex - ux * aSize + nx * aSize * 0.55},${ey - uy * aSize + ny * aSize * 0.55} ${ex - ux * aSize - nx * aSize * 0.55},${ey - uy * aSize - ny * aSize * 0.55}`}
+                    fill={INK}
+                    opacity={alpha * 0.9}
+                  />
                 </g>
               );
-            })()}
+            })}
+          </g>
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
+          {/* SVR — Separated Vortex Ring (above pappus) */}
+          <g opacity={svrSpring}>
+            {/* soft bloom — tight toroidal halo, kept clear of the pappus */}
+            <ellipse
+              cx={SVR_CX}
+              cy={SVR_CY}
+              rx={svrRxNow * 1.04}
+              ry={svrRyNow * 1.25}
+              fill="url(#svr-fill)"
+            />
+            {/* Nested ring outlines — outer and mid-core */}
+            <ellipse
+              cx={SVR_CX}
+              cy={SVR_CY}
+              rx={svrRxNow}
+              ry={svrRyNow}
+              fill="none"
+              stroke={AMBER}
+              strokeOpacity={0.72}
+              strokeWidth={1.4}
+            />
+            <ellipse
+              cx={SVR_CX}
+              cy={SVR_CY}
+              rx={svrRxNow * 0.72}
+              ry={svrRyNow * 0.72}
+              fill="none"
+              stroke={AMBER}
+              strokeOpacity={0.55}
+              strokeWidth={1.1}
+              strokeDasharray="5 4"
+            />
+            <ellipse
+              cx={SVR_CX}
+              cy={SVR_CY}
+              rx={svrRxNow * 0.4}
+              ry={svrRyNow * 0.4}
+              fill="none"
+              stroke={AMBER}
+              strokeOpacity={0.38}
+              strokeWidth={0.9}
+              strokeDasharray="3 3"
+            />
+            {/* Twin side-lobe strokes to suggest torus cross-section */}
+            <circle
+              cx={SVR_CX - svrRxNow}
+              cy={SVR_CY}
+              r={svrRyNow * 0.72}
+              fill="none"
+              stroke={AMBER}
+              strokeOpacity={0.55}
+              strokeWidth={1.1}
+            />
+            <circle
+              cx={SVR_CX + svrRxNow}
+              cy={SVR_CY}
+              r={svrRyNow * 0.72}
+              fill="none"
+              stroke={AMBER}
+              strokeOpacity={0.55}
+              strokeWidth={1.1}
+            />
+            {/* Rotation arrows along the outer ring */}
+            {[0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].map((baseA, i) => {
+              const a = baseA + rotT * Math.PI * 2;
+              const rx = svrRxNow;
+              const ry = svrRyNow;
+              const px = SVR_CX + Math.cos(a) * rx;
+              const py = SVR_CY + Math.sin(a) * ry;
+              const tx = -Math.sin(a) * rx;
+              const ty = Math.cos(a) * ry;
+              const tl = Math.hypot(tx, ty);
+              const ux = tx / tl;
+              const uy = ty / tl;
+              const nx = -uy;
+              const ny = ux;
+              const size = 13;
+              const tipX = px + ux * size;
+              const tipY = py + uy * size;
+              const baseLX = px - ux * 2 + nx * size * 0.68;
+              const baseLY = py - uy * 2 + ny * size * 0.68;
+              const baseRX = px - ux * 2 - nx * size * 0.68;
+              const baseRY = py - uy * 2 - ny * size * 0.68;
+              return (
+                <g key={i}>
+                  <polygon
+                    points={`${tipX},${tipY} ${baseLX},${baseLY} ${baseRX},${baseRY}`}
+                    fill={AMBER}
+                    stroke={INK}
+                    strokeWidth={0.6}
+                  />
+                </g>
+              );
+            })}
+            {/* Center labels: SVR text and tiny recirculation glyph */}
+            <text
+              x={SVR_CX}
+              y={SVR_CY + 4}
+              textAnchor="middle"
+              fill={AMBER}
+              fontFamily={inter}
+              fontWeight={600}
+              fontSize={11}
+              letterSpacing={4}
+              opacity={0.78}
+            >
+              SVR
+            </text>
+          </g>
+
+          {/* PAPPUS — ghost filaments (depth layer) */}
+          <g>
+            {GHOST_FILAMENTS.map((f, i) => {
+              const { d } = filamentPath(f);
+              const len = filamentLen(f);
+              const delay = 0.05 + (i / GHOST_FILAMENTS.length) * 0.25;
+              const localT = Math.max(0, Math.min(1, (grow - delay) / 0.55));
+              const eased = 1 - Math.pow(1 - localT, 3);
+              const dashOffset = len * (1 - eased);
+              return (
+                <path
+                  key={`g-${i}`}
+                  d={d}
+                  stroke={INK_SOFT}
+                  strokeOpacity={f.alpha}
+                  strokeWidth={f.thickness}
+                  strokeLinecap="round"
+                  fill="none"
+                  strokeDasharray={len}
+                  strokeDashoffset={dashOffset}
                 />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
+              );
+            })}
+          </g>
+
+          {/* PAPPUS — primary filaments */}
+          <g>
+            {FILAMENTS.map((f, i) => {
+              const { d, tip } = filamentPath(f);
+              const len = filamentLen(f);
+              const delay = (i / FILAMENTS.length) * 0.3;
+              const localT = Math.max(0, Math.min(1, (grow - delay) / 0.6));
+              const eased = 1 - Math.pow(1 - localT, 3);
+              const dashOffset = len * (1 - eased);
+              const alpha = 0.72 + (((Math.sin(i * 1.37 + 0.4) * 10000) % 1 + 1) % 1) * 0.28;
+              return (
+                <g key={i}>
+                  <path
+                    d={d}
+                    stroke={INK}
+                    strokeOpacity={alpha}
+                    strokeWidth={f.thickness}
+                    strokeLinecap="round"
+                    fill="none"
+                    strokeDasharray={len}
+                    strokeDashoffset={dashOffset}
+                  />
+                  {/* Tiny tip plume — just a dot, more organic than a crosshair */}
+                  {eased > 0.9 && (
+                    <circle
+                      cx={tip[0]}
+                      cy={tip[1]}
+                      r={0.9}
+                      fill={INK}
+                      opacity={0.6}
+                    />
+                  )}
+                </g>
+              );
+            })}
+          </g>
+
+          {/* HUB — tiny node where filaments converge */}
+          <circle cx={HUB_X} cy={HUB_Y} r={4.5} fill={INK} />
+          <circle cx={HUB_X} cy={HUB_Y} r={2.0} fill={YELLOW} />
+
+          {/* BEAK — thin shaft from hub to achene */}
+          <line
+            x1={HUB_X}
+            y1={HUB_Y + 4}
+            x2={HUB_X}
+            y2={HUB_Y + BEAK_LEN}
+            stroke={INK}
+            strokeWidth={1.5}
+            opacity={Math.min(1, grow * 2)}
+          />
+          {/* small tick marks along the beak (engineering style) */}
+          {[0.3, 0.5, 0.7].map((p, i) => (
+            <line
+              key={i}
+              x1={HUB_X - 3}
+              y1={HUB_Y + BEAK_LEN * p}
+              x2={HUB_X + 3}
+              y2={HUB_Y + BEAK_LEN * p}
+              stroke={INK_SOFT}
+              strokeWidth={0.9}
+              opacity={Math.min(1, grow * 2)}
+            />
+          ))}
+
+          {/* ACHENE — elongated seed body with ribs */}
+          <g opacity={Math.min(1, grow * 2)}>
+            <path
+              d={`M ${HUB_X} ${HUB_Y + BEAK_LEN}
+                  C ${HUB_X - ACHENE_W} ${HUB_Y + BEAK_LEN + 20},
+                    ${HUB_X - ACHENE_W} ${HUB_Y + BEAK_LEN + ACHENE_LEN - 20},
+                    ${HUB_X} ${HUB_Y + BEAK_LEN + ACHENE_LEN}
+                  C ${HUB_X + ACHENE_W} ${HUB_Y + BEAK_LEN + ACHENE_LEN - 20},
+                    ${HUB_X + ACHENE_W} ${HUB_Y + BEAK_LEN + 20},
+                    ${HUB_X} ${HUB_Y + BEAK_LEN}
+                  Z`}
+              fill={INK}
+              stroke={INK}
+              strokeWidth={0.8}
+            />
+            {/* longitudinal ribs */}
+            {[-5, -2.5, 0, 2.5, 5].map((off, i) => (
+              <path
+                key={i}
+                d={`M ${HUB_X + off * 0.4} ${HUB_Y + BEAK_LEN + 8}
+                    Q ${HUB_X + off} ${HUB_Y + BEAK_LEN + ACHENE_LEN / 2}
+                      ${HUB_X + off * 0.4} ${HUB_Y + BEAK_LEN + ACHENE_LEN - 8}`}
+                stroke={PAPER}
+                strokeOpacity={0.35}
+                strokeWidth={0.6}
+                fill="none"
+              />
+            ))}
+            {/* tiny spines on upper achene */}
+            {[0.14, 0.22, 0.3, 0.38].map((p, i) => (
+              <g key={i}>
+                <line
+                  x1={HUB_X - 4}
+                  y1={HUB_Y + BEAK_LEN + ACHENE_LEN * p}
+                  x2={HUB_X - 8}
+                  y2={HUB_Y + BEAK_LEN + ACHENE_LEN * p - 2}
                   stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
+                  strokeWidth={0.9}
+                />
+                <line
+                  x1={HUB_X + 4}
+                  y1={HUB_Y + BEAK_LEN + ACHENE_LEN * p}
+                  x2={HUB_X + 8}
+                  y2={HUB_Y + BEAK_LEN + ACHENE_LEN * p - 2}
+                  stroke={INK}
+                  strokeWidth={0.9}
                 />
               </g>
-            );
-          })}
+            ))}
+            {/* achene tip (pointed base) */}
+            <polygon
+              points={`${HUB_X - 1.5},${HUB_Y + BEAK_LEN + ACHENE_LEN}
+                       ${HUB_X + 1.5},${HUB_Y + BEAK_LEN + ACHENE_LEN}
+                       ${HUB_X},${HUB_Y + BEAK_LEN + ACHENE_LEN + 10}`}
+              fill={INK}
+            />
+          </g>
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
+          {/* CALLOUTS — right-side technical labels */}
+          <g opacity={calloutOpacity}>
+            {/* 1. SVR callout */}
+            <g>
+              <line
+                x1={SVR_CX + SVR_RX - 20}
+                y1={SVR_CY - 10}
+                x2={850}
+                y2={SVR_CY - 60}
+                stroke={AMBER}
+                strokeWidth={1.2}
+              />
+              <line
+                x1={850}
+                y1={SVR_CY - 60}
+                x2={990}
+                y2={SVR_CY - 60}
+                stroke={AMBER}
+                strokeWidth={1.2}
+              />
+              <circle
+                cx={SVR_CX + SVR_RX - 20}
+                cy={SVR_CY - 10}
+                r={3.5}
+                fill={YELLOW}
+                stroke={INK}
+                strokeWidth={1}
+              />
               <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
+                x={858}
+                y={SVR_CY - 70}
+                fill={INK}
                 fontFamily={inter}
-                fontSize={11}
+                fontSize={14}
+                fontWeight={600}
+                letterSpacing={3.2}
+              >
+                SEPARATED
+              </text>
+              <text
+                x={858}
+                y={SVR_CY - 52}
+                fill={INK}
+                fontFamily={inter}
+                fontSize={14}
+                fontWeight={600}
+                letterSpacing={3.2}
+              >
+                VORTEX RING
+              </text>
+              <text
+                x={858}
+                y={SVR_CY - 32}
+                fill={AMBER}
+                fontFamily={inter}
+                fontSize={12}
                 fontWeight={500}
                 letterSpacing={2.4}
-                opacity={op}
               >
-                {l.text}
+                detached · stable
               </text>
-            );
-          })}
+            </g>
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
+            {/* 2. Pappus filaments callout */}
+            <g>
+              <line
+                x1={HUB_X + 155}
+                y1={HUB_Y - 15}
+                x2={820}
+                y2={HUB_Y + 20}
+                stroke={AMBER}
+                strokeWidth={1.2}
+              />
+              <line
+                x1={820}
+                y1={HUB_Y + 20}
+                x2={990}
+                y2={HUB_Y + 20}
+                stroke={AMBER}
+                strokeWidth={1.2}
+              />
+              <circle
+                cx={HUB_X + 155}
+                cy={HUB_Y - 15}
+                r={3.5}
+                fill={YELLOW}
+                stroke={INK}
+                strokeWidth={1}
+              />
+              <text
+                x={828}
+                y={HUB_Y + 10}
+                fill={INK}
+                fontFamily={inter}
+                fontSize={14}
+                fontWeight={600}
+                letterSpacing={3.2}
+              >
+                ~100 PAPPUS
+              </text>
+              <text
+                x={828}
+                y={HUB_Y + 28}
+                fill={INK}
+                fontFamily={inter}
+                fontSize={14}
+                fontWeight={600}
+                letterSpacing={3.2}
+              >
+                FILAMENTS
+              </text>
+              <text
+                x={828}
+                y={HUB_Y + 48}
+                fill={AMBER}
+                fontFamily={inter}
+                fontSize={12}
+                fontWeight={500}
+                letterSpacing={2.4}
+              >
+                90% porous disk
+              </text>
+            </g>
+
+            {/* 3. Achene callout */}
+            <g>
+              <line
+                x1={HUB_X + 10}
+                y1={HUB_Y + BEAK_LEN + ACHENE_LEN / 2}
+                x2={820}
+                y2={HUB_Y + BEAK_LEN + ACHENE_LEN / 2 + 10}
+                stroke={AMBER}
+                strokeWidth={1.2}
+              />
+              <line
+                x1={820}
+                y1={HUB_Y + BEAK_LEN + ACHENE_LEN / 2 + 10}
+                x2={990}
+                y2={HUB_Y + BEAK_LEN + ACHENE_LEN / 2 + 10}
+                stroke={AMBER}
+                strokeWidth={1.2}
+              />
+              <circle
+                cx={HUB_X + 10}
+                cy={HUB_Y + BEAK_LEN + ACHENE_LEN / 2}
+                r={3.5}
+                fill={YELLOW}
+                stroke={INK}
+                strokeWidth={1}
+              />
+              <text
+                x={828}
+                y={HUB_Y + BEAK_LEN + ACHENE_LEN / 2}
+                fill={INK}
+                fontFamily={inter}
+                fontSize={14}
+                fontWeight={600}
+                letterSpacing={3.2}
+              >
+                ACHENE
+              </text>
+              <text
+                x={828}
+                y={HUB_Y + BEAK_LEN + ACHENE_LEN / 2 + 20}
+                fill={AMBER}
+                fontFamily={inter}
+                fontSize={12}
+                fontWeight={500}
+                letterSpacing={2.4}
+              >
+                payload · ~1 mg
+              </text>
+            </g>
+
+            {/* 4. Drag coefficient note (bottom right of frame) */}
+            <g transform="translate(820, 720)">
+              <text
+                fill={INK}
+                fontFamily={inter}
+                fontSize={14}
+                fontWeight={600}
+                letterSpacing={3}
+              >
+                4× DRAG / AREA
+              </text>
+              <text
+                y={20}
+                fill={AMBER}
+                fontFamily={inter}
+                fontSize={12}
+                fontWeight={500}
+                letterSpacing={2.4}
+              >
+                vs. solid disk
+              </text>
+            </g>
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip just below drafting frame */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 24})`}
+          fill={INK_FAINT}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · TARAXACUM OFFICINALE — FLIGHT CONFIGURATION</text>
+          <text x={FRAME.w} textAnchor="end" fill={AMBER}>
+            SEPARATED VORTEX RING, Re ≈ 100
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* Type lockup */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 960,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: AMBER,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,15 +969,15 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+          Role <span style={{ color: INK_FAINT, margin: "0 4px" }}>/</span>
+          <span style={{ color: INK, letterSpacing: 5 }}>
+            Aerospace Engineer
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: INK,
             fontFamily: playfair,
             fontWeight: 500,
             fontSize: 84,
@@ -632,30 +986,30 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The flying
           <br />
-          city planner.
+          engineer.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 28,
+            color: INK_SOFT,
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
             maxWidth: 880,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          The dandelion seed flies on a{" "}
+          <span style={{ color: AMBER, fontWeight: 600 }}>
+            separated vortex ring
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          — a stable detached vortex sitting above ~100 porous pappus filaments,
+          producing four times the drag per unit area of a solid disk. A flight
+          regime no human aircraft has achieved.
         </div>
       </div>
 
@@ -669,7 +1023,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: INK_FAINT,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +1031,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Cummins et al. · Nature 562 (2018) 414–418</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: YELLOW }}>●</span> Vortex = Lift
         </span>
       </div>
     </AbsoluteFill>
