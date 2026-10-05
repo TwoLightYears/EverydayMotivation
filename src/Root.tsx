@@ -8,6 +8,7 @@ export const Root: React.FC = () => {
       id="PairingCard"
       component={PairingCard}
       durationInFrames={150}
+      defaultProps={{}}
       fps={30}
       width={1080}
       height={1350}
