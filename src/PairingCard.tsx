@@ -50,158 +50,80 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0D1613";
+const BOARD = "#111E1A";
+const CREAM = "#CBAE75";
+const CREAM_HI = "#F5E6B8";
+const CRIMSON = "#C2451A";
+const PAD = "#5F8A6D";
+const GRID = "#172923";
+const GRID_MAJOR = "#1F342C";
+const DIM = "#6E7F74";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// Drafting frame inside the 1080×1350 page
+const FRAME = { x: 60, y: 130, w: 960, h: 711 };
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// Leaf plan sits in the left two-thirds; Crystal-Palace echo lives to the
+// right so the two silhouettes rhyme at a glance.
+const CX = FRAME.x + 320;
+const CY = FRAME.y + 325;
+const R_RIM = 218;
+const R_HUB = 15;
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
+// Primary rib count (radial beams from hub to rim)
+const PRIMARIES = 24;
+// Concentric cross-rib rings between hub and rim
+const RINGS = [0.3, 0.52, 0.74, 0.92];
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Growth timeline
+  const T_PRIMARY = fps * 2.0; // primary ribs 0 → 2.0 s
+  const T_RINGS_START = fps * 1.4;
+  const T_RINGS_END = fps * 2.8;
+  const T_ANNOT = fps * 2.6;
+  const T_SECTION = fps * 2.1;
+  const T_PALACE = fps * 3.0;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const primaryT = Math.min(1, frame / T_PRIMARY);
+  const ringsT = Math.max(
+    0,
+    Math.min(1, (frame - T_RINGS_START) / (T_RINGS_END - T_RINGS_START)),
+  );
+  const annotT = Math.max(0, Math.min(1, (frame - T_ANNOT) / (fps * 0.8)));
+  const sectionT = Math.max(0, Math.min(1, (frame - T_SECTION) / (fps * 0.9)));
+  const palaceT = Math.max(0, Math.min(1, (frame - T_PALACE) / (fps * 0.9)));
+
+  // breathing pulse once the lattice is in
+  const breathe =
+    0.5 +
+    0.5 *
+      Math.sin(((frame / fps) * Math.PI * 2) / 4.0 - Math.PI / 2) *
+      (primaryT >= 1 ? 1 : 0);
 
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 0.6,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 1.4, fps * 2.3], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Precompute rib geometry (deterministic — no randomness)
+  const primaries = Array.from({ length: PRIMARIES }, (_, i) => {
+    const a = (i / PRIMARIES) * Math.PI * 2 - Math.PI / 2;
+    const delay = i / PRIMARIES; // sweep clockwise
+    return { i, a, delay };
+  });
+
+  const ringRadii = RINGS.map((f) => R_HUB + (R_RIM - R_HUB) * f);
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -217,7 +139,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: DIM,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +147,10 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: CREAM }}>2026 · 10 · 06</span>
       </div>
 
-      {/* Drafting frame + map */}
       <svg
         width={1080}
         height={1350}
@@ -241,12 +162,12 @@ export const PairingCard: React.FC = () => {
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={32}
+            height={32}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
+              d="M 32 0 L 0 0 0 32"
               fill="none"
               stroke={GRID}
               strokeWidth={1}
@@ -256,30 +177,36 @@ export const PairingCard: React.FC = () => {
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={128}
+            height={128}
             patternUnits="userSpaceOnUse"
           >
             <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
+              d="M 128 0 L 0 0 0 128"
               fill="none"
               stroke={GRID_MAJOR}
               strokeWidth={1}
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
           <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+            <stop offset="0%" stopColor="#13201C" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <radialGradient id="pad-fill" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={PAD} stopOpacity={0.14} />
+            <stop offset="70%" stopColor={PAD} stopOpacity={0.08} />
+            <stop offset="100%" stopColor={PAD} stopOpacity={0.0} />
+          </radialGradient>
+
+          <radialGradient id="hub-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={CRIMSON} stopOpacity={0.55} />
+            <stop offset="100%" stopColor={CRIMSON} stopOpacity={0} />
+          </radialGradient>
+
+          <filter id="rib-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2.2" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
@@ -309,15 +236,13 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#243932"
           strokeWidth={1}
         />
 
@@ -330,266 +255,409 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={CRIMSON} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Plate heading inside the drafting frame — single line, left */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 34})`}
           fontFamily={inter}
+          fontSize={11}
+          letterSpacing={3.2}
           fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <text fill={CREAM}>
+            PL. III
+            <tspan fill={DIM} fontWeight={500}>
+              {"  ·  V. AMAZONICA  ·  PLAN & SECT. A–A"}
+            </tspan>
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
+        {/* ─── Pad fill (very subtle green disk underneath the ribs) ─── */}
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R_RIM}
+          fill="url(#pad-fill)"
+          opacity={Math.min(1, primaryT * 1.4)}
+        />
+
+        {/* ─── Rim (upturned leaf edge) — double-line ──────────────── */}
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R_RIM}
+          fill="none"
+          stroke={CREAM}
+          strokeWidth={2}
+          opacity={Math.min(1, primaryT * 1.4)}
+          strokeDasharray={2 * Math.PI * R_RIM}
+          strokeDashoffset={2 * Math.PI * R_RIM * (1 - Math.min(1, primaryT))}
+          transform={`rotate(-90 ${CX} ${CY})`}
+        />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R_RIM + 8}
+          fill="none"
+          stroke={CREAM}
+          strokeWidth={1}
+          opacity={0.55 * Math.min(1, primaryT * 1.4)}
+          strokeDasharray="3 5"
+        />
+
+        {/* ─── Primary radial ribs ──────────────────────────────────── */}
+        {primaries.map(({ i, a, delay }) => {
+          const local = Math.max(0, (primaryT - delay * 0.75) / 0.25);
+          const grow = Math.min(1, local);
+          const eased = 1 - Math.pow(1 - grow, 3);
+          const r2 = R_HUB + (R_RIM - R_HUB) * eased;
+          const x1 = CX + Math.cos(a) * R_HUB;
+          const y1 = CY + Math.sin(a) * R_HUB;
+          const x2 = CX + Math.cos(a) * r2;
+          const y2 = CY + Math.sin(a) * r2;
+          const emphasised = i % 4 === 0;
+          return (
+            <g key={`rib-${i}`}>
+              <line
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={CREAM}
+                strokeWidth={emphasised ? 2.4 : 1.4}
                 strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+                opacity={0.95}
+                filter={emphasised ? "url(#rib-glow)" : undefined}
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+            </g>
+          );
+        })}
+
+        {/* ─── Transverse cross-ribs (concentric rings), drawn as cells ─── */}
+        {ringRadii.map((r, idx) => {
+          const delay = idx / RINGS.length;
+          const local = Math.max(0, (ringsT - delay * 0.6) / 0.4);
+          const grow = Math.min(1, local);
+          const eased = 1 - Math.pow(1 - grow, 3);
+          const perim = 2 * Math.PI * r;
+          return (
+            <circle
+              key={`ring-${idx}`}
+              cx={CX}
+              cy={CY}
+              r={r}
+              fill="none"
+              stroke={CREAM}
+              strokeWidth={idx === RINGS.length - 1 ? 1.6 : 1}
+              strokeOpacity={0.78}
+              strokeDasharray={perim}
+              strokeDashoffset={perim * (1 - eased)}
+              transform={`rotate(${-90 + idx * 7} ${CX} ${CY})`}
+            />
+          );
+        })}
+
+        {/* ─── Secondary short arcs between neighbouring primaries, at the
+             midpoint of each ring span. These subdivide each cell exactly
+             as the real plant does. ─────────────────────────────────────── */}
+        {ringsT > 0.35 &&
+          ringRadii.slice(0, -1).map((r0, bandIdx) => {
+            const r1 = ringRadii[bandIdx + 1];
+            const rMid = (r0 + r1) / 2;
+            const op = Math.min(1, (ringsT - 0.35) * 2.2) * 0.52;
             return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
+              <g key={`sec-${bandIdx}`} opacity={op}>
+                {Array.from({ length: PRIMARIES }, (_, k) => {
+                  const a0 = (k / PRIMARIES) * Math.PI * 2 - Math.PI / 2;
+                  const a1 = ((k + 1) / PRIMARIES) * Math.PI * 2 - Math.PI / 2;
+                  const am = (a0 + a1) / 2;
+                  const span = (a1 - a0) * 0.42;
+                  const sx = CX + Math.cos(am - span) * rMid;
+                  const sy = CY + Math.sin(am - span) * rMid;
+                  const ex = CX + Math.cos(am + span) * rMid;
+                  const ey = CY + Math.sin(am + span) * rMid;
+                  return (
+                    <path
+                      key={k}
+                      d={`M ${sx} ${sy} A ${rMid} ${rMid} 0 0 1 ${ex} ${ey}`}
+                      fill="none"
+                      stroke={CREAM_HI}
+                      strokeWidth={0.7}
+                    />
+                  );
+                })}
               </g>
             );
           })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
+        {/* ─── Hub (petiole attachment point) ──────────────────────── */}
+        <g opacity={Math.min(1, primaryT * 3)}>
+          <circle cx={CX} cy={CY} r={R_HUB * 2.2} fill="url(#hub-glow)" />
+          <circle
+            cx={CX}
+            cy={CY}
+            r={R_HUB}
+            fill={CRIMSON}
+            stroke={CREAM_HI}
+            strokeWidth={1.5}
+          />
+          <circle
+            cx={CX}
+            cy={CY}
+            r={R_HUB * 0.55}
+            fill={INK}
+            stroke={CREAM}
+            strokeWidth={0.8}
+          />
         </g>
 
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+        {/* ─── Diameter dimension line ABOVE the plan ─────────────── */}
+        <g opacity={annotT}>
+          {(() => {
+            const dy = CY - R_RIM - 36;
+            return (
+              <>
+                <line
+                  x1={CX - R_RIM - 36}
+                  y1={dy}
+                  x2={CX + R_RIM + 36}
+                  y2={dy}
+                  stroke={DIM}
+                  strokeWidth={1}
+                />
+                <line
+                  x1={CX - R_RIM}
+                  y1={dy - 10}
+                  x2={CX - R_RIM}
+                  y2={dy + 10}
+                  stroke={DIM}
+                  strokeWidth={1}
+                />
+                <line
+                  x1={CX + R_RIM}
+                  y1={dy - 10}
+                  x2={CX + R_RIM}
+                  y2={dy + 10}
+                  stroke={DIM}
+                  strokeWidth={1}
+                />
+                <polygon
+                  points={`${CX - R_RIM},${dy} ${CX - R_RIM + 8},${dy - 4} ${CX - R_RIM + 8},${dy + 4}`}
+                  fill={DIM}
+                />
+                <polygon
+                  points={`${CX + R_RIM},${dy} ${CX + R_RIM - 8},${dy - 4} ${CX + R_RIM - 8},${dy + 4}`}
+                  fill={DIM}
+                />
+                <text
+                  x={CX}
+                  y={dy - 10}
+                  textAnchor="middle"
+                  fill={CREAM}
+                  fontFamily={inter}
+                  fontSize={12}
+                  fontWeight={600}
+                  letterSpacing={3}
+                >
+                  Ø 1.80 M
+                </text>
+              </>
+            );
+          })()}
+        </g>
+
+        {/* ─── Callout: PRIMARY RIB ────────────────────────────────── */}
+        <g opacity={annotT}>
+          {/* leader from a prominent primary rib */}
+          <line
+            x1={CX + Math.cos(-Math.PI / 2 + Math.PI / 6) * (R_RIM * 0.65)}
+            y1={CY + Math.sin(-Math.PI / 2 + Math.PI / 6) * (R_RIM * 0.65)}
+            x2={CX + R_RIM + 30}
+            y2={CY - 110}
+            stroke={CREAM}
+            strokeWidth={0.9}
+          />
+          <line
+            x1={CX + R_RIM + 30}
+            y1={CY - 110}
+            x2={CX + R_RIM + 110}
+            y2={CY - 110}
+            stroke={CREAM}
+            strokeWidth={0.9}
+          />
+          <circle
+            cx={CX + Math.cos(-Math.PI / 2 + Math.PI / 6) * (R_RIM * 0.65)}
+            cy={CY + Math.sin(-Math.PI / 2 + Math.PI / 6) * (R_RIM * 0.65)}
+            r={2.2}
+            fill={CREAM_HI}
+          />
           <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            x={CX + R_RIM + 36}
+            y={CY - 118}
+            fill={CREAM}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={600}
+            letterSpacing={2.8}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            PRIMARY RIB
+          </text>
+          <text
+            x={CX + R_RIM + 36}
+            y={CY - 100}
+            fill={DIM}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={500}
+            letterSpacing={2}
+          >
+            air-filled girder
           </text>
         </g>
+
+        {/* ─── Callout: CROSS-RIB ──────────────────────────────────── */}
+        <g opacity={annotT}>
+          <line
+            x1={CX + Math.cos(Math.PI * 0.78) * (R_RIM * 0.62)}
+            y1={CY + Math.sin(Math.PI * 0.78) * (R_RIM * 0.62)}
+            x2={CX - R_RIM - 30}
+            y2={CY + 100}
+            stroke={CREAM}
+            strokeWidth={0.9}
+          />
+          <line
+            x1={CX - R_RIM - 30}
+            y1={CY + 100}
+            x2={CX - R_RIM - 110}
+            y2={CY + 100}
+            stroke={CREAM}
+            strokeWidth={0.9}
+          />
+          <circle
+            cx={CX + Math.cos(Math.PI * 0.78) * (R_RIM * 0.62)}
+            cy={CY + Math.sin(Math.PI * 0.78) * (R_RIM * 0.62)}
+            r={2.2}
+            fill={CREAM_HI}
+          />
+          <text
+            x={CX - R_RIM - 36}
+            y={CY + 92}
+            fill={CREAM}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={600}
+            letterSpacing={2.8}
+            textAnchor="end"
+          >
+            CROSS-RIB
+          </text>
+          <text
+            x={CX - R_RIM - 36}
+            y={CY + 110}
+            fill={DIM}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={500}
+            letterSpacing={2}
+            textAnchor="end"
+          >
+            closes the cell
+          </text>
+        </g>
+
+        {/* ─── Callout: HUB (petiole attachment). Leader runs straight down
+             the plan's south meridian, then kinks right into the clear
+             space below the rim where only the 1.80 M dim does NOT live. ── */}
+        <g opacity={annotT}>
+          <line
+            x1={CX}
+            y1={CY + R_HUB + 2}
+            x2={CX}
+            y2={CY + R_RIM + 24}
+            stroke={CRIMSON}
+            strokeWidth={1.1}
+          />
+          <line
+            x1={CX}
+            y1={CY + R_RIM + 24}
+            x2={CX + 60}
+            y2={CY + R_RIM + 24}
+            stroke={CRIMSON}
+            strokeWidth={1.1}
+          />
+          <text
+            x={CX + 66}
+            y={CY + R_RIM + 20}
+            fill={CRIMSON}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={600}
+            letterSpacing={2.6}
+          >
+            PETIOLE
+          </text>
+          <text
+            x={CX + 66}
+            y={CY + R_RIM + 34}
+            fill={DIM}
+            fontFamily={inter}
+            fontSize={9}
+            fontWeight={500}
+            letterSpacing={1.8}
+          >
+            stem attachment
+          </text>
+        </g>
+
+        {/* ─── Section line A–A across the plan ────────────────────── */}
+        <g opacity={sectionT * 0.85}>
+          <line
+            x1={CX - R_RIM - 10}
+            y1={CY}
+            x2={CX + R_RIM + 10}
+            y2={CY}
+            stroke={CREAM_HI}
+            strokeWidth={0.6}
+            strokeDasharray="6 6"
+          />
+          <text
+            x={CX - R_RIM - 22}
+            y={CY + 4}
+            fill={CREAM_HI}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={700}
+            textAnchor="end"
+            letterSpacing={2.6}
+          >
+            A
+          </text>
+          <text
+            x={CX + R_RIM + 22}
+            y={CY + 4}
+            fill={CREAM_HI}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={700}
+            letterSpacing={2.6}
+          >
+            A
+          </text>
+        </g>
+
+        {/* ─── Cross-section strip (SECT A–A), bottom of drafting frame ─── */}
+        <SectionAA sectionT={sectionT} breathe={breathe} />
+
+        {/* ─── Crystal Palace echo, lower-right of drafting frame ──── */}
+        <PalaceEcho palaceT={palaceT} />
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ───────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -606,7 +674,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CREAM,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,32 +683,30 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: DIM, margin: "0 4px" }}>/</span>
+          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>Architect</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: "#F4F0E4",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 80,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The leaf that drew
           <br />
-          city planner.
+          the Crystal Palace.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#CDC9BE",
             fontFamily: inter,
             fontSize: 19,
             lineHeight: 1.4,
@@ -649,13 +715,13 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          A radial lattice of air-filled ribs under each 1.8 m pad lets{" "}
+          <span style={{ color: CREAM, fontWeight: 600 }}>
+            Victoria amazonica
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          float and carry ~45 kg of distributed load — the geometry Joseph
+          Paxton named, in his 1850 lecture to the Royal Society of Arts, as
+          the structural model for the Crystal Palace.
         </div>
       </div>
 
@@ -669,7 +735,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: DIM,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,11 +743,466 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Paxton · Lecture to the R.S.A. · 13 Nov 1850</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: CRIMSON }}>●</span> Rib &nbsp;·&nbsp; cell
+          &nbsp;·&nbsp; rim
         </span>
       </div>
     </AbsoluteFill>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// SECT A–A : a lateral slice through the leaf showing the air-filled ribs
+// as a shallow pontoon / girder floating on the waterline.
+// ─────────────────────────────────────────────────────────────────────────
+const SectionAA: React.FC<{ sectionT: number; breathe: number }> = ({
+  sectionT,
+  breathe: _breathe,
+}) => {
+  // Section strip sits BELOW the plan, centred on the plan's horizontal axis.
+  const span = R_RIM * 2;
+  const left = CX - R_RIM;
+  const right = CX + R_RIM;
+  const yBase = CY + R_RIM + 76; // water line
+  const domeRise = 22;
+  const bodyBottom = yBase - 2;
+  const dash = span + 200;
+  const nRibs = 15;
+  const op = sectionT;
+
+  return (
+    <g opacity={op}>
+      {/* water line (dashed) */}
+      <line
+        x1={left - 36}
+        y1={yBase}
+        x2={right + 36}
+        y2={yBase}
+        stroke={CREAM_HI}
+        strokeOpacity={0.4}
+        strokeWidth={1}
+        strokeDasharray="2 6"
+      />
+      {/* water hatching below */}
+      {Array.from({ length: 26 }, (_, i) => {
+        const x = left - 20 + i * ((span + 40) / 25);
+        return (
+          <line
+            key={`w-${i}`}
+            x1={x}
+            y1={yBase + 8}
+            x2={x - 10}
+            y2={yBase + 18}
+            stroke={CREAM}
+            strokeOpacity={0.22}
+            strokeWidth={0.8}
+          />
+        );
+      })}
+      {/* top skin — shallow dome */}
+      <path
+        d={`M ${left} ${bodyBottom - 10} Q ${CX} ${bodyBottom - domeRise - 10} ${right} ${bodyBottom - 10}`}
+        fill="none"
+        stroke={CREAM}
+        strokeWidth={1.6}
+        strokeDasharray={dash}
+        strokeDashoffset={dash * (1 - sectionT)}
+      />
+      {/* upturned rim lips */}
+      <path
+        d={`M ${left} ${bodyBottom - 10} q -22 -4 -26 -26`}
+        fill="none"
+        stroke={CREAM}
+        strokeWidth={1.6}
+      />
+      <path
+        d={`M ${right} ${bodyBottom - 10} q 22 -4 26 -26`}
+        fill="none"
+        stroke={CREAM}
+        strokeWidth={1.6}
+      />
+      {/* flat bottom skin resting on water */}
+      <line
+        x1={left}
+        y1={bodyBottom}
+        x2={right}
+        y2={bodyBottom}
+        stroke={CREAM}
+        strokeWidth={1.6}
+      />
+      {/* vertical rib partitions inside the pontoon (echo of plan primaries) */}
+      {Array.from({ length: nRibs }, (_, i) => {
+        const f = (i + 1) / (nRibs + 1);
+        const x = left + span * f;
+        const topY =
+          bodyBottom - 10 - domeRise * Math.sin(Math.PI * f);
+        return (
+          <line
+            key={i}
+            x1={x}
+            y1={topY + 1}
+            x2={x}
+            y2={bodyBottom - 1}
+            stroke={CREAM}
+            strokeWidth={1}
+            strokeOpacity={0.72}
+          />
+        );
+      })}
+      {/* a few crimson-tinted ribs to mark primaries */}
+      {[3, 7, 11].map((i) => {
+        const f = (i + 1) / (nRibs + 1);
+        const x = left + span * f;
+        const topY = bodyBottom - 10 - domeRise * Math.sin(Math.PI * f);
+        return (
+          <line
+            key={`pri-${i}`}
+            x1={x}
+            y1={topY + 1}
+            x2={x}
+            y2={bodyBottom - 1}
+            stroke={CRIMSON}
+            strokeWidth={1.5}
+            strokeOpacity={0.65}
+          />
+        );
+      })}
+      {/* trapped air glyphs — tiny circles in each cell */}
+      {Array.from({ length: nRibs - 1 }, (_, i) => {
+        const f = (i + 1.5) / (nRibs + 1);
+        const x = left + span * f;
+        const y = bodyBottom - domeRise * 0.4 - 3;
+        return (
+          <circle
+            key={`b-${i}`}
+            cx={x}
+            cy={y}
+            r={1.3}
+            fill={CREAM_HI}
+            opacity={0.75}
+          />
+        );
+      })}
+
+      {/* label */}
+      <text
+        x={left}
+        y={yBase + 38}
+        fill={CREAM}
+        fontFamily={inter}
+        fontSize={11}
+        fontWeight={600}
+        letterSpacing={3.2}
+      >
+        SECT. A–A · AIR-FILLED CANTILEVER
+      </text>
+      {/* "water" label at right */}
+      <text
+        x={right}
+        y={yBase + 38}
+        textAnchor="end"
+        fill={DIM}
+        fontFamily={inter}
+        fontSize={10}
+        fontWeight={500}
+        letterSpacing={2.2}
+      >
+        waterline
+      </text>
+
+      {/* vertical dim ~8 cm on left */}
+      <g stroke={DIM} strokeWidth={0.9} fill={DIM}>
+        <line
+          x1={left - 54}
+          y1={bodyBottom - domeRise - 10}
+          x2={left - 54}
+          y2={bodyBottom}
+        />
+        <line
+          x1={left - 58}
+          y1={bodyBottom - domeRise - 10}
+          x2={left - 50}
+          y2={bodyBottom - domeRise - 10}
+        />
+        <line
+          x1={left - 58}
+          y1={bodyBottom}
+          x2={left - 50}
+          y2={bodyBottom}
+        />
+        <text
+          x={left - 60}
+          y={bodyBottom - domeRise / 2}
+          fill={CREAM}
+          fontFamily={inter}
+          fontSize={10}
+          fontWeight={600}
+          letterSpacing={2.2}
+          stroke="none"
+          textAnchor="end"
+        >
+          8 CM
+        </text>
+      </g>
+    </g>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// A quietly-drawn Crystal Palace nave truss sitting to the right of the plan,
+// so the viewer sees the geometric rhyme between the leaf's radial beams
+// and Paxton's iron girder.
+// ─────────────────────────────────────────────────────────────────────────
+const PalaceEcho: React.FC<{ palaceT: number }> = ({ palaceT }) => {
+  // Half-section elevation of a Crystal-Palace nave bay. We draw only the
+  // right half of the arch so the straight hub-sided edge rhymes with the
+  // leaf's radial beams on the left.
+  const op = palaceT;
+  if (op <= 0) return null;
+
+  const cx = FRAME.x + 760; // springing of the arch (central column line)
+  const cy = FRAME.y + 500; // floor line
+  const H = 180; // column height (floor → springing)
+  const RISE = 110; // vertical rise of the half-arch above springing
+  const R = 140; // arch half-span (horizontal reach)
+
+  // 9 rib radials from the springing — same count as the leaf's primary
+  // ribs in a quarter sector would resolve to, so the geometric rhyme reads.
+  const nTrusses = 9;
+
+  // ellipse arch point at parameter f (0 at crown → 1 at springing)
+  const arcPt = (f: number) => {
+    // Draw the right half of a flattened semi-arch from crown (above cx) to
+    // the column top (cx + R, cy - H). Use quarter-ellipse mapping.
+    const theta = (f * Math.PI) / 2; // 0 → π/2
+    const x = cx + Math.sin(theta) * R;
+    const y = cy - H - Math.cos(theta) * RISE;
+    return { x, y };
+  };
+
+  const crown = arcPt(0);
+  const springing = arcPt(1);
+  const floorRight = { x: cx + R, y: cy };
+
+  // outer glazing arc as path
+  const arcSteps = 24;
+  const arcPts = Array.from({ length: arcSteps + 1 }, (_, i) =>
+    arcPt(i / arcSteps),
+  );
+  const arcPath = `M ${arcPts[0].x} ${arcPts[0].y} ` +
+    arcPts.slice(1).map((p) => `L ${p.x} ${p.y}`).join(" ");
+
+  // inner glazing arc, offset inward (down + left)
+  const innerArcPath =
+    `M ${cx} ${crown.y + 8} ` +
+    Array.from({ length: arcSteps + 1 }, (_, i) => {
+      const f = i / arcSteps;
+      const p = arcPt(f);
+      const dx = Math.sin((f * Math.PI) / 2);
+      const dy = Math.cos((f * Math.PI) / 2);
+      return `L ${p.x - dx * 10} ${p.y + dy * 10}`;
+    }).join(" ");
+
+  return (
+    <g opacity={op}>
+      {/* heading sits above the arch crown so it does not sit on the
+          crimson keystone node */}
+      <text
+        x={cx - 10}
+        y={cy - H - RISE - 30}
+        fill={CREAM}
+        fontFamily={inter}
+        fontSize={11}
+        fontWeight={600}
+        letterSpacing={3.2}
+      >
+        AFTER PAXTON · 1851
+      </text>
+      <text
+        x={cx - 10}
+        y={cy - H - RISE - 16}
+        fill={DIM}
+        fontFamily={inter}
+        fontSize={10}
+        fontWeight={500}
+        letterSpacing={2.4}
+      >
+        crystal palace · half-bay elevation
+      </text>
+
+      {/* ground / floor line */}
+      <line
+        x1={cx - 20}
+        y1={cy}
+        x2={cx + R + 40}
+        y2={cy}
+        stroke={CREAM}
+        strokeWidth={1.4}
+      />
+      {/* ground hatching below */}
+      {Array.from({ length: 16 }, (_, i) => {
+        const sx = cx - 20 + i * ((R + 60) / 15);
+        return (
+          <line
+            key={`gh-${i}`}
+            x1={sx}
+            y1={cy + 3}
+            x2={sx - 7}
+            y2={cy + 11}
+            stroke={CREAM}
+            strokeOpacity={0.25}
+            strokeWidth={0.7}
+          />
+        );
+      })}
+
+      {/* central column (the vertical mirror line that echoes the hub) */}
+      <line
+        x1={cx}
+        y1={crown.y}
+        x2={cx}
+        y2={cy}
+        stroke={CREAM}
+        strokeWidth={1.8}
+      />
+      {/* outer column */}
+      <line
+        x1={floorRight.x}
+        y1={springing.y}
+        x2={floorRight.x}
+        y2={cy}
+        stroke={CREAM}
+        strokeWidth={1.4}
+      />
+
+      {/* outer glazing arc */}
+      <path
+        d={arcPath}
+        fill="none"
+        stroke={CREAM}
+        strokeWidth={1.6}
+      />
+      {/* inner glazing arc */}
+      <path
+        d={innerArcPath}
+        fill="none"
+        stroke={CREAM}
+        strokeOpacity={0.5}
+        strokeWidth={0.9}
+      />
+      {/* second inner line to suggest ridge-and-furrow depth */}
+      <path
+        d={arcPath}
+        fill="none"
+        stroke={CREAM_HI}
+        strokeOpacity={0.3}
+        strokeWidth={0.6}
+        transform={`translate(-3 3)`}
+      />
+
+      {/* radial trusses from central column (springing+column top) out to
+          each glazing bar on the arch — this is the direct rhyme with the
+          leaf's primary ribs */}
+      {Array.from({ length: nTrusses }, (_, i) => {
+        const f = (i + 1) / (nTrusses + 1);
+        const p = arcPt(f);
+        return (
+          <line
+            key={`t-${i}`}
+            x1={cx}
+            y1={cy - H}
+            x2={p.x}
+            y2={p.y}
+            stroke={CREAM}
+            strokeOpacity={0.78}
+            strokeWidth={1}
+          />
+        );
+      })}
+
+      {/* vertical glazing mullions down from each truss tip to the floor */}
+      {Array.from({ length: nTrusses }, (_, i) => {
+        const f = (i + 1) / (nTrusses + 1);
+        const p = arcPt(f);
+        return (
+          <line
+            key={`m-${i}`}
+            x1={p.x}
+            y1={p.y}
+            x2={p.x}
+            y2={cy}
+            stroke={CREAM}
+            strokeOpacity={0.35}
+            strokeWidth={0.7}
+          />
+        );
+      })}
+
+      {/* horizontal glazing transom at mid-height */}
+      <line
+        x1={cx}
+        y1={cy - H * 0.55}
+        x2={floorRight.x}
+        y2={cy - H * 0.55}
+        stroke={CREAM}
+        strokeOpacity={0.4}
+        strokeWidth={0.7}
+      />
+      <line
+        x1={cx}
+        y1={cy - H * 0.25}
+        x2={floorRight.x}
+        y2={cy - H * 0.25}
+        stroke={CREAM}
+        strokeOpacity={0.4}
+        strokeWidth={0.7}
+      />
+
+      {/* crown node — crimson, echoing the petiole */}
+      <circle
+        cx={cx}
+        cy={crown.y}
+        r={5}
+        fill={CRIMSON}
+        stroke={CREAM_HI}
+        strokeWidth={1}
+      />
+
+      {/* height dim 23 M on the right */}
+      <g stroke={DIM} strokeWidth={0.9} fill={DIM}>
+        <line
+          x1={floorRight.x + 28}
+          y1={crown.y}
+          x2={floorRight.x + 28}
+          y2={cy}
+        />
+        <line
+          x1={floorRight.x + 24}
+          y1={crown.y}
+          x2={floorRight.x + 32}
+          y2={crown.y}
+        />
+        <line
+          x1={floorRight.x + 24}
+          y1={cy}
+          x2={floorRight.x + 32}
+          y2={cy}
+        />
+        <text
+          x={floorRight.x + 36}
+          y={(crown.y + cy) / 2 + 4}
+          fill={CREAM}
+          fontFamily={inter}
+          fontSize={10}
+          fontWeight={600}
+          letterSpacing={2.2}
+          stroke="none"
+        >
+          33 FT
+        </text>
+      </g>
+    </g>
   );
 };
