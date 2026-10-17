@@ -50,164 +50,568 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — taken from the concept's visual brief (diatom frustule under darkfield)
+const INK = "#06202A";
+const DEEP = "#0E3540";
+const SILICA = "#D6EEE7";
+const RIM = "#9BD5CF";
+const AMBER = "#D89844";
+const MUTED = "#6D8A91";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Geometry helpers ─────────────────────────────────────────────────────
+// A Coscinodiscus-style disc: concentric rings + radial costae + hexagonal pore lattice.
+// Draws in a 1080-wide local coordinate space centred at (CX, CY) with radius R.
+const CX = 540;
+const CY = 530;
+const R = 300; // outer silica rim
+const R_INNER = R - 26; // inner wall where pore field begins
+const R_PORE_OUTER = R - 40;
+const R_PORE_INNER = 58; // central hyaline area
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+type Pore = { x: number; y: number; r: number; shellDist: number };
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const buildPores = (): Pore[] => {
+  // Hexagonal lattice, keep points inside the pore annulus, varying radius slightly by band.
+  const pores: Pore[] = [];
+  const step = 24; // pore pitch
+  const hStep = step * Math.sqrt(3) / 2;
+  for (let row = -22; row <= 22; row++) {
+    const y = CY + row * hStep;
+    const xOffset = (row & 1) === 0 ? 0 : step / 2;
+    for (let col = -22; col <= 22; col++) {
+      const x = CX + col * step + xOffset;
+      const dx = x - CX;
+      const dy = y - CY;
+      const d = Math.hypot(dx, dy);
+      if (d > R_PORE_OUTER || d < R_PORE_INNER) continue;
+      // Pore radius drops a touch near the rim, grows a touch mid-shell.
+      const t = (d - R_PORE_INNER) / (R_PORE_OUTER - R_PORE_INNER);
+      const rad = 6.4 - Math.pow(t - 0.4, 2) * 4.2;
+      pores.push({ x, y, r: Math.max(3.5, rad), shellDist: d });
+    }
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return pores;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+// Radial costae (fine spoke-ridges that cross the pore field)
+const COSTAE_COUNT = 72;
+const buildCostae = (): Array<[number, number, number, number]> => {
+  const lines: Array<[number, number, number, number]> = [];
+  for (let i = 0; i < COSTAE_COUNT; i++) {
+    const theta = (i / COSTAE_COUNT) * Math.PI * 2;
+    const r0 = R_PORE_INNER + 2;
+    const r1 = R_PORE_OUTER - 2;
+    const x0 = CX + Math.cos(theta) * r0;
+    const y0 = CY + Math.sin(theta) * r0;
+    const x1 = CX + Math.cos(theta) * r1;
+    const y1 = CY + Math.sin(theta) * r1;
+    lines.push([x0, y0, x1, y1]);
+  }
+  return lines;
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// Micro-tick marks along the outer rim (like a lens barrel)
+const buildRimTicks = (): Array<[number, number, number, number, boolean]> => {
+  const t: Array<[number, number, number, number, boolean]> = [];
+  const count = 180;
+  for (let i = 0; i < count; i++) {
+    const theta = (i / count) * Math.PI * 2;
+    const major = i % 15 === 0;
+    const r0 = R + 2;
+    const r1 = r0 + (major ? 14 : 6);
+    const x0 = CX + Math.cos(theta) * r0;
+    const y0 = CY + Math.sin(theta) * r0;
+    const x1 = CX + Math.cos(theta) * r1;
+    const y1 = CY + Math.sin(theta) * r1;
+    t.push([x0, y0, x1, y1, major]);
+  }
+  return t;
 };
+
+const PORES = buildPores();
+const COSTAE = buildCostae();
+const RIM_TICKS = buildRimTicks();
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  // ── Timing ─────────────────────────────────────────────────────────────
+  const bodySpring = spring({
+    frame,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 220, mass: 0.9, stiffness: 110 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const titleSpring = spring({
+    frame: frame - fps * 0.5,
+    fps,
+    config: { damping: 220, mass: 0.9 },
+  });
+
+  const roleOpacity = interpolate(frame, [fps * 0.2, fps * 0.9], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const metaOpacity = interpolate(frame, [0, fps * 0.5], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // Light-sweep across the disc — one primary motion that dramatises the hook.
+  // Travels left→right across the frustule once over ~4 s, then holds.
+  const sweepT = Math.min(1, Math.max(0, (frame - fps * 0.6) / (fps * 3.8)));
+  const sweepEased = Easing.inOut(Easing.cubic)(sweepT);
+  const sweepX = CX - R - 60 + sweepEased * (R * 2 + 120);
+  const sweepWidth = R * 1.1;
+
+  // Progressive illumination of pores — rim→centre reveal lit by the sweep.
+  const poreT = Math.min(1, Math.max(0, (frame - fps * 0.4) / (fps * 2.2)));
+  const poreEased = 1 - Math.pow(1 - poreT, 3);
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
+      {/* ── Diatom plate ────────────────────────────────────────────── */}
+      <svg
+        width={1080}
+        height={1350}
+        viewBox="0 0 1080 1350"
+        style={{ position: "absolute", inset: 0 }}
+      >
+        <defs>
+          {/* Deep background vignette focuses the eye on the plate */}
+          <radialGradient id="bg-vignette" cx="50%" cy="43%" r="65%">
+            <stop offset="0%" stopColor={DEEP} stopOpacity={1} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
+          </radialGradient>
+
+          {/* Soft outer glow around the frustule — darkfield backlight */}
+          <radialGradient id="plate-halo" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={RIM} stopOpacity={0.22} />
+            <stop offset="60%" stopColor={RIM} stopOpacity={0.05} />
+            <stop offset="100%" stopColor={RIM} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Translucent inner glass — reads as backlit silica */}
+          <radialGradient id="plate-body" cx="50%" cy="42%" r="60%">
+            <stop offset="0%" stopColor="#E8F6F2" stopOpacity={0.14} />
+            <stop offset="55%" stopColor={SILICA} stopOpacity={0.06} />
+            <stop offset="100%" stopColor={SILICA} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Centre hyaline area — a quiet silica medallion */}
+          <radialGradient id="plate-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={SILICA} stopOpacity={0.18} />
+            <stop offset="80%" stopColor={SILICA} stopOpacity={0.06} />
+            <stop offset="100%" stopColor={SILICA} stopOpacity={0} />
+          </radialGradient>
+
+          {/* Horizontal light-sweep gradient (clip mask for the pore illumination) */}
+          <linearGradient id="sweep-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity={0} />
+            <stop offset="35%" stopColor="#FFFFFF" stopOpacity={1} />
+            <stop offset="65%" stopColor="#FFFFFF" stopOpacity={1} />
+            <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
+          </linearGradient>
+
+          {/* Mask for pore glow — just the sweep window */}
+          <mask id="sweep-mask">
+            <rect x={0} y={0} width={1080} height={1350} fill="#000" />
+            <rect
+              x={sweepX - sweepWidth / 2}
+              y={CY - R - 20}
+              width={sweepWidth}
+              height={R * 2 + 40}
+              fill="url(#sweep-grad)"
+            />
+          </mask>
+
+          {/* Clip the inner pore field to a circular region */}
+          <clipPath id="disc-clip">
+            <circle cx={CX} cy={CY} r={R_INNER - 2} />
+          </clipPath>
+
+          {/* Soft blur for backlit edges */}
+          <filter id="soft-blur" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="6" />
+          </filter>
+          <filter id="pore-blur" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3.4" />
+          </filter>
+        </defs>
+
+        {/* Background */}
+        <rect width={1080} height={1350} fill="url(#bg-vignette)" />
+
+        {/* Subtle margin grid — a glassblower's bench rule */}
+        <g stroke={DEEP} strokeWidth={1} opacity={0.55}>
+          {Array.from({ length: 20 }).map((_, i) => (
+            <line
+              key={`vg-${i}`}
+              x1={60 + i * 50}
+              y1={180}
+              x2={60 + i * 50}
+              y2={930}
+            />
+          ))}
+          {Array.from({ length: 16 }).map((_, i) => (
+            <line
+              key={`hg-${i}`}
+              x1={60}
+              y1={180 + i * 50}
+              x2={1020}
+              y2={180 + i * 50}
+            />
+          ))}
+        </g>
+
+        {/* ── Corner crop marks (bench frame) ─────────────────────── */}
+        {(
+          [
+            [80, 180, 1, 1],
+            [1000, 180, -1, 1],
+            [80, 930, 1, -1],
+            [1000, 930, -1, -1],
+          ] as const
+        ).map(([cx, cy, sx, sy], i) => (
+          <g key={`crop-${i}`} stroke={AMBER} strokeWidth={1.4} fill="none">
+            <line x1={cx} y1={cy} x2={cx + sx * 22} y2={cy} />
+            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 22} />
+          </g>
+        ))}
+
+        {/* Plate halo */}
+        <circle cx={CX} cy={CY} r={R + 90} fill="url(#plate-halo)" />
+
+        {/* Horizontal baseline through disc centre — bench axis */}
+        <line
+          x1={120}
+          y1={CY}
+          x2={CX - R - 24}
+          y2={CY}
+          stroke={MUTED}
+          strokeOpacity={0.35}
+          strokeWidth={1}
+          strokeDasharray="2 6"
+        />
+        <line
+          x1={CX + R + 24}
+          y1={CY}
+          x2={960}
+          y2={CY}
+          stroke={MUTED}
+          strokeOpacity={0.35}
+          strokeWidth={1}
+          strokeDasharray="2 6"
+        />
+
+        {/* Diameter annotation */}
+        <g
+          fill={MUTED}
+          stroke={MUTED}
+          strokeWidth={1}
+          fontFamily={inter}
+          fontSize={11}
+          letterSpacing={2.6}
+          fontWeight={500}
+        >
+          <text
+            x={CX - R - 44}
+            y={CY - 4}
+            textAnchor="end"
+            stroke="none"
+            opacity={0.75}
+          >
+            Ø 180 µm
+          </text>
+          <text
+            x={CX + R + 44}
+            y={CY - 4}
+            textAnchor="start"
+            stroke="none"
+            opacity={0.75}
+          >
+            SIO₂ · nH₂O
+          </text>
+        </g>
+
+        {/* ── Frustule body ───────────────────────────────────────── */}
+        {/* Translucent inner glass */}
+        <circle cx={CX} cy={CY} r={R - 2} fill="url(#plate-body)" />
+        {/* Outer silica rim (double ring) */}
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R}
+          fill="none"
+          stroke={SILICA}
+          strokeWidth={2.2}
+          opacity={0.95}
+        />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R - 10}
+          fill="none"
+          stroke={SILICA}
+          strokeWidth={1}
+          opacity={0.55}
+        />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R_INNER}
+          fill="none"
+          stroke={SILICA}
+          strokeWidth={1}
+          opacity={0.55}
+        />
+
+        {/* Rim ticks */}
+        {RIM_TICKS.map(([x0, y0, x1, y1, major], i) => (
+          <line
+            key={`tick-${i}`}
+            x1={x0}
+            y1={y0}
+            x2={x1}
+            y2={y1}
+            stroke={major ? SILICA : RIM}
+            strokeWidth={major ? 1.3 : 0.8}
+            opacity={major ? 0.7 : 0.35}
+          />
+        ))}
+
+        {/* Radial costae — behind the pore lattice */}
+        <g clipPath="url(#disc-clip)" opacity={0.35}>
+          {COSTAE.map(([x0, y0, x1, y1], i) => (
+            <line
+              key={`costa-${i}`}
+              x1={x0}
+              y1={y0}
+              x2={x1}
+              y2={y1}
+              stroke={RIM}
+              strokeWidth={0.6}
+            />
+          ))}
+        </g>
+
+        {/* ── Pore lattice (base layer: outlines) ───────────────── */}
+        <g clipPath="url(#disc-clip)">
+          {PORES.map((p, i) => {
+            const normDist =
+              (p.shellDist - R_PORE_INNER) /
+              (R_PORE_OUTER - R_PORE_INNER);
+            // Rim→centre reveal
+            const localOpenT = Math.min(
+              1,
+              Math.max(0, poreEased * 1.6 - (1 - normDist) * 0.8),
+            );
+            if (localOpenT <= 0) return null;
+            return (
+              <circle
+                key={`pore-${i}`}
+                cx={p.x}
+                cy={p.y}
+                r={p.r * (0.4 + 0.6 * localOpenT)}
+                fill="none"
+                stroke={SILICA}
+                strokeWidth={1.25}
+                opacity={0.55 + 0.4 * localOpenT}
+              />
+            );
+          })}
+        </g>
+
+        {/* ── Pore lattice (lit layer: only visible under the sweep) ─ */}
+        <g
+          clipPath="url(#disc-clip)"
+          mask="url(#sweep-mask)"
+          filter="url(#pore-blur)"
+        >
+          {PORES.map((p, i) => {
+            const normDist =
+              (p.shellDist - R_PORE_INNER) /
+              (R_PORE_OUTER - R_PORE_INNER);
+            const localOpenT = Math.min(
+              1,
+              Math.max(0, poreEased * 1.6 - (1 - normDist) * 0.8),
+            );
+            if (localOpenT <= 0) return null;
+            return (
+              <circle
+                key={`lit-${i}`}
+                cx={p.x}
+                cy={p.y}
+                r={p.r * 0.95}
+                fill={SILICA}
+                opacity={0.9 * localOpenT}
+              />
+            );
+          })}
+        </g>
+
+        {/* Central hyaline medallion */}
+        <circle cx={CX} cy={CY} r={R_PORE_INNER} fill="url(#plate-core)" />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R_PORE_INNER}
+          fill="none"
+          stroke={SILICA}
+          strokeWidth={1}
+          opacity={0.7}
+        />
+        <circle
+          cx={CX}
+          cy={CY}
+          r={R_PORE_INNER - 14}
+          fill="none"
+          stroke={RIM}
+          strokeWidth={0.8}
+          opacity={0.45}
+        />
+        {/* A tiny labelled central areola */}
+        <circle cx={CX} cy={CY} r={6} fill={AMBER} opacity={0.9} />
+
+        {/* ── Specular glint (traveling with the sweep) ───────────── */}
+        {/* A thin crescent of light that reads like silica catching the
+            sweep, clipped to the disc. */}
+        <g clipPath="url(#disc-clip)" opacity={0.85}>
+          <ellipse
+            cx={sweepX}
+            cy={CY}
+            rx={8}
+            ry={R_PORE_OUTER - 14}
+            fill={SILICA}
+            opacity={0.07}
+            filter="url(#soft-blur)"
+          />
+          <ellipse
+            cx={sweepX}
+            cy={CY}
+            rx={1.6}
+            ry={R_PORE_OUTER - 22}
+            fill="#FFFFFF"
+            opacity={0.18}
+          />
+        </g>
+
+        {/* ── Temperature callout (bench-note, left side) ─────────── */}
+        <g opacity={interpolate(frame, [fps * 1.3, fps * 2.1], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+          easing: Easing.out(Easing.cubic),
+        })}>
+          {/* leader from a pore on the shell up-left into margin */}
+          <line
+            x1={CX - R * 0.46}
+            y1={CY - R * 0.70}
+            x2={CX - R - 36}
+            y2={CY - R - 10}
+            stroke={AMBER}
+            strokeWidth={1.2}
+          />
+          <circle
+            cx={CX - R * 0.46}
+            cy={CY - R * 0.70}
+            r={3}
+            fill={AMBER}
+          />
+          <g transform={`translate(${CX - R - 38}, ${CY - R - 42})`}>
+            <text
+              x={0}
+              y={0}
+              textAnchor="end"
+              fill={AMBER}
+              fontFamily={inter}
+              fontSize={10.5}
+              letterSpacing={3.2}
+              fontWeight={600}
+            >
+              BUILT AT
+            </text>
+            <text
+              x={0}
+              y={34}
+              textAnchor="end"
+              fill={SILICA}
+              fontFamily={playfair}
+              fontStyle="italic"
+              fontSize={36}
+              fontWeight={500}
+            >
+              15 °C
+            </text>
+          </g>
+
+          {/* opposing note on the right, same baseline */}
+          <g transform={`translate(${CX + R + 38}, ${CY - R - 42})`}>
+            <text
+              x={0}
+              y={0}
+              textAnchor="start"
+              fill={MUTED}
+              fontFamily={inter}
+              fontSize={10.5}
+              letterSpacing={3.2}
+              fontWeight={600}
+            >
+              FURNACE
+            </text>
+            <text
+              x={0}
+              y={34}
+              textAnchor="start"
+              fill={MUTED}
+              fontFamily={playfair}
+              fontStyle="italic"
+              fontSize={36}
+              fontWeight={500}
+              opacity={0.75}
+            >
+              1600 °C
+            </text>
+          </g>
+        </g>
+
+        {/* ── Scale bar + figure caption below the plate ──────────── */}
+        <g
+          transform={`translate(80, 960)`}
+          fill={MUTED}
+          fontFamily={inter}
+          fontSize={11}
+          letterSpacing={3}
+          fontWeight={500}
+          opacity={bodySpring}
+        >
+          <g stroke={MUTED} strokeWidth={1.2}>
+            <line x1={0} y1={0} x2={110} y2={0} />
+            <line x1={0} y1={-5} x2={0} y2={5} />
+            <line x1={55} y1={-3} x2={55} y2={3} />
+            <line x1={110} y1={-5} x2={110} y2={5} />
+          </g>
+          <text x={120} y={4}>
+            50 µm
+          </text>
+          <text x={920 - 80} y={4} textAnchor="end" fill={RIM} opacity={0.9}>
+            FIG. 1 · COSCINODISCUS FRUSTULE, LIGHT-MICROGRAPH SCHEMATIC
+          </text>
+        </g>
+      </svg>
+
+      {/* ── Metadata band ───────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -217,469 +621,116 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: "#8FA6AD",
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
           textTransform: "uppercase",
           fontWeight: 500,
+          opacity: metaOpacity,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: AMBER }}>2026 · 10 · 17</span>
       </div>
 
-      {/* Drafting frame + map */}
-      <svg
-        width={1080}
-        height={1350}
-        viewBox="0 0 1080 1350"
-        style={{ position: "absolute", inset: 0 }}
-      >
-        <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
-          strokeWidth={1}
-        />
-
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
-          </g>
-        ))}
-
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
-        </g>
-      </svg>
-
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ──────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 1000,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
             [0, 1],
-            [16, 0],
+            [14, 0],
           )}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: AMBER,
             fontFamily: inter,
-            fontSize: 13,
+            fontSize: 12.5,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 12,
             fontWeight: 600,
+            opacity: roleOpacity,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+          Role <span style={{ color: MUTED, margin: "0 4px" }}>/</span>
+          <span style={{ color: "#F0F6F3", letterSpacing: 5 }}>
+            Glassblower
           </span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: "#F2F8F5",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
+            fontSize: 54,
+            lineHeight: 1.0,
+            letterSpacing: -1.1,
             fontStyle: "italic",
+            maxWidth: 820,
           }}
         >
-          The brainless
+          The ambient-temperature
           <br />
-          city planner.
-        </div>
-
-        <div
-          style={{
-            marginTop: 30,
-            color: "#C8CAD0",
-            fontFamily: inter,
-            fontSize: 19,
-            lineHeight: 1.4,
-            fontWeight: 400,
-            maxWidth: 880,
-            opacity: hookOpacity,
-          }}
-        >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          glassblower.
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Hook paragraph ───────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          top: 1200,
+          color: "#C4D5D1",
+          fontFamily: inter,
+          fontSize: 15.5,
+          lineHeight: 1.45,
+          fontWeight: 400,
+          maxWidth: 880,
+          opacity: hookOpacity,
+        }}
+      >
+        A single-celled{" "}
+        <span style={{ color: SILICA, fontWeight: 600 }}>diatom</span> secretes
+        silaffin proteins that polymerise dissolved silicic acid into an
+        opaline-glass shell, patterning its pores on a 40–200 nm scale that
+        industrial glassmakers can only approach by melting silica at ~1600 °C.
+      </div>
+
+      {/* ── Footer ──────────────────────────────────────────────── */}
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          bottom: 32,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: MUTED,
           fontFamily: inter,
-          fontSize: 11,
+          fontSize: 10.5,
           letterSpacing: 3,
           textTransform: "uppercase",
           fontWeight: 500,
+          opacity: metaOpacity,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Kröger et al. · Science 286 (1999) 1129–1132</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: AMBER }}>●</span> Fucoxanthin ·{" "}
+          <span style={{ color: SILICA }}>●</span> Silica
         </span>
       </div>
     </AbsoluteFill>
