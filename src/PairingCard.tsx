@@ -50,158 +50,160 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
+// Palette — from the concept's visual brief (lightning + its nitrate product)
+const INK = "#060915";
+const BOARD = "#0F1424";
+const BOARD_LO = "#0A0E1C";
+const CYAN = "#7FD9FF";
+const WHITE = "#F6F2FF";
+const VIOLET = "#B38CFF";
+const NITRATE = "#9FE3B0";
 const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+const DIM = "#4A5168";
+const GRID = "#141A2E";
+const GRID_MAJOR = "#1C2440";
+const SOIL = "#1A1407";
+const SOIL_HI = "#2A2010";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// ── Map coord space: 1080 × 800 inside the drafting frame ────────────────
+// Bolt zigzag path (one hero bolt, slightly left-of-centre, descending)
+type P = { x: number; y: number };
+const BOLT: P[] = [
+  { x: 320, y: 40 }, // 1 cloud base
+  { x: 395, y: 170 }, // 2
+  { x: 345, y: 290 }, // 3  (channel label anchor)
+  { x: 435, y: 410 }, // 4
+  { x: 365, y: 540 }, // 5
+  { x: 460, y: 660 }, // 6
+  { x: 410, y: 720 }, // 7 ground strike
+];
+// A couple of thin forks (secondary, don't fight the main line)
+const FORK_A: P[] = [
+  { x: 395, y: 170 },
+  { x: 300, y: 240 },
+  { x: 325, y: 320 },
+];
+const FORK_B: P[] = [
+  { x: 435, y: 410 },
+  { x: 520, y: 470 },
+  { x: 505, y: 540 },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+const polyLen = (pts: P[]): number => {
+  let L = 0;
+  for (let i = 1; i < pts.length; i++) {
+    L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return L;
+};
+const polyD = (pts: P[]): string =>
+  "M " + pts.map((p) => `${p.x} ${p.y}`).join(" L ");
+
+const BOLT_LEN = polyLen(BOLT);
+const FORK_A_LEN = polyLen(FORK_A);
+const FORK_B_LEN = polyLen(FORK_B);
+const GROUND_Y = 720;
+
+// Altitude annotation bands (right-hand column), map coords
+type Band = {
+  y: number;
+  label: string;
+  rxn: React.ReactNode;
+  caption: string;
+  delay: number; // in [0,1] along bolt progress
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
-};
-
+// ── Component ────────────────────────────────────────────────────────────
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // The strike completes over ~1.2 s, then a bright flash at ground, then the
+  // altitude annotations resolve in sequence as the eye travels down.
+  const strikeSpan = fps * 1.2;
+  const t = Math.min(1, Math.max(0, frame / strikeSpan));
+  // ease-out cubic — the stroke draws fast then settles
+  const strikeEased = 1 - Math.pow(1 - t, 3);
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  // Fork reveals piggy-back on their own small delays
+  const forkA = Math.min(1, Math.max(0, (frame - fps * 0.4) / (fps * 0.6)));
+  const forkB = Math.min(1, Math.max(0, (frame - fps * 0.7) / (fps * 0.6)));
 
+  // Flash at ground when bolt lands
+  const flash = interpolate(
+    frame,
+    [fps * 1.1, fps * 1.25, fps * 1.9],
+    [0, 1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // Title + hook spring in after the strike
   const titleSpring = spring({
-    frame: frame - fps * 0.4,
+    frame: frame - fps * 1.4,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 0.9 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 2.0, fps * 2.9], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
+  // Nitrate droplet: falls into the soil near the end
+  const dropFall = interpolate(frame, [fps * 2.4, fps * 3.2], [0, 1], {
+    easing: Easing.inOut(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
   // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
+  // Top metadata band : 0..110
+  // Field frame       : 130..841 (h 711, w 960)
+  // Title             : 880..
+  // Hook              : ~1095..
+  // Footer            : ~1290..
   const FRAME = { x: 60, y: 130, w: 960, h: 711 };
   const MAP_W = 1080;
   const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const scale = FRAME.w / MAP_W;
+
+  // Progress thresholds for each band (triggered as the bolt sweeps past)
+  const bandAt = (yMap: number): number => {
+    // frame at which the bolt reveal reaches that altitude
+    // reveal length progresses with strikeEased from 0..1 across BOLT_LEN
+    // find the length-along-bolt at this y
+    let acc = 0;
+    for (let i = 1; i < BOLT.length; i++) {
+      const a = BOLT[i - 1];
+      const b = BOLT[i];
+      if (
+        (a.y <= yMap && b.y >= yMap) ||
+        (a.y >= yMap && b.y <= yMap)
+      ) {
+        const f = (yMap - a.y) / (b.y - a.y || 1);
+        acc += Math.hypot(b.x - a.x, b.y - a.y) * f;
+        break;
+      }
+      acc += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    return acc / BOLT_LEN;
+  };
+
+  // Reveal 0..1 for an altitude band
+  const bandReveal = (yMap: number): number => {
+    const u = bandAt(yMap);
+    const after = strikeEased - u;
+    return Math.min(1, Math.max(0, after * 6));
+  };
+
+  const BANDS = [
+    { y: 155, label: "ATMOSPHERE", unit: "78% N₂ · 21% O₂" },
+    { y: 455, label: "COOLING WAKE", unit: "NO + O₂ → NO₂" },
+    { y: 625, label: "RAIN-OUT", unit: "NO₂ + H₂O → HNO₃" },
+  ];
+  // Channel band hosts the big-number callout rather than a BANDS row,
+  // so it owns its own vertical slot in the right column.
+  const CHANNEL_Y = 300;
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -225,11 +227,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: CYAN }}>2026 · 10 · 24</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Field frame */}
       <svg
         width={1080}
         height={1350}
@@ -237,6 +239,7 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
+          {/* Patterns */}
           <pattern
             id="grid"
             x={FRAME.x}
@@ -268,20 +271,33 @@ export const PairingCard: React.FC = () => {
             />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="board-vignette" cx="50%" cy="35%" r="75%">
+            <stop offset="0%" stopColor="#121A2E" stopOpacity={1} />
+            <stop offset="100%" stopColor={BOARD_LO} stopOpacity={1} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          <radialGradient id="ground-flash" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={WHITE} stopOpacity={1} />
+            <stop offset="35%" stopColor={CYAN} stopOpacity={0.6} />
+            <stop offset="100%" stopColor={VIOLET} stopOpacity={0} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <radialGradient id="molecule-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={CYAN} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={CYAN} stopOpacity={0} />
+          </radialGradient>
+
+          <linearGradient id="soil-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={SOIL_HI} />
+            <stop offset="100%" stopColor={SOIL} />
+          </linearGradient>
+
+          <filter id="bolt-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="6" result="b1" />
+            <feGaussianBlur stdDeviation="14" in="SourceGraphic" result="b2" />
             <feMerge>
-              <feMergeNode in="blur" />
+              <feMergeNode in="b2" />
+              <feMergeNode in="b1" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
@@ -317,7 +333,7 @@ export const PairingCard: React.FC = () => {
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#1F2740"
           strokeWidth={1}
         />
 
@@ -330,245 +346,586 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={VIOLET} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Figure index — top-right of frame, out of the strike zone */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + FRAME.w - 26}, ${FRAME.y + 30})`}
+          fill={VIOLET}
           fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text
+            fontSize={11}
+            letterSpacing={3.4}
+            fontWeight={600}
+            textAnchor="end"
+          >
+            FIG. 1
+          </text>
         </g>
 
-        {/* Scale bar */}
+        {/* Altitude scale on the far left (inside frame) */}
         <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
           fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
+          fontSize={9}
+          letterSpacing={2.4}
           fontWeight={500}
+          fill={DIM}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          {[
+            { y: 100, lab: "12 KM" },
+            { y: 275, lab: "8 KM" },
+            { y: 450, lab: "4 KM" },
+            { y: 625, lab: "1 KM" },
+            { y: 720, lab: "0" },
+          ].map((a, i) => {
+            const yPix = FRAME.y + a.y * scale;
+            return (
+              <g key={i}>
+                <line
+                  x1={FRAME.x + 20}
+                  x2={FRAME.x + 40}
+                  y1={yPix}
+                  y2={yPix}
+                  stroke={DIM}
+                  strokeWidth={1}
+                />
+                <text x={FRAME.x + 46} y={yPix + 3} fill={DIM}>
+                  {a.lab}
+                </text>
+              </g>
+            );
+          })}
+          <text
+            x={FRAME.x + 20}
+            y={FRAME.y + FRAME.h - 10}
+            fill={DIM}
+            fontSize={9}
+            letterSpacing={2.6}
+          >
+            ALTITUDE
           </text>
         </g>
 
         {/* Map content: scale 1080×800 coords into FRAME */}
         <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+          {/* Horizon / soil cross-section */}
+          <rect x={0} y={GROUND_Y} width={1080} height={80} fill="url(#soil-fill)" />
+          <line
+            x1={0}
+            y1={GROUND_Y}
+            x2={1080}
+            y2={GROUND_Y}
+            stroke={NITRATE}
+            strokeOpacity={0.4}
+            strokeWidth={1.2}
+          />
+          {/* Soil texture dots */}
+          {Array.from({ length: 90 }).map((_, i) => {
+            const seed = (i * 9301 + 49297) % 233280;
+            const rx = (seed / 233280) * 1060 + 10;
+            const ry = GROUND_Y + 8 + ((i * 71) % 60);
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+              <circle
+                key={`soil-${i}`}
+                cx={rx}
+                cy={ry}
+                r={0.9}
+                fill={DIM}
+                opacity={0.55}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+          {/* Root descending from strike point */}
+          <path
+            d={`M ${BOLT[BOLT.length - 1].x} ${GROUND_Y}
+                C ${BOLT[BOLT.length - 1].x + 10} ${GROUND_Y + 20},
+                  ${BOLT[BOLT.length - 1].x - 25} ${GROUND_Y + 35},
+                  ${BOLT[BOLT.length - 1].x - 15} ${GROUND_Y + 72}`}
+            stroke={NITRATE}
+            strokeWidth={1.8}
+            strokeOpacity={0.85}
+            fill="none"
+            strokeLinecap="round"
+          />
+          <path
+            d={`M ${BOLT[BOLT.length - 1].x + 2} ${GROUND_Y + 22}
+                C ${BOLT[BOLT.length - 1].x + 24} ${GROUND_Y + 32},
+                  ${BOLT[BOLT.length - 1].x + 40} ${GROUND_Y + 50},
+                  ${BOLT[BOLT.length - 1].x + 48} ${GROUND_Y + 68}`}
+            stroke={NITRATE}
+            strokeWidth={1.2}
+            strokeOpacity={0.6}
+            fill="none"
+            strokeLinecap="round"
+          />
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
+          {/* Cloud base — the strike's origin */}
+          <g opacity={0.9}>
+            {[
+              { cx: 330, cy: 60, rx: 160, ry: 22 },
+              { cx: 230, cy: 78, rx: 85, ry: 14 },
+              { cx: 445, cy: 72, rx: 70, ry: 12 },
+            ].map((c, i) => (
+              <ellipse
+                key={`cloud-${i}`}
+                cx={c.cx}
+                cy={c.cy}
+                rx={c.rx}
+                ry={c.ry}
+                fill={BOARD}
+                stroke={DIM}
+                strokeWidth={1}
+                strokeOpacity={0.6}
+              />
+            ))}
           </g>
+
+          {/* Ground flash — radial burst when bolt lands */}
+          {flash > 0.01 && (
+            <g opacity={flash}>
+              <circle
+                cx={BOLT[BOLT.length - 1].x}
+                cy={GROUND_Y}
+                r={260}
+                fill="url(#ground-flash)"
+              />
+            </g>
+          )}
+
+          {/* Fork A — thin secondary branch */}
+          {forkA > 0 && (
+            <g filter="url(#bolt-glow)" opacity={0.9}>
+              <path
+                d={polyD(FORK_A)}
+                stroke={CYAN}
+                strokeWidth={2.5}
+                strokeOpacity={0.55}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={FORK_A_LEN}
+                strokeDashoffset={FORK_A_LEN * (1 - forkA)}
+              />
+              <path
+                d={polyD(FORK_A)}
+                stroke={WHITE}
+                strokeWidth={1}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={FORK_A_LEN}
+                strokeDashoffset={FORK_A_LEN * (1 - forkA)}
+              />
+            </g>
+          )}
+          {/* Fork B — thin secondary branch */}
+          {forkB > 0 && (
+            <g filter="url(#bolt-glow)" opacity={0.85}>
+              <path
+                d={polyD(FORK_B)}
+                stroke={CYAN}
+                strokeWidth={2.5}
+                strokeOpacity={0.5}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={FORK_B_LEN}
+                strokeDashoffset={FORK_B_LEN * (1 - forkB)}
+              />
+              <path
+                d={polyD(FORK_B)}
+                stroke={WHITE}
+                strokeWidth={1}
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray={FORK_B_LEN}
+                strokeDashoffset={FORK_B_LEN * (1 - forkB)}
+              />
+            </g>
+          )}
+
+          {/* Main bolt — outer violet aura */}
+          <path
+            d={polyD(BOLT)}
+            stroke={VIOLET}
+            strokeWidth={22}
+            strokeOpacity={0.22}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#bolt-glow)"
+            strokeDasharray={BOLT_LEN}
+            strokeDashoffset={BOLT_LEN * (1 - strikeEased)}
+          />
+          {/* Main bolt — cyan plasma layer */}
+          <path
+            d={polyD(BOLT)}
+            stroke={CYAN}
+            strokeWidth={10}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#bolt-glow)"
+            strokeDasharray={BOLT_LEN}
+            strokeDashoffset={BOLT_LEN * (1 - strikeEased)}
+          />
+          {/* Main bolt — incandescent core */}
+          <path
+            d={polyD(BOLT)}
+            stroke={WHITE}
+            strokeWidth={3}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={BOLT_LEN}
+            strokeDashoffset={BOLT_LEN * (1 - strikeEased)}
+          />
+
+          {/* Right-column annotation stack — resolves band-by-band */}
+          {BANDS.map((b, i) => {
+            const rev = bandReveal(b.y);
+            if (rev <= 0.001) return null;
+
+            // Band numbering: 01 atmosphere, 02 channel (callout), 03 wake, 04 rain
+            const bandNum = i === 0 ? "01" : i === 1 ? "03" : "04";
+
+            // Pick the x of the bolt at this y to seat a leader into the band
+            let bx = BOLT[0].x;
+            for (let k = 1; k < BOLT.length; k++) {
+              const a = BOLT[k - 1];
+              const c = BOLT[k];
+              if (
+                (a.y <= b.y && c.y >= b.y) ||
+                (a.y >= b.y && c.y <= b.y)
+              ) {
+                const f = (b.y - a.y) / (c.y - a.y || 1);
+                bx = a.x + (c.x - a.x) * f;
+                break;
+              }
+            }
+            const LX = 640; // annotation column x in map coords
+            const LY = b.y;
+
+            return (
+              <g key={`band-${i}`} opacity={rev}>
+                {/* Leader line from bolt to band label */}
+                <line
+                  x1={bx + 8}
+                  y1={LY}
+                  x2={LX - 10}
+                  y2={LY}
+                  stroke={VIOLET}
+                  strokeOpacity={0.55}
+                  strokeWidth={1}
+                  strokeDasharray="2 4"
+                />
+                {/* Vertex marker on bolt */}
+                <circle cx={bx} cy={LY} r={3.5} fill={WHITE} />
+                <circle
+                  cx={bx}
+                  cy={LY}
+                  r={9}
+                  fill="none"
+                  stroke={CYAN}
+                  strokeOpacity={0.6}
+                  strokeWidth={1}
+                />
+
+                {/* Band label block */}
+                <text
+                  x={LX}
+                  y={LY - 10}
+                  fill={CYAN}
+                  fontFamily={inter}
+                  fontSize={12}
+                  letterSpacing={3.4}
+                  fontWeight={600}
+                >
+                  {`${bandNum} · ${b.label}`}
+                </text>
+                <text
+                  x={LX}
+                  y={LY + 14}
+                  fill="#E6E8EF"
+                  fontFamily={inter}
+                  fontSize={18}
+                  letterSpacing={0.2}
+                  fontWeight={500}
+                >
+                  {b.unit}
+                </text>
+
+                {/* Underline rule */}
+                <line
+                  x1={LX}
+                  y1={LY + 28}
+                  x2={LX + 330}
+                  y2={LY + 28}
+                  stroke={DIM}
+                  strokeWidth={1}
+                />
+              </g>
+            );
+          })}
+
+          {/* 02 · CHANNEL — the hook as a hero callout */}
+          {(() => {
+            const rev = bandReveal(CHANNEL_Y);
+            if (rev <= 0.001) return null;
+            // Leader to bolt vertex at channel y
+            let bx = BOLT[0].x;
+            for (let k = 1; k < BOLT.length; k++) {
+              const a = BOLT[k - 1];
+              const c = BOLT[k];
+              if (
+                (a.y <= CHANNEL_Y && c.y >= CHANNEL_Y) ||
+                (a.y >= CHANNEL_Y && c.y <= CHANNEL_Y)
+              ) {
+                const f = (CHANNEL_Y - a.y) / (c.y - a.y || 1);
+                bx = a.x + (c.x - a.x) * f;
+                break;
+              }
+            }
+            const LX = 640;
+            return (
+              <g opacity={rev}>
+                <line
+                  x1={bx + 8}
+                  y1={CHANNEL_Y}
+                  x2={LX - 10}
+                  y2={CHANNEL_Y}
+                  stroke={VIOLET}
+                  strokeOpacity={0.55}
+                  strokeWidth={1}
+                  strokeDasharray="2 4"
+                />
+                <circle cx={bx} cy={CHANNEL_Y} r={3.5} fill={WHITE} />
+                <circle
+                  cx={bx}
+                  cy={CHANNEL_Y}
+                  r={9}
+                  fill="none"
+                  stroke={CYAN}
+                  strokeOpacity={0.6}
+                  strokeWidth={1}
+                />
+
+                {/* Section label */}
+                <text
+                  x={LX}
+                  y={CHANNEL_Y - 10}
+                  fill={CYAN}
+                  fontFamily={inter}
+                  fontSize={12}
+                  letterSpacing={3.4}
+                  fontWeight={600}
+                >
+                  02 · CHANNEL
+                </text>
+
+                {/* Hero number */}
+                <text
+                  x={LX}
+                  y={CHANNEL_Y + 68}
+                  fill={WHITE}
+                  fontFamily={playfair}
+                  fontStyle="italic"
+                  fontSize={82}
+                  fontWeight={500}
+                  letterSpacing={-1}
+                >
+                  30,000
+                  <tspan
+                    fill={VIOLET}
+                    fontFamily={inter}
+                    fontStyle="normal"
+                    fontSize={30}
+                    dx={10}
+                    fontWeight={500}
+                  >
+                    K
+                  </tspan>
+                </text>
+
+                {/* Supporting line + rule */}
+                <text
+                  x={LX}
+                  y={CHANNEL_Y + 92}
+                  fill={GRAY}
+                  fontFamily={inter}
+                  fontSize={11}
+                  letterSpacing={3}
+                  fontWeight={500}
+                >
+                  ≈ 5 × SUN&apos;S SURFACE · N≡N CLEAVED
+                </text>
+                <line
+                  x1={LX}
+                  y1={CHANNEL_Y + 108}
+                  x2={LX + 330}
+                  y2={CHANNEL_Y + 108}
+                  stroke={DIM}
+                  strokeWidth={1}
+                />
+              </g>
+            );
+          })()}
+
+          {/* Molecule chips at channel band (bond cleavage) */}
+          <g opacity={bandReveal(CHANNEL_Y)}>
+            {/* Intact N₂ (upper-left of channel) */}
+            <g transform="translate(165, 240)">
+              <circle cx={-15} cy={0} r={15} fill={BOARD} stroke={VIOLET} strokeWidth={1.5} />
+              <circle cx={15} cy={0} r={15} fill={BOARD} stroke={VIOLET} strokeWidth={1.5} />
+              {/* Triple bond — three parallel lines */}
+              <line x1={-2} y1={-5} x2={2} y2={-5} stroke={VIOLET} strokeWidth={1.6} />
+              <line x1={-2} y1={0} x2={2} y2={0} stroke={VIOLET} strokeWidth={1.6} />
+              <line x1={-2} y1={5} x2={2} y2={5} stroke={VIOLET} strokeWidth={1.6} />
+              <text
+                x={-15}
+                y={4}
+                textAnchor="middle"
+                fill={VIOLET}
+                fontFamily={inter}
+                fontSize={13}
+                fontWeight={600}
+              >
+                N
+              </text>
+              <text
+                x={15}
+                y={4}
+                textAnchor="middle"
+                fill={VIOLET}
+                fontFamily={inter}
+                fontSize={13}
+                fontWeight={600}
+              >
+                N
+              </text>
+              <text
+                x={0}
+                y={38}
+                textAnchor="middle"
+                fill={VIOLET}
+                fontFamily={inter}
+                fontSize={10}
+                letterSpacing={2.2}
+                fontWeight={600}
+              >
+                N₂ · 945 kJ/mol
+              </text>
+            </g>
+
+            {/* Cleaved radicals — just left of the channel vertex (y≈400) */}
+            <g transform="translate(190, 410)">
+              {/* Jagged mini-strike between the two radicals */}
+              <path
+                d="M -42 -2 L -34 4 L -40 10 L -32 16"
+                stroke={CYAN}
+                strokeWidth={1.4}
+                fill="none"
+                strokeLinecap="round"
+              />
+              <circle cx={-20} cy={0} r={15} fill={BOARD} stroke={CYAN} strokeWidth={1.5} />
+              <circle cx={30} cy={10} r={15} fill={BOARD} stroke={CYAN} strokeWidth={1.5} />
+              <text
+                x={-20}
+                y={4}
+                textAnchor="middle"
+                fill={CYAN}
+                fontFamily={inter}
+                fontSize={13}
+                fontWeight={600}
+              >
+                N·
+              </text>
+              <text
+                x={30}
+                y={14}
+                textAnchor="middle"
+                fill={CYAN}
+                fontFamily={inter}
+                fontSize={13}
+                fontWeight={600}
+              >
+                N·
+              </text>
+              <text
+                x={5}
+                y={38}
+                textAnchor="middle"
+                fill={CYAN}
+                fontFamily={inter}
+                fontSize={10}
+                letterSpacing={2.2}
+                fontWeight={600}
+              >
+                RADICALS
+              </text>
+            </g>
+          </g>
+
+          {/* Falling nitrate drop into soil */}
+          {dropFall > 0 && (() => {
+            const startX = BOLT[BOLT.length - 1].x;
+            const startY = 640;
+            const endY = GROUND_Y + 42;
+            const y = startY + (endY - startY) * dropFall;
+            return (
+              <g opacity={Math.min(1, dropFall * 1.2)}>
+                {/* Trail (fading dots) */}
+                {[0.3, 0.55, 0.8].map((f, idx) => {
+                  const ty = startY + (y - startY) * f;
+                  return (
+                    <circle
+                      key={`trail-${idx}`}
+                      cx={startX}
+                      cy={ty}
+                      r={2 + idx * 0.6}
+                      fill={NITRATE}
+                      opacity={0.25 + idx * 0.12}
+                    />
+                  );
+                })}
+                {/* The drop */}
+                <path
+                  d={`M ${startX} ${y - 16}
+                      q 10 14 0 28
+                      q -10 -14 0 -28 z`}
+                  fill={NITRATE}
+                  opacity={0.98}
+                />
+                <circle
+                  cx={startX - 2}
+                  cy={y - 4}
+                  r={2.5}
+                  fill={WHITE}
+                  opacity={0.75}
+                />
+                <text
+                  x={startX + 24}
+                  y={y + 2}
+                  fill={NITRATE}
+                  fontFamily={inter}
+                  fontSize={14}
+                  letterSpacing={2.6}
+                  fontWeight={600}
+                >
+                  NO₃⁻ · TO ROOTS
+                </text>
+              </g>
+            );
+          })()}
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* Caption strip just below the field frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
           fill={GRAY}
@@ -577,14 +934,14 @@ export const PairingCard: React.FC = () => {
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
+          <text>FIG. 1 · ONE STROKE FIXES ~7 KG OF ATMOSPHERIC N</text>
           <text
             x={FRAME.w}
             textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
+            fill={CYAN}
+            opacity={0.9}
           >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+            GLOBAL YIELD · 5 Tg N / YR
           </text>
         </g>
       </svg>
@@ -606,7 +963,7 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CYAN,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -617,7 +974,7 @@ export const PairingCard: React.FC = () => {
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Fertilizer Chemist
           </span>
         </div>
 
@@ -632,9 +989,9 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The sky-born
           <br />
-          city planner.
+          chemist.
         </div>
 
         <div
@@ -649,13 +1006,14 @@ export const PairingCard: React.FC = () => {
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
+          For a few microseconds, a lightning channel reaches{" "}
+          <span style={{ color: CYAN, fontWeight: 600 }}>~30,000 K</span> —
+          five times the surface of the Sun — enough to shatter the triple
+          bond of N₂ and forge roughly{" "}
+          <span style={{ color: NITRATE, fontWeight: 600 }}>
+            5 Tg of plant-ready nitrate
           </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          every year, delivered to the Earth&apos;s soils in rain.
         </div>
       </div>
 
@@ -677,9 +1035,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Schumann &amp; Huntrieser · Atmos. Chem. Phys. 7 (2007) 3823</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: NITRATE }}>●</span> NO₃⁻ · Rain → Soil
         </span>
       </div>
     </AbsoluteFill>
