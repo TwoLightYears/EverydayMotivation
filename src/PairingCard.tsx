@@ -50,186 +50,214 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#141008";
+const PEAT_DEEP = "#2C1E12";
+const PEAT = "#3B2A1A";
+const TEA = "#8A6236";
+const SPHAG = "#A8B373";
+const PARCH = "#D7B98A";
+const RUST = "#C47B4A";
+const GRAY = "#857A6B";
+const PAPER = "#EDE2CC";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
-
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+// ── Stratigraphic column data ────────────────────────────────────────────
+type Stratum = {
+  top: number;
+  bottom: number;
+  tint: string;
+  texture: "sphagnum" | "fibrous" | "humified" | "basal";
+  grain: number;
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
+
+const STRATA: Stratum[] = [
+  { top: 0.00, bottom: 0.07, tint: "#9DB064", texture: "sphagnum", grain: 42 },
+  { top: 0.07, bottom: 0.19, tint: "#7A7A3C", texture: "fibrous", grain: 58 },
+  { top: 0.19, bottom: 0.35, tint: "#5A4323", texture: "fibrous", grain: 78 },
+  { top: 0.35, bottom: 0.57, tint: PEAT, texture: "humified", grain: 92 },
+  { top: 0.57, bottom: 0.78, tint: PEAT_DEEP, texture: "humified", grain: 76 },
+  { top: 0.78, bottom: 0.92, tint: "#1F1510", texture: "humified", grain: 54 },
+  { top: 0.92, bottom: 1.00, tint: "#120A08", texture: "basal", grain: 30 },
 ];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+type Card = {
+  depth: number;
+  acc: string;
+  age: string;
+  title: string;
+  sub: string;
+  delay: number;
+};
 
-const hashSeed = (s: string): number => {
+const CARDS: Card[] = [
+  {
+    depth: 0.02,
+    acc: "ACC. 2026·M",
+    age: "LIVING",
+    title: "Sphagnum capitula",
+    sub: "sphagnan secretion · pH 3.8",
+    delay: 0.0,
+  },
+  {
+    depth: 0.21,
+    acc: "ACC. 1984·N",
+    age: "c. 2 CE",
+    title: "Lindow Man",
+    sub: "ligature, triple death, intact skin",
+    delay: 0.15,
+  },
+  {
+    depth: 0.42,
+    acc: "ACC. 1950·H",
+    age: "c. 400 BCE",
+    title: "Tollund Man",
+    sub: "hair, skin, last porridge intact",
+    delay: 0.3,
+  },
+  {
+    depth: 0.63,
+    acc: "ACC. 1891·T",
+    age: "c. 1200 BCE",
+    title: "Trundholm sun chariot",
+    sub: "bronze & gilt disc, Nordic Bronze Age",
+    delay: 0.45,
+  },
+  {
+    depth: 0.86,
+    acc: "ACC. P·VII",
+    age: "c. 8000 BCE",
+    title: "Pine pollen horizon",
+    sub: "Mesolithic boreal expansion",
+    delay: 0.6,
+  },
+];
+
+const hash = (s: string): number => {
   let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
-};
-
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
-
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+  for (let i = 0; i < s.length; i++) h = (h ^ s.charCodeAt(i)) * 16777619;
+  return ((h >>> 0) % 10000) / 10000;
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Page layout (1080 × 1350 portrait) ─────────────────────────────
+  //  0–160     : header band
+  //  160–470   : title lockup (role / headline / hook)
+  //  490–1180  : stratigraphy hero
+  //  1200–1230 : caption strip
+  //  1280      : footer
+  const COL = { x: 420, y: 500, w: 200, h: 660 };
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
-    fps,
-    config: { damping: 200, mass: 0.8 },
-  });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const depositStart = fps * 0.2;
+  const depositEnd = fps * 2.8;
+  const depT = interpolate(frame, [depositStart, depositEnd], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const titleSpring = spring({
+    frame: frame - fps * 0.1,
+    fps,
+    config: { damping: 200, mass: 0.9 },
+  });
+
+  const hookOpacity = interpolate(frame, [fps * 0.9, fps * 1.9], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const stratumVisible = (s: Stratum): number => {
+    const ageMid = 1 - (s.top + s.bottom) / 2;
+    const t = depT * 1.08 - ageMid * 0.9;
+    return Math.max(0, Math.min(1, t * 1.6));
+  };
+
+  const cardOpacity = (c: Card): number => {
+    const start = fps * (2.9 + c.delay);
+    return interpolate(frame, [start, start + fps * 0.5], [0, 1], {
+      easing: Easing.out(Easing.cubic),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+  };
+  const cardSlide = (c: Card): number => {
+    const start = fps * (2.9 + c.delay);
+    return interpolate(frame, [start, start + fps * 0.6], [18, 0], {
+      easing: Easing.out(Easing.cubic),
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    });
+  };
+
+  const flecks = (s: Stratum, i: number) => {
+    const bandY = COL.y + s.top * COL.h;
+    const bandH = (s.bottom - s.top) * COL.h;
+    const nodes: React.ReactElement[] = [];
+    for (let k = 0; k < s.grain; k++) {
+      const seed = hash(`${i}-${k}-f`);
+      const seed2 = hash(`${i}-${k}-g`);
+      const seed3 = hash(`${i}-${k}-h`);
+      const x = COL.x + 6 + seed * (COL.w - 12);
+      const y = bandY + 4 + seed2 * (bandH - 8);
+      const r = 0.6 + seed3 * 1.6;
+      const op = 0.18 + seed3 * 0.28;
+      const col =
+        s.texture === "sphagnum"
+          ? seed > 0.75
+            ? PARCH
+            : "#CFD79A"
+          : s.texture === "fibrous"
+            ? seed > 0.6
+              ? "#8B6A3C"
+              : "#5B4322"
+            : seed > 0.75
+              ? "#6A4B2A"
+              : "#2A1C10";
+      nodes.push(
+        <circle key={`f-${i}-${k}`} cx={x} cy={y} r={r} fill={col} opacity={op} />,
+      );
+    }
+    if (s.texture === "fibrous" || s.texture === "humified") {
+      for (let k = 0; k < 8; k++) {
+        const seed = hash(`${i}-${k}-l`);
+        const seed2 = hash(`${i}-${k}-m`);
+        const y = bandY + 6 + seed * (bandH - 12);
+        const len = 20 + seed2 * (COL.w - 40);
+        const x = COL.x + 6 + seed2 * (COL.w - 12 - len);
+        nodes.push(
+          <line
+            key={`l-${i}-${k}`}
+            x1={x}
+            y1={y}
+            x2={x + len}
+            y2={y}
+            stroke={s.tint}
+            strokeOpacity={0.35}
+            strokeWidth={0.6}
+          />,
+        );
+      }
+    }
+    return nodes;
+  };
+
+  const AXIS_TICKS = [
+    { frac: 0.00, label: "0", sub: "SURFACE" },
+    { frac: 0.21, label: "2 ka", sub: "" },
+    { frac: 0.42, label: "2.4 ka", sub: "" },
+    { frac: 0.63, label: "3.2 ka", sub: "" },
+    { frac: 0.86, label: "10 ka", sub: "" },
+    { frac: 1.00, label: "BASE", sub: "" },
+  ];
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
 
-      {/* Top metadata band */}
-      <div
-        style={{
-          position: "absolute",
-          top: 56,
-          left: 80,
-          right: 80,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          color: GRAY,
-          fontFamily: inter,
-          fontSize: 13,
-          letterSpacing: 4.5,
-          textTransform: "uppercase",
-          fontWeight: 500,
-        }}
-      >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
-      </div>
-
-      {/* Drafting frame + map */}
       <svg
         width={1080}
         height={1350}
@@ -237,365 +265,597 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <radialGradient id="bg-vignette" cx="30%" cy="20%" r="100%">
+            <stop offset="0%" stopColor="#1E170F" stopOpacity={1} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
           </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <filter id="grain" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.9"
+              numOctaves="2"
+              seed="7"
+            />
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 0.09
+                      0 0 0 0 0.07
+                      0 0 0 0 0.05
+                      0 0 0 0.18 0"
+            />
           </filter>
+          <clipPath id="col-clip">
+            <rect x={COL.x} y={COL.y} width={COL.w} height={COL.h} />
+          </clipPath>
+          <linearGradient id="sphag-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#B8C080" />
+            <stop offset="100%" stopColor="#6E6B3B" />
+          </linearGradient>
         </defs>
 
-        {/* Drafting board */}
+        <rect x={0} y={0} width={1080} height={1350} fill="url(#bg-vignette)" />
         <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+          x={0}
+          y={0}
+          width={1080}
+          height={1350}
+          fill="url(#bg-vignette)"
+          filter="url(#grain)"
+          opacity={0.6}
         />
 
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
-          strokeWidth={1}
-        />
-
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
-          </g>
-        ))}
-
-        {/* N marker */}
+        {/* ── Top meta band ─────────────────────────────────────────── */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
           fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
+          fontSize={13}
+          letterSpacing={4.5}
           fontWeight={500}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <text x={80} y={100} fill={GRAY}>
+            EVERYDAY MOTIVATION · NO. 003
           </text>
+          <text x={1000} y={100} fill={SPHAG} textAnchor="end">
+            2026 · 10 · 29
+          </text>
+          <line
+            x1={80}
+            y1={122}
+            x2={1000}
+            y2={122}
+            stroke="#2A2218"
+            strokeWidth={1}
+          />
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+        {/* ── Left specimen-plate panel ─────────────────────────────── */}
+        <g>
+          {/* panel label */}
+          <text
+            x={80}
+            y={COL.y - 34}
+            fill={PARCH}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={600}
+            letterSpacing={3}
+          >
+            I · SPHAGNUM FUSCUM
+          </text>
+
+          {/* Sphagnum frond illustration — a compact botanical sketch */}
+          {(() => {
+            const px = 110;
+            const py = COL.y + 40;
+            // Draw a central stem with branches of fascicles
+            const stem = (
+              <line
+                x1={px}
+                y1={py - 10}
+                x2={px}
+                y2={py + 220}
+                stroke={SPHAG}
+                strokeWidth={1.6}
+                opacity={0.9}
               />
             );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
+            // capitulum (top cluster)
+            const capitulum = (
+              <g>
+                {Array.from({ length: 10 }).map((_, i) => {
+                  const a = -Math.PI / 2 + (i / 9 - 0.5) * Math.PI * 0.9;
+                  const r = 16 + (i % 3) * 3;
+                  const x2 = px + Math.cos(a) * r;
+                  const y2 = py - 10 + Math.sin(a) * r;
+                  return (
+                    <g key={`cap-${i}`}>
+                      <line
+                        x1={px}
+                        y1={py - 10}
+                        x2={x2}
+                        y2={y2}
+                        stroke="#B8C080"
+                        strokeWidth={1.2}
+                      />
+                      <circle cx={x2} cy={y2} r={2.2} fill="#C7D08A" />
+                    </g>
+                  );
+                })}
               </g>
             );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
+            // whorls of branches
+            const whorls = Array.from({ length: 7 }).map((_, i) => {
+              const y = py + 10 + i * 30;
+              const dir = i % 2 === 0 ? 1 : -1;
+              const base = (
+                <g key={`whorl-${i}`}>
+                  {[0, 1, 2].map((j) => {
+                    const spread = 18 + j * 10;
+                    const drop = 8 + j * 4;
+                    const tipX = px + dir * spread;
+                    const tipY = y + drop;
+                    return (
+                      <g key={`b-${j}`}>
+                        <path
+                          d={`M ${px} ${y} Q ${
+                            px + dir * (spread * 0.5)
+                          } ${y + drop * 0.3} ${tipX} ${tipY}`}
+                          stroke="#8A9A58"
+                          strokeWidth={1.1}
+                          fill="none"
+                        />
+                        {[0.4, 0.65, 0.85].map((f, k) => {
+                          const bx =
+                            px +
+                            (tipX - px) * f +
+                            dir * (1 - f) * 2;
+                          const by = y + drop * f - 0.5;
+                          return (
+                            <circle
+                              key={`l-${k}`}
+                              cx={bx}
+                              cy={by}
+                              r={1.2}
+                              fill="#A8B373"
+                            />
+                          );
+                        })}
+                      </g>
+                    );
+                  })}
+                  {/* opposite side pendant branches */}
+                  {[0, 1].map((j) => {
+                    const spread = 12 + j * 8;
+                    const drop = 14 + j * 6;
+                    return (
+                      <path
+                        key={`p-${j}`}
+                        d={`M ${px} ${y + 2} Q ${
+                          px - dir * (spread * 0.4)
+                        } ${y + drop * 0.4} ${px - dir * spread} ${
+                          y + drop
+                        }`}
+                        stroke="#6E7B3F"
+                        strokeWidth={1}
+                        fill="none"
+                        opacity={0.85}
+                      />
+                    );
+                  })}
                 </g>
               );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
+              return base;
+            });
             return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
+              <g opacity={0.9}>
+                {stem}
+                {whorls}
+                {capitulum}
+                {/* scale bar under frond */}
+                <g
+                  transform={`translate(${px - 25}, ${py + 240})`}
+                  stroke={GRAY}
+                  fill={GRAY}
+                  fontFamily={inter}
+                  fontSize={9}
+                  letterSpacing={2}
+                  fontWeight={500}
+                >
+                  <line x1={0} y1={0} x2={50} y2={0} strokeWidth={1} />
+                  <line x1={0} y1={-3} x2={0} y2={3} strokeWidth={1} />
+                  <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1} />
+                  <text x={25} y={14} textAnchor="middle" stroke="none">
+                    2 CM
+                  </text>
+                </g>
               </g>
             );
-          })}
+          })()}
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
+          {/* small spec sheet below the frond */}
+          <g transform={`translate(80, ${COL.y + 340})`}>
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
               fontFamily={inter}
-              fontSize={11}
+              fontSize={10}
               fontWeight={600}
-              letterSpacing={3.5}
+              letterSpacing={3}
+              fill={PARCH}
             >
-              TOKYO
+              FIELD CONDITIONS
             </text>
+            {[
+              ["pH", "3.8", "acidic humic"],
+              ["O₂", "< 0.1 mg/L", "anoxic water"],
+              ["AGENT", "SPHAGNAN", "polysaccharide"],
+              ["GROWTH", "~1 mm/yr", "accumulation"],
+              ["OLDEST", "~10 ka", "intact matter"],
+            ].map((row, i) => {
+              const y = 26 + i * 44;
+              return (
+                <g key={`r-${i}`}>
+                  <text
+                    x={0}
+                    y={y}
+                    fontFamily={inter}
+                    fontSize={10}
+                    fontWeight={600}
+                    letterSpacing={2.4}
+                    fill={GRAY}
+                  >
+                    {row[0]}
+                  </text>
+                  <text
+                    x={0}
+                    y={y + 22}
+                    fontFamily={playfair}
+                    fontStyle="italic"
+                    fontSize={18}
+                    fill={PARCH}
+                  >
+                    {row[1]}
+                  </text>
+                  <text
+                    x={250}
+                    y={y + 22}
+                    textAnchor="end"
+                    fontFamily={inter}
+                    fontSize={10}
+                    fill={TEA}
+                    letterSpacing={1.6}
+                  >
+                    {row[2]}
+                  </text>
+                  <line
+                    x1={0}
+                    y1={y + 30}
+                    x2={250}
+                    y2={y + 30}
+                    stroke="#2A2218"
+                    strokeWidth={1}
+                  />
+                </g>
+              );
+            })}
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* ── Section header: a single line above the hero ───────────── */}
+        <g>
+          <text
+            x={COL.x + COL.w / 2}
+            y={COL.y - 34}
+            textAnchor="middle"
+            fill={PARCH}
+            fontFamily={inter}
+            fontWeight={600}
+            fontSize={10}
+            letterSpacing={3}
+          >
+            II · STRATIGRAPHIC CORE
+          </text>
+          <text
+            x={1000}
+            y={COL.y - 34}
+            textAnchor="end"
+            fill={PARCH}
+            fontFamily={inter}
+            fontWeight={600}
+            fontSize={10}
+            letterSpacing={3}
+          >
+            III · ACCESSION INDEX
+          </text>
+          {/* corner crop marks around the hero area */}
+          {(
+            [
+              [COL.x - 50, COL.y - 18, 1, 1],
+              [COL.x + COL.w + 50, COL.y - 18, -1, 1],
+              [COL.x - 50, COL.y + COL.h + 18, 1, -1],
+              [COL.x + COL.w + 50, COL.y + COL.h + 18, -1, -1],
+            ] as const
+          ).map(([cx, cy, sx, sy], i) => (
+            <g key={`cm-${i}`} stroke={RUST} strokeWidth={1.2} fill="none" opacity={0.6}>
+              <line x1={cx} y1={cy} x2={cx + sx * 18} y2={cy} />
+              <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 18} />
+            </g>
+          ))}
+        </g>
+
+        {/* ── Depth axis (left of column) ────────────────────────────── */}
+        <g>
+          <line
+            x1={COL.x - 20}
+            y1={COL.y}
+            x2={COL.x - 20}
+            y2={COL.y + COL.h}
+            stroke={GRAY}
+            strokeOpacity={0.55}
+            strokeWidth={1}
+          />
+          {AXIS_TICKS.map((t, i) => {
+            const y = COL.y + t.frac * COL.h;
+            const op = Math.min(1, Math.max(0, depT * 1.2 - t.frac * 0.4));
+            return (
+              <g key={`tick-${i}`} opacity={op}>
+                <line
+                  x1={COL.x - 26}
+                  y1={y}
+                  x2={COL.x - 14}
+                  y2={y}
+                  stroke={GRAY}
+                  strokeWidth={1}
+                />
+                <text
+                  x={COL.x - 32}
+                  y={y + 4}
+                  textAnchor="end"
+                  fill={PARCH}
+                  fontFamily={inter}
+                  fontSize={11}
+                  letterSpacing={1.6}
+                  fontWeight={600}
+                >
+                  {t.label}
+                </text>
+                {t.sub ? (
+                  <text
+                    x={COL.x - 32}
+                    y={y + 17}
+                    textAnchor="end"
+                    fill={GRAY}
+                    fontFamily={inter}
+                    fontSize={9}
+                    letterSpacing={2.6}
+                    fontWeight={500}
+                  >
+                    {t.sub}
+                  </text>
+                ) : null}
+              </g>
+            );
+          })}
+        </g>
+
+        {/* ── Column frame ─────────────────────────────────────────── */}
+        <rect
+          x={COL.x - 2}
+          y={COL.y - 2}
+          width={COL.w + 4}
+          height={COL.h + 4}
+          fill="none"
+          stroke={PARCH}
+          strokeOpacity={0.35}
+          strokeWidth={1}
+        />
+        <rect
+          x={COL.x}
+          y={COL.y}
+          width={COL.w}
+          height={COL.h}
+          fill="#120D08"
+        />
+
+        {/* ── Stratigraphic deposition ────────────────────────────────── */}
+        <g clipPath="url(#col-clip)">
+          {STRATA.map((s, i) => {
+            const vis = stratumVisible(s);
+            const topY = COL.y + s.top * COL.h;
+            const bottomY = COL.y + s.bottom * COL.h;
+            const bandH = bottomY - topY;
+            const slide = (1 - vis) * 20;
+            return (
+              <g key={`st-${i}`} opacity={vis}>
+                <rect
+                  x={COL.x}
+                  y={topY + slide}
+                  width={COL.w}
+                  height={bandH}
+                  fill={s.tint}
+                />
+                <line
+                  x1={COL.x}
+                  y1={topY + slide}
+                  x2={COL.x + COL.w}
+                  y2={topY + slide}
+                  stroke="#1A110A"
+                  strokeOpacity={0.65}
+                  strokeWidth={1}
+                />
+                <g transform={`translate(0, ${slide})`}>{flecks(s, i)}</g>
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Sphagnum crown — living moss hairs along the surface */}
+        <g opacity={Math.min(1, Math.max(0, depT * 1.3 - 0.6))}>
+          {Array.from({ length: 44 }).map((_, i) => {
+            const seed = hash(`crown-${i}`);
+            const x = COL.x + 4 + (i / 43) * (COL.w - 8);
+            const y = COL.y + 2;
+            const h = 8 + seed * 11;
+            const wob = (seed - 0.5) * 4;
+            return (
+              <g key={`c-${i}`}>
+                <line
+                  x1={x}
+                  y1={y + 2}
+                  x2={x + wob}
+                  y2={y - h}
+                  stroke="url(#sphag-grad)"
+                  strokeWidth={1.1}
+                  strokeOpacity={0.9}
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx={x + wob}
+                  cy={y - h}
+                  r={1.7}
+                  fill="#C7D08A"
+                  opacity={0.95}
+                />
+              </g>
+            );
+          })}
+        </g>
+
+        {/* Water-table dashed line */}
+        <g opacity={Math.min(1, Math.max(0, depT - 0.3) * 2)}>
+          <line
+            x1={COL.x - 4}
+            y1={COL.y + 0.11 * COL.h}
+            x2={COL.x + COL.w + 4}
+            y2={COL.y + 0.11 * COL.h}
+            stroke={TEA}
+            strokeOpacity={0.6}
+            strokeDasharray="2 3"
+            strokeWidth={1}
+          />
+        </g>
+
+        {/* ── Accession cards (right of column) ──────────────────────── */}
+        {CARDS.map((c, i) => {
+          const op = cardOpacity(c);
+          const dx = cardSlide(c);
+          const yAnchor = COL.y + c.depth * COL.h;
+          const cardY = yAnchor - 34;
+          const cardX = 660 + dx;
+          const cardW = 340;
+          const cardH = 68;
+          return (
+            <g key={`card-${i}`} opacity={op}>
+              <line
+                x1={COL.x + COL.w + 2}
+                y1={yAnchor}
+                x2={cardX - 4}
+                y2={yAnchor}
+                stroke={RUST}
+                strokeOpacity={0.8}
+                strokeWidth={1}
+              />
+              <circle
+                cx={COL.x + COL.w + 2}
+                cy={yAnchor}
+                r={3}
+                fill={RUST}
+              />
+              <rect
+                x={cardX}
+                y={cardY}
+                width={cardW}
+                height={cardH}
+                fill={PAPER}
+                stroke={RUST}
+                strokeOpacity={0.75}
+                strokeWidth={1}
+              />
+              <circle
+                cx={cardX + cardW - 14}
+                cy={cardY + 14}
+                r={3.5}
+                fill="none"
+                stroke="#8E6A3C"
+                strokeWidth={1}
+              />
+              <rect
+                x={cardX + 10}
+                y={cardY + 9}
+                width={82}
+                height={16}
+                fill="none"
+                stroke={RUST}
+                strokeWidth={1}
+              />
+              <text
+                x={cardX + 51}
+                y={cardY + 21}
+                textAnchor="middle"
+                fill={RUST}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={700}
+                letterSpacing={1.4}
+              >
+                {c.acc}
+              </text>
+              <text
+                x={cardX + 102}
+                y={cardY + 21}
+                fill="#5A4428"
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={600}
+                letterSpacing={2.4}
+              >
+                {c.age}
+              </text>
+              <text
+                x={cardX + 10}
+                y={cardY + 45}
+                fill="#1E140A"
+                fontFamily={playfair}
+                fontStyle="italic"
+                fontWeight={500}
+                fontSize={19}
+              >
+                {c.title}
+              </text>
+              <text
+                x={cardX + 10}
+                y={cardY + 61}
+                fill="#5A4428"
+                fontFamily={inter}
+                fontSize={11}
+                letterSpacing={0.4}
+              >
+                {c.sub}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* ── Caption strip just below the column area ─────────────── */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
+          transform={`translate(80, 1200)`}
           fill={GRAY}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>PEAT CORE · 10 M · HOLOCENE</text>
+          <text x={920} textAnchor="end" fill={SPHAG} opacity={0.85}>
+            NOTHING THROWN OUT · EVERYTHING FILED
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup (top block, full width above the hero) ──────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
-          right: 80,
-          top: 905,
+          top: 170,
+          width: 920,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,66 +866,63 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: SPHAG,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 20,
             fontWeight: 600,
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          <span style={{ color: PARCH, letterSpacing: 5 }}>Archivist</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: PARCH,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
-            lineHeight: 0.96,
-            letterSpacing: -1.4,
+            fontSize: 92,
+            lineHeight: 0.94,
+            letterSpacing: -1.6,
             fontStyle: "italic",
           }}
         >
-          The brainless
-          <br />
-          city planner.
+          The patient archivist.
         </div>
 
         <div
           style={{
-            marginTop: 30,
-            color: "#C8CAD0",
+            marginTop: 26,
+            color: "#C5BDA9",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.45,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 820,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          A Sphagnum bog secretes{" "}
+          <span style={{ color: SPHAG, fontWeight: 600 }}>sphagnan</span> — a
+          polysaccharide that binds the enzymes of its own microbes. Combined
+          with pH&nbsp;3.8 and anoxic water, it keeps the archive{" "}
+          <span style={{ color: PARCH, fontWeight: 600 }}>
+            intact for millennia
+          </span>
+          .
         </div>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ─────────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          bottom: 50,
+          bottom: 48,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
@@ -677,9 +934,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Painter 1991 · Carbohydrate Polymers 15 (2) 83–101</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: RUST }}>●</span> Accessioned, not decomposed
         </span>
       </div>
     </AbsoluteFill>
