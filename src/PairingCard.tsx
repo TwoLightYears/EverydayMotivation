@@ -50,161 +50,181 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette (concept brief)
+const SKY = "#0F1522";
+const BOARD = "#141A28";
+const PAPPUS = "#F6F2E6";
+const PAPPUS_MID = "#D8CFBB";
+const ACHENE = "#C9A066";
+const GOLD = "#E8C972";
+const SLATE = "#5B6B7E";
+const GRID = "#1C2436";
+const GRID_MAJOR = "#273048";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Stage frame on the 1080 × 1350 page ──────────────────────────────────
+const FRAME = { x: 60, y: 130, w: 960, h: 741 };
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
+// Seed geometry (page coords)
+const HUB = { x: 540, y: 700 }; // base of pappus / top of achene
+const ACHENE_TIP = { x: 540, y: 828 };
+const PAPPUS_RADIUS_INNER = 24;
+const PAPPUS_RADIUS_OUTER = 184;
+const PAPPUS_TOP_Y = 540; // visual top of the pappus
 
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
+// Separated vortex ring (SVR) — torus-in-profile above the pappus
+const SVR = { cx: 540, cy: 470, rx: 190, ry: 56 };
 
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
+// Bristle fan — drawn as ~60 straight filaments; the hook annotates the real ~100
+const BRISTLE_COUNT = 64;
+// Fan angles measured from vertical (pointing straight up = 0 rad), covering
+// nearly a full hemisphere plus a touch below.
+const BRISTLE_ANGLE_SPAN = (Math.PI * 2) * 0.52; // ~187°
 
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
+type Bristle = {
+  theta: number; // angle from vertical
+  len: number;
+  side: 1 | -1;
+  jitter: number;
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+const bristles: Bristle[] = Array.from({ length: BRISTLE_COUNT }, (_, i) => {
+  const t = i / (BRISTLE_COUNT - 1);
+  // Map 0..1 to -span/2..+span/2
+  const theta = (t - 0.5) * BRISTLE_ANGLE_SPAN;
+  // Length modulates slightly so the pappus has a soft outer edge
+  const edge = Math.cos(theta * 0.9);
+  const base = PAPPUS_RADIUS_OUTER;
+  // deterministic pseudo-jitter so the fan isn't geometrically perfect
+  const seed = Math.sin(i * 12.9898) * 43758.5453;
+  const jitter = (seed - Math.floor(seed)) - 0.5;
+  const len = base * (0.86 + 0.14 * edge) + jitter * 14;
+  return {
+    theta,
+    len,
+    side: theta >= 0 ? 1 : -1,
+    jitter,
+  };
+});
+
+// ── Streamlines ──────────────────────────────────────────────────────────
+// Each streamline is a cubic that enters from the bottom of the stage,
+// deflects outward around the pappus, and (for the inner ones) curls into
+// the SVR torus. Rendered as dashed paths whose offset is animated to flow.
+type Stream = {
+  startX: number;
+  turnX: number;
+  topX: number;
+  topY: number;
+  dashLen: number;
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+const STREAMS: Stream[] = [
+  // Deep left — passes well outside the pappus, deflects outward
+  { startX: 125, turnX: 95, topX: 150, topY: 230, dashLen: 4 },
+  { startX: 230, turnX: 195, topX: 240, topY: 280, dashLen: 4 },
+  // Inner-left — curls up and into the left side of the SVR
+  { startX: 350, turnX: 335, topX: SVR.cx - SVR.rx + 14, topY: SVR.cy + 2, dashLen: 4 },
+  { startX: 455, turnX: 440, topX: SVR.cx - 72, topY: SVR.cy - SVR.ry + 8, dashLen: 4 },
+  // Center — threads through the pappus into the top of the SVR
+  { startX: 540, turnX: 540, topX: 540, topY: SVR.cy - SVR.ry - 10, dashLen: 4 },
+  // Inner-right
+  { startX: 625, turnX: 640, topX: SVR.cx + 72, topY: SVR.cy - SVR.ry + 8, dashLen: 4 },
+  { startX: 730, turnX: 745, topX: SVR.cx + SVR.rx - 14, topY: SVR.cy + 2, dashLen: 4 },
+  // Deep right
+  { startX: 850, turnX: 885, topX: 840, topY: 280, dashLen: 4 },
+  { startX: 955, turnX: 985, topX: 930, topY: 230, dashLen: 4 },
+];
+
+const streamPath = (s: Stream): string => {
+  // Bottom of the stage frame
+  const y0 = FRAME.y + FRAME.h - 10;
+  // Control points for a smooth S that leans around the pappus,
+  // then curves toward the SVR termination point.
+  const c1y = HUB.y + 10; // lower control
+  const c2y = PAPPUS_TOP_Y - 10; // upper control (near the top of the pappus)
+  return (
+    `M ${s.startX} ${y0} ` +
+    `C ${s.turnX} ${c1y}, ${s.turnX} ${c2y}, ${s.topX} ${s.topY}`
+  );
+};
+
+// Approximate path length used to drive dashoffset flow.
+const streamLen = (s: Stream): number => {
+  const y0 = FRAME.y + FRAME.h - 10;
+  // rough chord sum
+  const d1 = Math.hypot(s.turnX - s.startX, HUB.y + 10 - y0);
+  const d2 = Math.hypot(0, PAPPUS_TOP_Y - 10 - (HUB.y + 10));
+  const d3 = Math.hypot(s.topX - s.turnX, s.topY - (PAPPUS_TOP_Y - 10));
+  return d1 + d2 + d3;
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
-
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
-
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  // ── Timing ──────────────────────────────────────────────────────────
+  const seedSpring = spring({
+    frame: frame - fps * 0.1,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 200, mass: 1.2 },
   });
 
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
-    easing: Easing.out(Easing.cubic),
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
+  // Bristles unfurl after the seed arrives
+  const bristleReveal = interpolate(
+    frame,
+    [fps * 0.4, fps * 1.6],
+    [0, 1],
+    { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // Streamlines come in after the pappus is visible
+  const streamReveal = interpolate(
+    frame,
+    [fps * 1.4, fps * 2.4],
+    [0, 1],
+    { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // SVR traces itself in after streamlines
+  const svrReveal = interpolate(
+    frame,
+    [fps * 2.2, fps * 3.4],
+    [0, 1],
+    { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // SVR "breath" — a gentle radial pulse (~5s loop)
+  const breathPhase = ((frame % (fps * 5)) / (fps * 5)) * Math.PI * 2;
+  const breath = 1 + Math.sin(breathPhase) * 0.012;
+
+  // Continuous dash offset to make streamlines flow upward
+  const flowPhase = (frame / (fps * 2.2)) % 1; // 0..1
+
+  // Type animations
+  const roleTag = spring({
+    frame: frame - fps * 1.4,
+    fps,
+    config: { damping: 220, mass: 0.8 },
   });
+  const titleSpring = spring({
+    frame: frame - fps * 1.7,
+    fps,
+    config: { damping: 220, mass: 0.9 },
+  });
+  const hookOpacity = interpolate(
+    frame,
+    [fps * 2.3, fps * 3.3],
+    [0, 1],
+    { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // Seed vertical drift-in (lands at y=0 offset)
+  const seedDriftY = interpolate(seedSpring, [0, 1], [-30, 0]);
+  const seedOpacity = seedSpring;
 
+  // ── Render ──────────────────────────────────────────────────────────
   return (
-    <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
+    <AbsoluteFill style={{ backgroundColor: SKY, fontFamily: inter }}>
       <style>{fontCss}</style>
 
       {/* Top metadata band */}
@@ -217,7 +237,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: SLATE,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +245,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: GOLD }}>2026 · 10 · 31</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Drafting board + diagram */}
       <svg
         width={1080}
         height={1350}
@@ -241,49 +261,42 @@ export const PairingCard: React.FC = () => {
             id="grid"
             x={FRAME.x}
             y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
+            width={48}
+            height={48}
             patternUnits="userSpaceOnUse"
           >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
+            <path d={`M 48 0 L 0 0 0 48`} fill="none" stroke={GRID} strokeWidth={1} />
           </pattern>
           <pattern
             id="grid-major"
             x={FRAME.x}
             y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
+            width={192}
+            height={192}
             patternUnits="userSpaceOnUse"
           >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
+            <path d={`M 192 0 L 0 0 0 192`} fill="none" stroke={GRID_MAJOR} strokeWidth={1} />
           </pattern>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="50%" cy="40%" r="80%">
+            <stop offset="0%" stopColor="#1A2135" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <radialGradient id="achene-grad" cx="50%" cy="35%" r="70%">
+            <stop offset="0%" stopColor="#E6C286" stopOpacity={1} />
+            <stop offset="60%" stopColor={ACHENE} stopOpacity={1} />
+            <stop offset="100%" stopColor="#7E5F31" stopOpacity={1} />
+          </radialGradient>
+
+          <radialGradient id="hub-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={PAPPUS} stopOpacity={0.9} />
+            <stop offset="60%" stopColor={PAPPUS_MID} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={PAPPUS_MID} stopOpacity={0} />
+          </radialGradient>
+
+          <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3.4" />
           </filter>
         </defs>
 
@@ -295,13 +308,7 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#board-vignette)"
         />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
+        <rect x={FRAME.x} y={FRAME.y} width={FRAME.w} height={FRAME.h} fill="url(#grid)" />
         <rect
           x={FRAME.x}
           y={FRAME.y}
@@ -309,15 +316,13 @@ export const PairingCard: React.FC = () => {
           height={FRAME.h}
           fill="url(#grid-major)"
         />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#2E3650"
           strokeWidth={1}
         />
 
@@ -330,261 +335,460 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={GOLD} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Up-arrow (wind direction) at the bottom of the stage */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 28}, ${FRAME.y + FRAME.h - 28})`}
+          fill={SLATE}
           fontFamily={inter}
           fontWeight={600}
           fontSize={11}
           letterSpacing={3}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text x={16} y={6} stroke="none" fill={SLATE}>
+            WIND
+          </text>
+          <line x1={6} y1={-16} x2={6} y2={-2} stroke={SLATE} strokeWidth={1.2} />
+          <polygon points="2,-10 6,-18 10,-10" fill={GOLD} />
         </g>
 
-        {/* Scale bar */}
+        {/* Scale strip: Reynolds number legend */}
         <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + FRAME.w - 220}, ${FRAME.y + FRAME.h - 28})`}
+          stroke={SLATE}
+          fill={SLATE}
           fontFamily={inter}
           fontSize={10}
           letterSpacing={3}
           fontWeight={500}
         >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
+          <line x1={0} y1={0} x2={120} y2={0} strokeWidth={1.2} />
           <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
+          <line x1={60} y1={-3} x2={60} y2={3} strokeWidth={1.2} />
+          <line x1={120} y1={-5} x2={120} y2={5} strokeWidth={1.2} />
+          <text x={130} y={4} stroke="none" fill={SLATE}>
+            Re ≈ 10
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+        {/* ── Streamlines ────────────────────────────────────────── */}
+        <g opacity={streamReveal}>
+          {/* First pass: a soft continuous base line, dim */}
+          {STREAMS.map((s, i) => (
+            <path
+              key={`sl-base-${i}`}
+              d={streamPath(s)}
+              stroke={SLATE}
+              strokeOpacity={0.22}
+              strokeWidth={1}
+              fill="none"
+              strokeLinecap="round"
+            />
+          ))}
+          {/* Second pass: short dashed overlay that flows upward */}
+          {STREAMS.map((s, i) => {
+            const dash = s.dashLen;
+            const offset = -flowPhase * (dash + 6);
             return (
               <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
+                key={`sl-${i}`}
+                d={streamPath(s)}
+                stroke={PAPPUS_MID}
+                strokeOpacity={0.55}
+                strokeWidth={1.1}
                 fill="none"
                 strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+                strokeDasharray={`${dash} 6`}
+                strokeDashoffset={offset}
               />
             );
           })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+          {/* Tiny arrowheads at the top */}
+          {STREAMS.map((s, i) => {
+            const dx = s.topX - s.turnX;
+            const dy = s.topY - (PAPPUS_TOP_Y - 10);
+            const ang = Math.atan2(dy, dx);
             return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
+              <polygon
+                key={`sl-h-${i}`}
+                points={`-6,-3 0,0 -6,3`}
+                transform={`translate(${s.topX}, ${s.topY}) rotate(${(ang * 180) / Math.PI})`}
+                fill={PAPPUS_MID}
+                opacity={0.75}
+              />
             );
           })}
+        </g>
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
+        {/* ── Separated Vortex Ring (SVR) ────────────────────────── */}
+        <g
+          transform={`translate(${SVR.cx} ${SVR.cy}) scale(${breath}) translate(${-SVR.cx} ${-SVR.cy})`}
+          opacity={svrReveal}
+        >
+          {/* Outer soft glow */}
+          <ellipse
+            cx={SVR.cx}
+            cy={SVR.cy}
+            rx={SVR.rx + 10}
+            ry={SVR.ry + 10}
+            fill="none"
+            stroke={PAPPUS}
+            strokeOpacity={0.09}
+            strokeWidth={14}
+            filter="url(#soft-glow)"
+          />
+          {/* Outer torus edge */}
+          <ellipse
+            cx={SVR.cx}
+            cy={SVR.cy}
+            rx={SVR.rx}
+            ry={SVR.ry}
+            fill="none"
+            stroke={PAPPUS}
+            strokeOpacity={0.55}
+            strokeWidth={1.4}
+          />
+          {/* Inner torus edge */}
+          <ellipse
+            cx={SVR.cx}
+            cy={SVR.cy}
+            rx={SVR.rx - 60}
+            ry={SVR.ry - 22}
+            fill="none"
+            stroke={PAPPUS_MID}
+            strokeOpacity={0.55}
+            strokeWidth={1.1}
+          />
+          {/* Flow arrows around the torus profile */}
+          {Array.from({ length: 10 }).map((_, i) => {
+            const a = (i / 10) * Math.PI * 2 + flowPhase * Math.PI * 2;
+            const r1x = SVR.rx - 30;
+            const r1y = SVR.ry - 11;
+            const px = SVR.cx + Math.cos(a) * r1x;
+            const py = SVR.cy + Math.sin(a) * r1y;
+            // tangent direction
+            const tx = -Math.sin(a) * r1x;
+            const ty = Math.cos(a) * r1y;
+            const ang = Math.atan2(ty, tx);
+            return (
+              <polygon
+                key={`vp-${i}`}
+                points={`-5,-2 0,0 -5,2`}
+                transform={`translate(${px}, ${py}) rotate(${(ang * 180) / Math.PI})`}
+                fill={PAPPUS}
+                opacity={0.75}
+              />
+            );
+          })}
+          {/* SVR label */}
+          <text
+            x={SVR.cx + SVR.rx + 16}
+            y={SVR.cy - SVR.ry - 6}
+            fill={PAPPUS}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={600}
+            letterSpacing={3.6}
+          >
+            SVR
+          </text>
+          <text
+            x={SVR.cx + SVR.rx + 16}
+            y={SVR.cy - SVR.ry + 12}
+            fill={SLATE}
+            fontFamily={inter}
+            fontSize={10}
+            fontWeight={500}
+            letterSpacing={2.4}
+          >
+            SEPARATED VORTEX RING
+          </text>
+        </g>
+
+        {/* ── Seed assembly (bristles + achene) ────────────────── */}
+        <g
+          opacity={seedOpacity}
+          transform={`translate(0, ${seedDriftY})`}
+        >
+          {/* Hub glow behind bristles — subtle */}
+          <circle cx={HUB.x} cy={HUB.y} r={46} fill="url(#hub-glow)" opacity={0.55} />
+
+          {/* Bristles */}
+          {bristles.map((b, i) => {
+            const unfurl = Math.max(0, Math.min(1, bristleReveal * 1.1 - i * 0.004));
+            const eased = 1 - Math.pow(1 - unfurl, 3);
+            const grown = b.len * eased;
+            const ex = HUB.x + Math.sin(b.theta) * grown;
+            const ey = HUB.y - Math.cos(b.theta) * grown;
+            // Inner base — slightly offset from the hub so bristles look rooted
+            const bx = HUB.x + Math.sin(b.theta) * PAPPUS_RADIUS_INNER;
+            const by = HUB.y - Math.cos(b.theta) * PAPPUS_RADIUS_INNER;
+
+            // Edge bristles slightly dimmer; central bristles brightest
+            const centrality = 1 - Math.abs(b.theta) / (BRISTLE_ANGLE_SPAN / 2);
+            const stroke = centrality > 0.55 ? PAPPUS : PAPPUS_MID;
+            const opacity = 0.6 + 0.35 * centrality;
+
+            return (
+              <g key={`br-${i}`}>
+                <line
+                  x1={bx}
+                  y1={by}
+                  x2={ex}
+                  y2={ey}
+                  stroke={stroke}
+                  strokeOpacity={opacity}
+                  strokeWidth={0.9}
+                  strokeLinecap="round"
+                />
+                {/* Tip barbule (tiny plume) */}
+                {eased > 0.9 && (
                   <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+                    cx={ex}
+                    cy={ey}
+                    r={1.2}
+                    fill={stroke}
+                    opacity={opacity * 0.9}
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
+                )}
               </g>
             );
           })}
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
+          {/* Highlighted bristle (callout target) — brighter and thicker */}
+          {(() => {
+            const b = bristles[Math.floor(BRISTLE_COUNT * 0.78)];
+            const unfurl = Math.min(1, Math.max(0, bristleReveal * 1.1));
+            const eased = 1 - Math.pow(1 - unfurl, 3);
+            const grown = b.len * eased;
+            const ex = HUB.x + Math.sin(b.theta) * grown;
+            const ey = HUB.y - Math.cos(b.theta) * grown;
+            const bx = HUB.x + Math.sin(b.theta) * PAPPUS_RADIUS_INNER;
+            const by = HUB.y - Math.cos(b.theta) * PAPPUS_RADIUS_INNER;
             return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
+              <line
+                x1={bx}
+                y1={by}
+                x2={ex}
+                y2={ey}
+                stroke={GOLD}
+                strokeOpacity={0.95}
+                strokeWidth={1.4}
+                strokeLinecap="round"
+              />
             );
-          })}
+          })()}
 
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+          {/* Beak (slender stem between achene and pappus hub) */}
+          <line
+            x1={HUB.x}
+            y1={HUB.y + 2}
+            x2={HUB.x}
+            y2={HUB.y + 46}
+            stroke={ACHENE}
+            strokeWidth={1.8}
+            opacity={seedOpacity}
+          />
+
+          {/* Achene (seed body) — a slender ribbed spindle */}
+          <g opacity={seedOpacity}>
+            <path
+              d={`
+                M ${HUB.x} ${HUB.y + 46}
+                C ${HUB.x - 14} ${HUB.y + 64}, ${HUB.x - 14} ${ACHENE_TIP.y - 26}, ${HUB.x} ${ACHENE_TIP.y}
+                C ${HUB.x + 14} ${ACHENE_TIP.y - 26}, ${HUB.x + 14} ${HUB.y + 64}, ${HUB.x} ${HUB.y + 46}
+                Z
+              `}
+              fill="url(#achene-grad)"
+              stroke="#5B4423"
+              strokeWidth={0.8}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+            {/* Fine ribs on achene */}
+            {[-7, -3.5, 0, 3.5, 7].map((dx, i) => (
+              <line
+                key={`rib-${i}`}
+                x1={HUB.x + dx * 0.65}
+                y1={HUB.y + 56}
+                x2={HUB.x + dx * 0.3}
+                y2={ACHENE_TIP.y - 8}
+                stroke="#5B4423"
+                strokeOpacity={0.4}
+                strokeWidth={0.6}
+              />
+            ))}
+            {/* Tiny barbed tip */}
+            <polygon
+              points={`${HUB.x - 3},${ACHENE_TIP.y - 2} ${HUB.x + 3},${ACHENE_TIP.y - 2} ${HUB.x},${ACHENE_TIP.y + 8}`}
+              fill="#5B4423"
             />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
           </g>
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* ── Callouts ─────────────────────────────────────────────── */}
+        {/* Left callout: POROSITY 0.916 */}
+        <g opacity={interpolate(frame, [fps * 2.6, fps * 3.6], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })}>
+          <line
+            x1={160}
+            y1={610}
+            x2={360}
+            y2={660}
+            stroke={PAPPUS_MID}
+            strokeOpacity={0.6}
+            strokeWidth={1}
+          />
+          <circle cx={360} cy={660} r={3} fill={PAPPUS} />
+          <text
+            x={160}
+            y={596}
+            fill={SLATE}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={500}
+            letterSpacing={3}
+          >
+            POROSITY
+          </text>
+          <text
+            x={160}
+            y={624}
+            fill={PAPPUS}
+            fontFamily={inter}
+            fontSize={28}
+            fontWeight={600}
+            letterSpacing={0.5}
+          >
+            0.916
+          </text>
+        </g>
+
+        {/* Right callout: ~100 BRISTLES */}
+        <g opacity={interpolate(frame, [fps * 2.8, fps * 3.8], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })}>
+          {(() => {
+            const b = bristles[Math.floor(BRISTLE_COUNT * 0.78)];
+            const grown = b.len;
+            const ex = HUB.x + Math.sin(b.theta) * grown;
+            const ey = HUB.y - Math.cos(b.theta) * grown;
+            return (
+              <>
+                <line
+                  x1={ex}
+                  y1={ey}
+                  x2={920}
+                  y2={ey - 50}
+                  stroke={GOLD}
+                  strokeOpacity={0.7}
+                  strokeWidth={1}
+                />
+                <line
+                  x1={920}
+                  y1={ey - 50}
+                  x2={990}
+                  y2={ey - 50}
+                  stroke={GOLD}
+                  strokeOpacity={0.7}
+                  strokeWidth={1}
+                />
+                <circle cx={ex} cy={ey} r={3} fill={GOLD} />
+                <text
+                  x={990}
+                  y={ey - 72}
+                  textAnchor="end"
+                  fill={SLATE}
+                  fontFamily={inter}
+                  fontSize={11}
+                  fontWeight={500}
+                  letterSpacing={3}
+                >
+                  BRISTLES
+                </text>
+                <text
+                  x={990}
+                  y={ey - 44}
+                  textAnchor="end"
+                  fill={PAPPUS}
+                  fontFamily={inter}
+                  fontSize={28}
+                  fontWeight={600}
+                  letterSpacing={0.5}
+                >
+                  ~100
+                </text>
+              </>
+            );
+          })()}
+        </g>
+
+        {/* Upper-left callout: 4× DRAG OF SOLID DISC — points to the top of the SVR */}
+        <g opacity={interpolate(frame, [fps * 3.0, fps * 4.0], [0, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })}>
+          <line
+            x1={SVR.cx - 60}
+            y1={SVR.cy - SVR.ry - 2}
+            x2={200}
+            y2={SVR.cy - SVR.ry - 70}
+            stroke={GOLD}
+            strokeOpacity={0.6}
+            strokeWidth={1}
+          />
+          <line
+            x1={200}
+            y1={SVR.cy - SVR.ry - 70}
+            x2={120}
+            y2={SVR.cy - SVR.ry - 70}
+            stroke={GOLD}
+            strokeOpacity={0.6}
+            strokeWidth={1}
+          />
+          <circle cx={SVR.cx - 60} cy={SVR.cy - SVR.ry - 2} r={3} fill={GOLD} />
+          <text
+            x={120}
+            y={SVR.cy - SVR.ry - 86}
+            fill={SLATE}
+            fontFamily={inter}
+            fontSize={11}
+            fontWeight={500}
+            letterSpacing={3}
+          >
+            DRAG VS SOLID DISC
+          </text>
+          <text
+            x={120}
+            y={SVR.cy - SVR.ry - 58}
+            fill={GOLD}
+            fontFamily={inter}
+            fontSize={28}
+            fontWeight={600}
+            letterSpacing={0.5}
+          >
+            4×
+          </text>
+        </g>
+
+        {/* Caption strip below the drafting frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={SLATE}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · PAPPUS WAKE OBSERVED IN A VERTICAL WIND TUNNEL</text>
+          <text x={FRAME.w} textAnchor="end" fill={GOLD} opacity={0.9}>
+            TAXON · TARAXACUM OFFICINALE
           </text>
         </g>
       </svg>
@@ -595,67 +799,62 @@ export const PairingCard: React.FC = () => {
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 915,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: GOLD,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
             marginBottom: 18,
             fontWeight: 600,
+            opacity: roleTag,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: SLATE, margin: "0 4px" }}>/</span>
+          <span style={{ color: "#F2EEE2", letterSpacing: 5 }}>Aerospace Engineer</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: "#F4F0E4",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 86,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The parachute
           <br />
-          city planner.
+          that leaks.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#C7CBD4",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
             maxWidth: 880,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          A dandelion seed drifts for kilometres because its pappus — roughly{" "}
+          <span style={{ color: PAPPUS, fontWeight: 600 }}>100 bristles</span>{" "}
+          with a porosity of{" "}
+          <span style={{ color: PAPPUS, fontWeight: 600 }}>0.916</span> — lets most
+          of the air pass through and, in doing so, pins a stable{" "}
+          <span style={{ color: GOLD, fontWeight: 600 }}>separated vortex ring</span>{" "}
+          above the seed that gives it four times the drag of a solid disc.
         </div>
       </div>
 
@@ -669,7 +868,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: SLATE,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +876,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Cummins et al. · Nature 562 (2018) 414–418</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: GOLD }}>●</span> Pappus = Aerodynamic lab
         </span>
       </div>
     </AbsoluteFill>
