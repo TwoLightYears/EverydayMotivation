@@ -51,161 +51,760 @@ const fontCss = `
 `;
 
 // Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+const INK = "#050810";
+const STRIP_BG = "#131F30";
+const PANEL_BG = "#070C16";
+const CREAM = "#F0E4CE";
+const CLAW = "#D64A2E";
+const CLAW_HIGHLIGHT = "#F28A5F";
+const CLAW_SHADOW = "#7A2112";
+const FLASH = "#7BC6FF";
+const FLASH_HOT = "#F2F9FF";
+const GRAY = "#8E96A3";
+const GRAY_DIM = "#3D4552";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+const clamp = (v: number): number => Math.max(0, Math.min(1, v));
+
+// ──────────────────────────────────────────────────────────────────────────
+//  CLAW GEOMETRY
+//  Design the claw in its own coordinate space with pivot at (0,0).
+//  Scale and translate to position within a panel.
+//  Length L sets the horizontal extent (tip is at (-L, ~0)).
+// ──────────────────────────────────────────────────────────────────────────
+
+const L = 400; // design length
+
+// Upper jaw (dactyl): tapering wedge with a plunger lobe hanging down
+// around 45%–55% along its length.
+const UPPER_PTS: [number, number][] = [
+  [0, -34], // top-base at pivot
+  [-0.14 * L, -58], // shoulder
+  [-0.42 * L, -66], // dorsal ridge
+  [-0.72 * L, -56], // pre-tip upper
+  [-0.92 * L, -32], // tip upper
+  [-1.0 * L, -8], // tip point
+  [-0.93 * L, 10], // tip underside
+  [-0.78 * L, 18], // underside near tip
+  [-0.60 * L, 22], // pre-plunger
+  [-0.56 * L, 24], // plunger upper-left
+  [-0.54 * L, 58], // plunger lower-left
+  [-0.46 * L, 68], // plunger tip
+  [-0.38 * L, 58], // plunger lower-right
+  [-0.36 * L, 24], // plunger upper-right
+  [-0.22 * L, 20], // underside
+  [-0.08 * L, 26], // base underside
+  [0, 34], // bottom-base at pivot
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
+// Lower jaw (propodus): heavier wedge with a socket (a notched recess in the
+// upper edge, between ~40% and ~55%).
+const LOWER_PTS: [number, number][] = [
+  [0, 34], // top-base at pivot (shared with upper's bottom-base)
+  [-0.12 * L, 60], // shoulder down
+  [-0.44 * L, 72], // ventral bulge
+  [-0.78 * L, 60], // taper toward tip
+  [-0.93 * L, 32], // tip lower
+  [-1.0 * L, 10], // tip point (slightly offset from upper)
+  [-0.94 * L, -8], // tip upper
+  [-0.78 * L, -16], // approaching mouth
+  [-0.58 * L, -20], // mouth edge (upper plateau)
+  [-0.56 * L, -4], // socket upper-left
+  [-0.52 * L, 12], // socket bottom-left
+  [-0.42 * L, 14], // socket bottom
+  [-0.34 * L, 12], // socket bottom-right
+  [-0.30 * L, -4], // socket upper-right
+  [-0.28 * L, -20], // mouth edge back
+  [-0.12 * L, -22], // shoulder up
+  [0, -34], // top-base at pivot
 ];
 
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
+const SOCKET_POS: [number, number] = [-0.42 * L, 4]; // centre of socket cavity
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
-  }
-  return ((h >>> 0) % 1000) / 1000;
+const ptsToPath = (
+  pts: [number, number][],
+  transform?: (p: [number, number]) => [number, number],
+): string => {
+  const a = transform ? pts.map(transform) : pts;
+  return (
+    "M " +
+    a
+      .map(([x, y], i) => (i === 0 ? `${x} ${y}` : `L ${x} ${y}`))
+      .join(" ") +
+    " Z"
+  );
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+// Rotate point by +angle (radians) about origin in SVG screen space
+// (positive Y = down, positive angle = clockwise in screen).
+// We want upper jaw to open UPWARD when openAngle > 0, so we rotate by
+// -openAngle (counter-clockwise in screen).
+const rotateCCW = (angle: number) => (p: [number, number]): [number, number] => {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return [p[0] * c + p[1] * s, -p[0] * s + p[1] * c];
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// ──────────────────────────────────────────────────────────────────────────
+//  PANEL
+// ──────────────────────────────────────────────────────────────────────────
+
+const Panel: React.FC<{
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  stage: 0 | 1 | 2 | 3;
+  active: number;
+  revealed: number;
+  flashPower: number;
+}> = ({ x, y, w, h, stage, active, revealed, flashPower }) => {
+  const mx = 16;
+  const my = 16;
+  const iw = w - mx * 2;
+  const ih = h - my * 2;
+
+  // Claw sits in the upper-middle; pivot at right side of panel, tip at left.
+  // Keep the claw compact enough to leave open water on its left for the jet
+  // and cavitation bubble.
+  const scale = Math.min((iw * 0.58) / L, (ih * 0.36) / 160);
+  const pivotX = mx + iw * 0.94;
+  const pivotY = my + ih * 0.42;
+  // Jet/bubble origin — just past the claw tip, in open water.
+  const tipX = pivotX - L * scale;
+  const tipY = pivotY;
+  const jetX = tipX - 18 * scale; // small gap between jaws and the jet root
+  const jetY = tipY;
+  const bubbleX = tipX - 70 * scale; // where the cavity sits
+  const bubbleY = tipY;
+  // For legacy references in flash + arc anchor, retain socket coords.
+  const socketX = pivotX + SOCKET_POS[0] * scale;
+  const socketY = pivotY + SOCKET_POS[1] * scale;
+
+  // Stage-specific
+  const openAnglesDeg = [55, 20, 0, 0];
+  const openAngle = (openAnglesDeg[stage] * Math.PI) / 180;
+
+  const labels = ["LOADED", "RELEASE", "CAVITATION", "COLLAPSE"] as const;
+  const captions = [
+    "Dactyl cocked 55°",
+    "Water jet · 25 m/s",
+    "Vapor cavity · Δp < −100 kPa",
+    "Flash · ~5,000 K · 218 dB",
+  ] as const;
+  const timecodes = [
+    "T + 0 µs",
+    "T + 500 µs",
+    "T + 800 µs",
+    "T + 1.5 ms",
+  ] as const;
+
+  // Transform upper jaw points: scale, then rotate by -openAngle about origin,
+  // then translate to pivot.
+  const upperTransform = (p: [number, number]): [number, number] => {
+    const scaled: [number, number] = [p[0] * scale, p[1] * scale];
+    const rotated = rotateCCW(openAngle)(scaled);
+    return [pivotX + rotated[0], pivotY + rotated[1]];
+  };
+  const lowerTransform = (p: [number, number]): [number, number] => {
+    return [pivotX + p[0] * scale, pivotY + p[1] * scale];
+  };
+
+  const revealW = w * revealed;
+
+  return (
+    <g transform={`translate(${x}, ${y})`}>
+      <defs>
+        <clipPath id={`reveal-${stage}`}>
+          <rect x={0} y={0} width={revealW} height={h} />
+        </clipPath>
+        <radialGradient id={`flash-${stage}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={FLASH_HOT} stopOpacity={1} />
+          <stop offset="18%" stopColor={FLASH_HOT} stopOpacity={0.9} />
+          <stop offset="45%" stopColor={FLASH} stopOpacity={0.75} />
+          <stop offset="100%" stopColor={FLASH} stopOpacity={0} />
+        </radialGradient>
+        <radialGradient id={`bubble-${stage}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.1} />
+          <stop offset="70%" stopColor={FLASH} stopOpacity={0.14} />
+          <stop offset="100%" stopColor={FLASH} stopOpacity={0} />
+        </radialGradient>
+        <linearGradient id={`upper-${stage}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={CLAW_HIGHLIGHT} />
+          <stop offset="100%" stopColor={CLAW} />
+        </linearGradient>
+        <linearGradient id={`lower-${stage}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={CLAW} />
+          <stop offset="100%" stopColor={CLAW_SHADOW} />
+        </linearGradient>
+      </defs>
+
+      {/* Panel back — darker than strip */}
+      <rect x={0} y={0} width={w} height={h} fill={PANEL_BG} />
+
+      {/* Panel border — highlighted when active */}
+      <rect
+        x={0.5}
+        y={0.5}
+        width={w - 1}
+        height={h - 1}
+        fill="none"
+        stroke={active > 0.5 ? CLAW : GRAY_DIM}
+        strokeOpacity={interpolate(active, [0, 1], [0.5, 1])}
+        strokeWidth={interpolate(active, [0, 1], [1, 1.6])}
+      />
+
+      <g clipPath={`url(#reveal-${stage})`}>
+        {/* Header: frame number + timecode */}
+        <g fontFamily={inter} fontSize={10} fontWeight={600} letterSpacing={3}>
+          <text x={mx} y={my + 4} fill={GRAY}>
+            {`0${stage + 1}`}
+            <tspan fill={GRAY_DIM}>{" / 04"}</tspan>
+          </text>
+          <text
+            x={mx + iw}
+            y={my + 4}
+            textAnchor="end"
+            fill={active > 0.5 ? CLAW : GRAY_DIM}
+            opacity={active > 0.5 ? 1 : 0.8}
+          >
+            {timecodes[stage]}
+          </text>
+        </g>
+
+        {/* Thin separators under header */}
+        <line
+          x1={mx}
+          y1={my + 14}
+          x2={mx + iw}
+          y2={my + 14}
+          stroke={GRAY_DIM}
+          strokeWidth={0.8}
+          strokeOpacity={0.5}
+        />
+
+        {/* Faint grid inside the panel */}
+        <g stroke={GRAY_DIM} strokeOpacity={0.18} strokeWidth={0.5}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <line
+              key={`gx-${i}`}
+              x1={mx}
+              y1={my + 30 + ((ih - 70) * (i + 1)) / 6}
+              x2={mx + iw}
+              y2={my + 30 + ((ih - 70) * (i + 1)) / 6}
+            />
+          ))}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <line
+              key={`gy-${i}`}
+              x1={mx + (iw * (i + 1)) / 4}
+              y1={my + 24}
+              x2={mx + (iw * (i + 1)) / 4}
+              y2={my + ih - 48}
+            />
+          ))}
+        </g>
+
+        {/* Motion-blur ghost on stage 1 (prior angles) */}
+        {stage === 1 && (
+          <g>
+            {[0.75, 0.5, 0.25].map((f, i) => {
+              const a = ((openAnglesDeg[0] * f) * Math.PI) / 180;
+              const transform = (p: [number, number]): [number, number] => {
+                const scaled: [number, number] = [p[0] * scale, p[1] * scale];
+                const rotated = rotateCCW(a)(scaled);
+                return [pivotX + rotated[0], pivotY + rotated[1]];
+              };
+              return (
+                <path
+                  key={`blur-${i}`}
+                  d={ptsToPath(UPPER_PTS, transform)}
+                  fill={CLAW}
+                  opacity={0.08 - i * 0.015}
+                />
+              );
+            })}
+          </g>
+        )}
+
+        {/* Cavitation bubble — stage 2, hero of this panel */}
+        {stage === 2 && (() => {
+          const BR = 86 * scale; // bubble radius
+          return (
+            <g>
+              {/* Outer glow halo */}
+              <circle
+                cx={bubbleX}
+                cy={bubbleY}
+                r={BR * 1.55}
+                fill={FLASH}
+                opacity={0.08}
+              />
+              <circle
+                cx={bubbleX}
+                cy={bubbleY}
+                r={BR * 1.2}
+                fill={FLASH}
+                opacity={0.08}
+              />
+              {/* Bubble body */}
+              <circle
+                cx={bubbleX}
+                cy={bubbleY}
+                r={BR}
+                fill={`url(#bubble-${stage})`}
+              />
+              <circle
+                cx={bubbleX}
+                cy={bubbleY}
+                r={BR}
+                fill="none"
+                stroke={FLASH}
+                strokeWidth={2}
+                strokeOpacity={0.95}
+              />
+              {/* Inner rim highlight */}
+              <circle
+                cx={bubbleX}
+                cy={bubbleY}
+                r={BR * 0.88}
+                fill="none"
+                stroke={FLASH_HOT}
+                strokeWidth={0.9}
+                strokeOpacity={0.55}
+              />
+              {/* Specular highlight */}
+              <ellipse
+                cx={bubbleX - BR * 0.5}
+                cy={bubbleY - BR * 0.58}
+                rx={BR * 0.28}
+                ry={BR * 0.08}
+                fill={FLASH_HOT}
+                opacity={0.9}
+                transform={`rotate(-30 ${bubbleX - BR * 0.5} ${
+                  bubbleY - BR * 0.58
+                })`}
+              />
+              {/* Dimension arrow and label — ⌀ callout */}
+              <g
+                stroke={FLASH}
+                strokeOpacity={0.75}
+                strokeWidth={0.9}
+                fill="none"
+              >
+                <line
+                  x1={bubbleX - BR}
+                  y1={bubbleY + BR + 14}
+                  x2={bubbleX + BR}
+                  y2={bubbleY + BR + 14}
+                />
+                <line
+                  x1={bubbleX - BR}
+                  y1={bubbleY + BR + 10}
+                  x2={bubbleX - BR}
+                  y2={bubbleY + BR + 18}
+                />
+                <line
+                  x1={bubbleX + BR}
+                  y1={bubbleY + BR + 10}
+                  x2={bubbleX + BR}
+                  y2={bubbleY + BR + 18}
+                />
+              </g>
+              <text
+                x={bubbleX}
+                y={bubbleY + BR + 32}
+                textAnchor="middle"
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={600}
+                fill={FLASH}
+                letterSpacing={2}
+              >
+                CAVITY · 3.5 MM
+              </text>
+            </g>
+          );
+        })()}
+
+        {/* Flash halo — stage 3 */}
+        {stage === 3 && flashPower > 0.02 && (
+          <>
+            <circle
+              cx={bubbleX}
+              cy={bubbleY}
+              r={ih * 0.46 * flashPower}
+              fill={`url(#flash-${stage})`}
+              opacity={flashPower * 0.98}
+            />
+            <g
+              stroke={FLASH_HOT}
+              strokeWidth={1.4}
+              opacity={flashPower * 0.75}
+              strokeLinecap="round"
+            >
+              {Array.from({ length: 16 }).map((_, i) => {
+                const a = (i / 16) * Math.PI * 2;
+                const r1 = ih * 0.10;
+                const r2 = ih * 0.44 * (0.5 + 0.5 * flashPower);
+                return (
+                  <line
+                    key={`ray-${i}`}
+                    x1={bubbleX + Math.cos(a) * r1}
+                    y1={bubbleY + Math.sin(a) * r1}
+                    x2={bubbleX + Math.cos(a) * r2}
+                    y2={bubbleY + Math.sin(a) * r2}
+                  />
+                );
+              })}
+            </g>
+            {/* Bright core */}
+            <circle
+              cx={bubbleX}
+              cy={bubbleY}
+              r={16 * flashPower}
+              fill={FLASH_HOT}
+              opacity={0.9}
+            />
+            <circle
+              cx={bubbleX}
+              cy={bubbleY}
+              r={6 * flashPower}
+              fill="#FFFFFF"
+            />
+          </>
+        )}
+
+        {/* Water-jet arrow — stage 1 only */}
+        {stage === 1 && (
+          <g strokeLinecap="round" fill="none">
+            {/* Multi-line arrow showing jet exiting the claw tip */}
+            {[-1, 0, 1].map((i) => (
+              <path
+                key={`jet-${i}`}
+                d={`M ${jetX} ${jetY + i * 6 * scale}
+                    L ${jetX - 95 * scale} ${jetY + i * 6 * scale}`}
+                stroke={FLASH}
+                strokeOpacity={i === 0 ? 0.9 : 0.55}
+                strokeWidth={i === 0 ? 1.6 : 1}
+                strokeDasharray={i === 0 ? "10 5" : "6 5"}
+              />
+            ))}
+            {/* Arrowhead */}
+            <polyline
+              points={`${jetX - 86 * scale},${jetY - 10 * scale} ${
+                jetX - 95 * scale
+              },${jetY} ${jetX - 86 * scale},${jetY + 10 * scale}`}
+              stroke={FLASH}
+              strokeOpacity={0.95}
+              strokeWidth={1.6}
+            />
+            {/* Speed label */}
+            <text
+              x={jetX - 48 * scale}
+              y={jetY - 16 * scale}
+              fill={FLASH}
+              fontFamily={inter}
+              fontSize={10.5}
+              fontWeight={600}
+              letterSpacing={1.5}
+              textAnchor="middle"
+            >
+              25 m/s
+            </text>
+          </g>
+        )}
+
+        {/* ── CLAW ── render order: lower jaw underlay, upper jaw, pivot ── */}
+        <path
+          d={ptsToPath(LOWER_PTS, lowerTransform)}
+          fill={`url(#lower-${stage})`}
+          stroke={CLAW_SHADOW}
+          strokeWidth={1.2}
+          strokeLinejoin="round"
+        />
+
+        {/* Dark socket cavity accent */}
+        <ellipse
+          cx={socketX}
+          cy={socketY}
+          rx={10 * scale}
+          ry={10 * scale}
+          fill={INK}
+          opacity={0.55}
+        />
+
+        <path
+          d={ptsToPath(UPPER_PTS, upperTransform)}
+          fill={`url(#upper-${stage})`}
+          stroke={CLAW_SHADOW}
+          strokeOpacity={0.85}
+          strokeWidth={1.2}
+          strokeLinejoin="round"
+        />
+
+        {/* Pivot pin */}
+        <circle
+          cx={pivotX}
+          cy={pivotY}
+          r={5}
+          fill={CREAM}
+          stroke={CLAW_SHADOW}
+          strokeWidth={1}
+        />
+        <circle cx={pivotX} cy={pivotY} r={1.6} fill={INK} />
+
+        {/* Panel-1 anatomical labels + angle arc */}
+        {stage === 0 && (
+          <g
+            fontFamily={inter}
+            fontSize={9}
+            letterSpacing={2.5}
+            fill={CREAM}
+            opacity={0.9}
+            fontWeight={500}
+          >
+            {/* Dactyl label — leader points at top of upper jaw */}
+            <line
+              x1={mx + 6}
+              y1={my + 60}
+              x2={pivotX - 220 * scale}
+              y2={pivotY - 55 * scale}
+              stroke={CREAM}
+              strokeOpacity={0.5}
+              strokeWidth={0.8}
+            />
+            <text x={mx + 6} y={my + 50}>
+              DACTYL
+            </text>
+            {/* Propodus label — leader points at ventral bulge */}
+            <line
+              x1={mx + 6}
+              y1={my + ih - 100}
+              x2={pivotX - 230 * scale}
+              y2={pivotY + 70 * scale}
+              stroke={CREAM}
+              strokeOpacity={0.5}
+              strokeWidth={0.8}
+            />
+            <text x={mx + 6} y={my + ih - 110}>
+              PROPODUS
+            </text>
+            {/* Angle arc: from the closed position to the open position of
+                the upper jaw's leading ridge. Start angle is at the +X axis
+                mirrored (jaw points along -X), end is -55° rotated (CCW). */}
+            {(() => {
+              const rArc = 130 * scale;
+              const sweep = (55 * Math.PI) / 180;
+              const startX = pivotX - rArc;
+              const startY = pivotY;
+              const endX = pivotX - Math.cos(sweep) * rArc;
+              const endY = pivotY - Math.sin(sweep) * rArc;
+              return (
+                <g>
+                  {/* Reference line (closed position) */}
+                  <line
+                    x1={pivotX}
+                    y1={pivotY}
+                    x2={startX}
+                    y2={startY}
+                    stroke={FLASH}
+                    strokeOpacity={0.35}
+                    strokeWidth={0.8}
+                    strokeDasharray="3 4"
+                  />
+                  {/* Open-position reference */}
+                  <line
+                    x1={pivotX}
+                    y1={pivotY}
+                    x2={endX}
+                    y2={endY}
+                    stroke={FLASH}
+                    strokeOpacity={0.35}
+                    strokeWidth={0.8}
+                    strokeDasharray="3 4"
+                  />
+                  {/* Arc */}
+                  <path
+                    d={`M ${startX} ${startY} A ${rArc} ${rArc} 0 0 1 ${endX} ${endY}`}
+                    fill="none"
+                    stroke={FLASH}
+                    strokeOpacity={0.9}
+                    strokeWidth={1.2}
+                  />
+                  {/* Angle label — sat just outside the arc on the upper-left */}
+                  <text
+                    x={pivotX - Math.cos(sweep / 2) * (rArc + 14)}
+                    y={pivotY - Math.sin(sweep / 2) * (rArc + 14) + 4}
+                    fill={FLASH}
+                    fontSize={11}
+                    textAnchor="end"
+                    letterSpacing={1}
+                    fontWeight={600}
+                  >
+                    55°
+                  </text>
+                </g>
+              );
+            })()}
+          </g>
+        )}
+
+        {/* Scale bar — bottom-right of panel art area */}
+        <g
+          transform={`translate(${mx + iw - 70}, ${my + ih - 56})`}
+          stroke={GRAY}
+          fill={GRAY}
+        >
+          <line x1={0} y1={0} x2={50} y2={0} strokeWidth={1} />
+          <line x1={0} y1={-3} x2={0} y2={3} strokeWidth={1} />
+          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1} />
+          <text
+            x={25}
+            y={-6}
+            textAnchor="middle"
+            fontFamily={inter}
+            fontSize={9}
+            letterSpacing={2}
+            stroke="none"
+          >
+            5 MM
+          </text>
+        </g>
+
+        {/* Panel label strip — bottom */}
+        <g>
+          <line
+            x1={mx}
+            y1={my + ih - 38}
+            x2={mx + iw}
+            y2={my + ih - 38}
+            stroke={GRAY_DIM}
+            strokeWidth={0.8}
+          />
+          <text
+            x={mx}
+            y={my + ih - 22}
+            fill={active > 0.5 ? CLAW : CREAM}
+            opacity={interpolate(active, [0, 1], [0.6, 1])}
+            fontFamily={inter}
+            fontSize={11.5}
+            fontWeight={600}
+            letterSpacing={4}
+          >
+            {labels[stage]}
+          </text>
+          <text
+            x={mx}
+            y={my + ih - 6}
+            fill={GRAY}
+            fontFamily={inter}
+            fontSize={10.5}
+            fontWeight={400}
+          >
+            {captions[stage]}
+          </text>
+        </g>
+      </g>
+    </g>
+  );
 };
+
+// ──────────────────────────────────────────────────────────────────────────
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // Strip & panel layout
+  const STRIP = { x: 20, y: 190, w: 1040, h: 580 };
+  const SPROCKET_H = 28;
+  const PANEL_AREA = {
+    x: STRIP.x,
+    y: STRIP.y + SPROCKET_H,
+    w: STRIP.w,
+    h: STRIP.h - SPROCKET_H * 2,
+  };
+  const GUTTER = 8;
+  const PANEL_W = (PANEL_AREA.w - GUTTER * 3) / 4;
+  const PANEL_H = PANEL_AREA.h;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const stageDuration = fps * 0.95;
+  const panelReveal = (i: number): number => {
+    const start = fps * 0.25 + i * (fps * 0.55);
+    const end = start + fps * 0.55;
+    return clamp((frame - start) / (end - start));
+  };
+  const panelActive = (i: number): number => {
+    const center = fps * 0.75 + i * stageDuration;
+    const d = Math.abs(frame - center);
+    const activeWidth = stageDuration * 0.65;
+    return clamp(1 - d / activeWidth);
+  };
+
+  // Flash — peaks near end of panel 4 active window
+  const flashPeak = fps * 0.75 + 3 * stageDuration + fps * 0.15;
+  const flashAttack = fps * 0.08;
+  const flashDecay = fps * 1.3;
+  const flashPower = (() => {
+    if (frame < flashPeak - flashAttack) {
+      return clamp(
+        (frame - (flashPeak - flashAttack - fps * 0.35)) / (fps * 0.35),
+      ) * 0.55;
+    }
+    if (frame < flashPeak) {
+      return 0.55 + 0.45 * clamp(1 - (flashPeak - frame) / flashAttack);
+    }
+    const decay = clamp(1 - (frame - flashPeak) / flashDecay);
+    return 0.35 + 0.6 * decay;
+  })();
+
+  // Full-composition flash wash
+  const washPower = (() => {
+    if (frame < flashPeak - flashAttack || frame > flashPeak + fps * 0.6) return 0;
+    if (frame < flashPeak) {
+      return 0.4 * clamp(1 - (flashPeak - frame) / flashAttack);
+    }
+    return 0.4 * clamp(1 - (frame - flashPeak) / (fps * 0.5));
+  })();
 
   const titleSpring = spring({
     frame: frame - fps * 0.4,
     fps,
     config: { damping: 200, mass: 0.8 },
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const hookOpacity = interpolate(frame, [fps * 1.1, fps * 2.0], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const metaOpacity = interpolate(frame, [0, fps * 0.3], [0, 1], {
+    extrapolateRight: "clamp",
+  });
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
       <style>{fontCss}</style>
+
+      {/* Darkroom vignette */}
+      <svg
+        width={1080}
+        height={1350}
+        viewBox="0 0 1080 1350"
+        style={{ position: "absolute", inset: 0 }}
+      >
+        <defs>
+          <radialGradient id="room-vig" cx="50%" cy="40%" r="80%">
+            <stop offset="0%" stopColor="#0A1424" stopOpacity={1} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
+          </radialGradient>
+          <linearGradient id="strip-gloss" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#192538" />
+            <stop offset="50%" stopColor="#141E2F" />
+            <stop offset="100%" stopColor="#192538" />
+          </linearGradient>
+        </defs>
+        <rect x={0} y={0} width={1080} height={1350} fill="url(#room-vig)" />
+      </svg>
 
       {/* Top metadata band */}
       <div
@@ -223,379 +822,176 @@ export const PairingCard: React.FC = () => {
           letterSpacing: 4.5,
           textTransform: "uppercase",
           fontWeight: 500,
+          opacity: metaOpacity,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: CLAW }}>2026 · 11 · 05</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Thin rule under meta */}
+      <div
+        style={{
+          position: "absolute",
+          left: 80,
+          right: 80,
+          top: 96,
+          height: 1,
+          backgroundColor: GRAY_DIM,
+          opacity: 0.6 * metaOpacity,
+        }}
+      />
+
+      {/* Section label */}
+      <div
+        style={{
+          position: "absolute",
+          top: 118,
+          left: 80,
+          color: GRAY,
+          fontFamily: inter,
+          fontSize: 11,
+          letterSpacing: 3.5,
+          textTransform: "uppercase",
+          fontWeight: 500,
+          opacity: 0.85 * metaOpacity,
+        }}
+      >
+        Plate I <span style={{ color: GRAY_DIM }}>/</span>{" "}
+        <span style={{ color: CREAM }}>
+          Sequential high-speed imaging · Alpheus heterochaelis major chela
+        </span>
+      </div>
+
+      {/* Film strip + panels */}
       <svg
         width={1080}
         height={1350}
         viewBox="0 0 1080 1350"
         style={{ position: "absolute", inset: 0 }}
       >
-        <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
+        {/* Strip body */}
+        <rect
+          x={STRIP.x}
+          y={STRIP.y}
+          width={STRIP.w}
+          height={STRIP.h}
+          fill="url(#strip-gloss)"
+        />
+        {/* Sprocket bands */}
+        <rect
+          x={STRIP.x}
+          y={STRIP.y}
+          width={STRIP.w}
+          height={SPROCKET_H}
+          fill={INK}
+          opacity={0.6}
+        />
+        <rect
+          x={STRIP.x}
+          y={STRIP.y + STRIP.h - SPROCKET_H}
+          width={STRIP.w}
+          height={SPROCKET_H}
+          fill={INK}
+          opacity={0.6}
+        />
+        {Array.from({ length: 20 }).map((_, i) => {
+          const sx = STRIP.x + 24 + i * ((STRIP.w - 48) / 19);
+          return (
+            <g key={`sp-${i}`}>
+              <rect
+                x={sx - 7}
+                y={STRIP.y + SPROCKET_H / 2 - 5}
+                width={14}
+                height={10}
+                rx={1.5}
+                fill={STRIP_BG}
+              />
+              <rect
+                x={sx - 7}
+                y={STRIP.y + STRIP.h - SPROCKET_H / 2 - 5}
+                width={14}
+                height={10}
+                rx={1.5}
+                fill={STRIP_BG}
+              />
+            </g>
+          );
+        })}
+
+        {/* Film edge markings */}
+        <g fontFamily={inter} fontSize={10} letterSpacing={3} fontWeight={600}>
+          <text x={STRIP.x + 14} y={STRIP.y - 10} fill={CLAW}>
+            KODAK TMAX · ALPHEUS · ROLL 01
+          </text>
+          <text
+            x={STRIP.x + STRIP.w - 14}
+            y={STRIP.y - 10}
+            textAnchor="end"
+            fill={GRAY}
           >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
+            SHUTTER 1 / 500,000 S
+          </text>
+          <text x={STRIP.x + 14} y={STRIP.y + STRIP.h + 22} fill={GRAY}>
+            FIG. 1 · SINGLE SNAP · 4 EXPOSURES
+          </text>
+          <text
+            x={STRIP.x + STRIP.w - 14}
+            y={STRIP.y + STRIP.h + 22}
+            textAnchor="end"
+            fill={CLAW}
+            opacity={0.9}
           >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
+            SONOLUMINESCENCE RECORDED
+          </text>
+        </g>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
-          </radialGradient>
-
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-
-        {/* Inner thin border */}
-        <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
-          fill="none"
-          stroke="#2B313C"
-          strokeWidth={1}
-        />
-
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
-          </g>
+        {/* Four panels */}
+        {[0, 1, 2, 3].map((i) => (
+          <Panel
+            key={i}
+            x={PANEL_AREA.x + i * (PANEL_W + GUTTER)}
+            y={PANEL_AREA.y}
+            w={PANEL_W}
+            h={PANEL_H}
+            stage={i as 0 | 1 | 2 | 3}
+            active={panelActive(i)}
+            revealed={panelReveal(i)}
+            flashPower={i === 3 ? flashPower : 0}
+          />
         ))}
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
-        </g>
-
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
-
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
+        {/* Inter-panel arrows along the sprocket channel */}
+        {[0, 1, 2].map((i) => {
+          const x = PANEL_AREA.x + (i + 1) * PANEL_W + i * GUTTER + GUTTER / 2;
+          const y = PANEL_AREA.y + PANEL_H / 2;
+          const op = clamp((panelReveal(i + 1) - 0.3) * 3);
+          return (
+            <g key={`arr-${i}`} opacity={op * 0.75}>
+              <line
+                x1={x - 4}
+                y1={y}
+                x2={x + 4}
+                y2={y}
+                stroke={CLAW}
+                strokeWidth={1.2}
               />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
-
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
-                  />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
-                </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
-              </g>
-            );
-          })}
-
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
-        </g>
-
-        {/* Caption strip just below the drafting frame */}
-        <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={11}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
-          </text>
-        </g>
+              <polygon
+                points={`${x + 4},${y - 3} ${x + 8},${y} ${x + 4},${y + 3}`}
+                fill={CLAW}
+              />
+            </g>
+          );
+        })}
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* Type lockup */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
+          top: 830,
           opacity: titleSpring,
           transform: `translateY(${interpolate(
             titleSpring,
@@ -606,18 +1002,18 @@ export const PairingCard: React.FC = () => {
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: CLAW,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 20,
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
+          Role <span style={{ color: GRAY_DIM, margin: "0 4px" }}>/</span>
           <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
+            Flash Photographer
           </span>
         </div>
 
@@ -626,36 +1022,34 @@ export const PairingCard: React.FC = () => {
             color: "#F4F4F6",
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 86,
             lineHeight: 0.96,
             letterSpacing: -1.4,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          A shrimp
           <br />
-          city planner.
+          with a flashbulb.
         </div>
 
         <div
           style={{
-            marginTop: 30,
+            marginTop: 28,
             color: "#C8CAD0",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.45,
             fontWeight: 400,
             maxWidth: 880,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          Closing its asymmetric claw at ~25 m/s, the{" "}
+          <span style={{ color: FLASH, fontWeight: 600 }}>snapping shrimp</span>{" "}
+          forms a cavitation bubble whose collapse emits a picosecond flash of
+          sonoluminescence at an inferred{" "}
+          <span style={{ color: CLAW, fontWeight: 600 }}>~5,000 K</span>.
         </div>
       </div>
 
@@ -677,11 +1071,21 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Lohse, Schmitz & Versluis · Nature 413 (2001) 477</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: FLASH }}>●</span> 1 snap = 1 flashbulb
         </span>
       </div>
+
+      {/* Full-frame flash wash */}
+      <AbsoluteFill
+        style={{
+          backgroundColor: FLASH,
+          opacity: washPower,
+          mixBlendMode: "screen",
+          pointerEvents: "none",
+        }}
+      />
     </AbsoluteFill>
   );
 };
