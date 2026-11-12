@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "still": "remotion still src/index.ts PairingCard",
-    "render": "remotion render src/index.ts PairingCard"
+    "render": "remotion render src/index.ts PairingCard",
+    "still:scallop": "remotion still src/index.ts ScallopCard",
+    "render:scallop": "remotion render src/index.ts ScallopCard"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
