@@ -50,135 +50,134 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
-const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+// Palette — from the concept's visual brief
+const INK = "#0F1217";
+const BOARD = "#141821";
+const STONE_DARK = "#1D222A";
+const STONE_MID = "#2B313B";
+const STONE_WARM = "#3A3326";
+const CRUST = "#5C4A2A";
+const LICHEN = "#C9A24A";
+const BONE = "#E8DCBE";
+const BONE_DIM = "#B5A882";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
-];
+// ── Hexagonal mosaic generation ───────────────────────────────────────
+// Working in a 1080 × 900 "plan view" coordinate space then scaled into a
+// frame on the 1080×1350 poster.
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
+type Hex = {
+  q: number;
+  r: number;
+  x: number;
+  y: number;
+  shade: string;
+  sides: number; // 6 for a true hexagon, 5/7 for fault cells
+  rotate: number;
 };
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
 
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
+const R = 48; // pointy-top hex radius (center to vertex)
+const HEX_DX = Math.sqrt(3) * R; // horizontal step for pointy-top
+const HEX_DY = 1.5 * R; // vertical step
 
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+// Pointy-top hex: vertices at 30°, 90°, 150°, 210°, 270°, 330°
+const hexPoints = (cx: number, cy: number, r: number, sides = 6, rot = 0): string => {
+  const pts: string[] = [];
+  for (let i = 0; i < sides; i++) {
+    const ang = ((360 / sides) * i + 30 + rot) * (Math.PI / 180);
+    const x = cx + r * Math.cos(ang);
+    const y = cy + r * Math.sin(ang);
+    pts.push(`${x.toFixed(2)},${y.toFixed(2)}`);
   }
-  return ((h >>> 0) % 1000) / 1000;
+  return pts.join(" ");
 };
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
+// Deterministic hash → 0..1
+const hash2 = (a: number, b: number): number => {
+  let h = 2166136261 ^ (a * 374761393) ^ (b * 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h = h ^ (h >>> 16);
+  return ((h >>> 0) % 10000) / 10000;
 };
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+const toneForHex = (q: number, r: number): string => {
+  const v = hash2(q, r);
+  if (v < 0.05) return "#4A3C22"; // warm iron oxide
+  if (v < 0.13) return STONE_WARM; // deeper warm
+  if (v < 0.45) return STONE_DARK;
+  if (v < 0.80) return STONE_MID;
+  return "#3F4854"; // slightly brighter blue-gray
+};
+
+// Which cells wear a dusting of Xanthoria lichen (gold)
+const hasLichen = (q: number, r: number): boolean => {
+  const v = hash2(q + 50, r + 50);
+  return v < 0.06;
+};
+
+// Build the mosaic. Pointy-top grid; axial coordinates (q,r).
+const buildMosaic = (cx: number, cy: number, radius: number): Hex[] => {
+  const cells: Hex[] = [];
+  const range = 7;
+  for (let q = -range; q <= range; q++) {
+    for (let r = -range; r <= range; r++) {
+      const s = -q - r;
+      if (Math.abs(s) > range) continue;
+      const x = cx + HEX_DX * (q + r / 2);
+      const y = cy + HEX_DY * r;
+      // keep inside a rounded disk, with a little buffer for cell radius
+      const d = Math.hypot(x - cx, y - cy);
+      if (d > radius - R * 0.4) continue;
+      const h = hash2(q + 100, r + 100);
+      // Rare 5- or 7-sided "faults" among the hexagons
+      let sides = 6;
+      let rotate = 0;
+      if (q === -2 && r === 3) {
+        sides = 5;
+        rotate = 10;
+      } else if (q === 3 && r === -2) {
+        sides = 7;
+        rotate = -6;
+      } else if (q === -3 && r === 0) {
+        sides = 5;
+        rotate = -14;
+      } else if (q === 2 && r === 2) {
+        sides = 7;
+        rotate = 8;
+      }
+      cells.push({
+        q,
+        r,
+        x,
+        y,
+        shade: toneForHex(q, r),
+        sides,
+        rotate: h * 2 - 1 + rotate, // tiny irregularity for realism
+      });
+    }
+  }
+  // Sort growth order by distance from center so cracks propagate outward.
+  cells.sort((a, b) => {
+    const da = Math.hypot(a.x - cx, a.y - cy);
+    const db = Math.hypot(b.x - cx, b.y - cy);
+    return da - db;
+  });
+  return cells;
 };
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  // ── Timing ──────────────────────────────────────────────────────────
+  const GROW_START = fps * 0.1;
+  const GROW_SPAN = fps * 2.2;
+  const grow = (frame - GROW_START) / GROW_SPAN;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const dividersSpring = spring({
+    frame: frame - fps * 2.2,
+    fps,
+    config: { damping: 180, mass: 1.2, stiffness: 90 },
+  });
 
   const titleSpring = spring({
     frame: frame - fps * 0.4,
@@ -192,16 +191,27 @@ export const PairingCard: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  // ── Page layout (1080 × 1350 portrait) ─────────────────────────────
+  // Top metadata band: 56..
+  // Plan frame        : 130..840 (h ≈ 710, w 960)
+  // Title lockup      : 895..
+  // Footer            : 1280..
+  const FRAME = { x: 60, y: 130, w: 960, h: 710 };
+
+  // Mosaic plan space: 1080 × 900 → scaled into FRAME
+  const PLAN_W = 1080;
+  const PLAN_H = 900;
+  const scale = FRAME.w / PLAN_W; // = ~0.8889
+
+  const mosaicCX = PLAN_W / 2 - 30;
+  const mosaicCY = PLAN_H / 2 - 40;
+  const MOSAIC_R = 340;
+  const cells = buildMosaic(mosaicCX, mosaicCY, MOSAIC_R);
+
+  // ── 120° callout anchor: a 3-way joint between central hexes ────
+  // Pointy-top joints are at the vertex-corners; one sits directly above the
+  // centre at (cx, cy - R).
+  const callAnchor = { x: mosaicCX, y: mosaicCY - R };
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -217,7 +227,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: BONE_DIM,
           fontFamily: inter,
           fontSize: 13,
           letterSpacing: 4.5,
@@ -225,11 +235,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: LICHEN }}>2026 · 11 · 17</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Frame + plan drawing */}
       <svg
         width={1080}
         height={1350}
@@ -237,54 +247,30 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
-
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
-          </radialGradient>
-
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
+          <radialGradient id="board-vignette" cx="50%" cy="42%" r="70%">
+            <stop offset="0%" stopColor="#1B202A" stopOpacity={1} />
             <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          <pattern
+            id="paper-grid"
+            x={FRAME.x}
+            y={FRAME.y}
+            width={40}
+            height={40}
+            patternUnits="userSpaceOnUse"
+          >
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1A1F28" strokeWidth={1} />
+          </pattern>
+
+          <linearGradient id="col-face" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3A414D" />
+            <stop offset="100%" stopColor="#242933" />
+          </linearGradient>
+
+          <clipPath id="frame-clip">
+            <rect x={FRAME.x} y={FRAME.y} width={FRAME.w} height={FRAME.h} />
+          </clipPath>
         </defs>
 
         {/* Drafting board */}
@@ -300,28 +286,19 @@ export const PairingCard: React.FC = () => {
           y={FRAME.y}
           width={FRAME.w}
           height={FRAME.h}
-          fill="url(#grid)"
+          fill="url(#paper-grid)"
         />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
-        />
-
-        {/* Inner thin border */}
         <rect
           x={FRAME.x + 0.5}
           y={FRAME.y + 0.5}
           width={FRAME.w - 1}
           height={FRAME.h - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#2D333E"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
+        {/* Corner crop marks (lichen gold) */}
         {(
           [
             [FRAME.x, FRAME.y, 1, 1],
@@ -330,40 +307,29 @@ export const PairingCard: React.FC = () => {
             [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
           ] as const
         ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
+          <g key={i} stroke={LICHEN} strokeWidth={1.5} fill="none">
             <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
             <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
           </g>
         ))}
 
-        {/* N marker */}
+        {/* Plate title (top-left of plan) */}
         <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 36})`}
+          fill={BONE_DIM}
           fontFamily={inter}
-          fontWeight={600}
           fontSize={11}
-          letterSpacing={3}
+          letterSpacing={3.2}
+          fontWeight={600}
         >
-          <text textAnchor="start">N</text>
-          <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
-          />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <text>PLATE III · PLAN VIEW · COLUMN JOINTS</text>
         </g>
 
-        {/* Scale bar */}
+        {/* Scale bar — bottom-left of frame */}
         <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
+          transform={`translate(${FRAME.x + 26}, ${FRAME.y + FRAME.h - 28})`}
+          stroke={BONE_DIM}
+          fill={BONE_DIM}
           fontFamily={inter}
           fontSize={10}
           letterSpacing={3}
@@ -374,217 +340,330 @@ export const PairingCard: React.FC = () => {
           <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
           <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
           <text x={110} y={4} stroke="none">
-            50 KM
+            40 CM
           </text>
         </g>
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
+        {/* Mosaic — scale plan space into FRAME (clipped to frame) */}
+        <g
+          transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}
+          clipPath="url(#frame-clip)"
+          style={{ clipPath: "url(#frame-clip)" }}
+        >
+          {/* Faint under-circle (the mason's layout circle) */}
+          <circle
+            cx={mosaicCX}
+            cy={mosaicCY}
+            r={MOSAIC_R + 24}
+            fill="none"
+            stroke={CRUST}
+            strokeOpacity={Math.min(0.35, Math.max(0, grow) * 0.45)}
+            strokeWidth={1.1}
+            strokeDasharray="4 6"
+          />
+
+          {/* Cells. Per-cell spring reveal from center outward. */}
+          {cells.map((c, i) => {
+            // Normalized distance from center (0 at center, 1 at radius)
+            const d = Math.hypot(c.x - mosaicCX, c.y - mosaicCY);
+            const dN = Math.min(1, d / MOSAIC_R);
+            const localT = (grow - dN * 0.65) / 0.4;
+            const appear = Math.max(0, Math.min(1, localT));
+            const eased = 1 - Math.pow(1 - appear, 3);
+            if (eased <= 0.001) return null;
+            const r = R * 0.985; // tiny gap
+            const points = hexPoints(c.x, c.y, r, c.sides, c.rotate);
+            const isFault = c.sides !== 6;
+            // Simulated directional light from top-left: brighten upper-left
+            // edges, shade the lower-right ones. Build a highlight sliver.
+            const topHiPoints = hexPoints(c.x - 1.4, c.y - 1.4, r, c.sides, c.rotate);
+            const botShPoints = hexPoints(c.x + 1.6, c.y + 1.6, r, c.sides, c.rotate);
+            const lichen = hasLichen(c.q, c.r);
             return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
+              <g key={`hex-${i}`} opacity={eased}>
+                {/* Lower-right ambient shadow (very subtle) */}
+                <polygon
+                  points={botShPoints}
                   fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+                  stroke="#060810"
+                  strokeOpacity={0.45}
+                  strokeWidth={1.2}
                 />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
+                {/* Base face */}
+                <polygon
+                  points={points}
+                  fill={c.shade}
+                  stroke={isFault ? CRUST : "#0A0D12"}
+                  strokeWidth={isFault ? 1.5 : 1.1}
+                />
+                {/* Top-left sunlit edge */}
+                <polygon
+                  points={topHiPoints}
                   fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
+                  stroke={BONE}
+                  strokeOpacity={0.09}
+                  strokeWidth={0.8}
                 />
+                {/* Xanthoria lichen dusting on select cells */}
+                {lichen && (
+                  <>
+                    <circle
+                      cx={c.x - R * 0.35}
+                      cy={c.y - R * 0.15}
+                      r={R * 0.22}
+                      fill={LICHEN}
+                      opacity={0.42}
+                    />
+                    <circle
+                      cx={c.x - R * 0.1}
+                      cy={c.y - R * 0.45}
+                      r={R * 0.12}
+                      fill={LICHEN}
+                      opacity={0.3}
+                    />
+                  </>
+                )}
               </g>
             );
           })}
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
-              );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
-              return (
-                <g opacity={fadeIn}>
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+          {/* Highlight the central hex more */}
+          <polygon
+            points={hexPoints(mosaicCX, mosaicCY, R * 0.985)}
+            fill="url(#col-face)"
+            stroke={LICHEN}
+            strokeOpacity={Math.max(0, grow - 0.2) * 0.6}
+            strokeWidth={1.4}
+          />
+
+          {/* ── 120° callout ─────────────────────────────────────── */}
+          {(() => {
+            const show = Math.max(0, Math.min(1, (grow - 0.85) * 3));
+            if (show <= 0) return null;
+            // The three joint arms meeting at callAnchor at 120° apart.
+            // Angles relative to +x axis: 30°, 150°, 270° (pointy-top joint).
+            const armLen = 70;
+            const rays = [30, 150, 270].map((deg) => {
+              const a = (deg * Math.PI) / 180;
+              return {
+                x: callAnchor.x + armLen * Math.cos(a),
+                y: callAnchor.y + armLen * Math.sin(a),
+                a,
+              };
+            });
+            // Arc between 30° and 150° (the top-interior 120° wedge)
+            const arcR = 34;
+            const a0 = (30 * Math.PI) / 180;
+            const a1 = (150 * Math.PI) / 180;
+            const ax0 = callAnchor.x + arcR * Math.cos(a0);
+            const ay0 = callAnchor.y + arcR * Math.sin(a0);
+            const ax1 = callAnchor.x + arcR * Math.cos(a1);
+            const ay1 = callAnchor.y + arcR * Math.sin(a1);
+            // Annotation anchor to the LEFT of the mosaic (empty quadrant).
+            const annX = 60;
+            const annY = callAnchor.y + 110;
+            return (
+              <g opacity={show}>
+                {rays.map((p, i) => (
+                  <line
+                    key={`ray-${i}`}
+                    x1={callAnchor.x}
+                    y1={callAnchor.y}
+                    x2={p.x}
+                    y2={p.y}
+                    stroke={LICHEN}
+                    strokeWidth={2}
+                    strokeLinecap="round"
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
+                ))}
+                <path
+                  d={`M ${ax0} ${ay0} A ${arcR} ${arcR} 0 0 1 ${ax1} ${ay1}`}
+                  fill="none"
+                  stroke={LICHEN}
+                  strokeWidth={1.6}
+                />
+                <text
+                  x={callAnchor.x}
+                  y={callAnchor.y - arcR - 10}
+                  textAnchor="middle"
+                  fill={LICHEN}
+                  fontFamily={inter}
+                  fontSize={22}
+                  fontWeight={600}
+                  letterSpacing={2}
+                >
+                  120°
+                </text>
+                {/* Leader out to annotation in LEFT margin */}
+                {(() => {
+                  const originX = callAnchor.x + armLen * Math.cos((150 * Math.PI) / 180);
+                  const originY = callAnchor.y + armLen * Math.sin((150 * Math.PI) / 180);
+                  const kinkX = annX + 40;
+                  const kinkY = originY + 30;
+                  return (
+                    <>
+                      <polyline
+                        points={`${originX},${originY} ${kinkX},${kinkY} ${kinkX},${annY - 14}`}
+                        fill="none"
+                        stroke={LICHEN}
+                        strokeWidth={1.1}
+                      />
+                      <circle cx={originX} cy={originY} r={3} fill={LICHEN} />
+                    </>
+                  );
+                })()}
+                <g>
+                  <text
+                    x={annX}
+                    y={annY}
+                    fill={LICHEN}
+                    fontFamily={inter}
+                    fontSize={14}
+                    fontWeight={600}
+                    letterSpacing={2.8}
+                  >
+                    3-WAY JOINT
+                  </text>
+                  <text
+                    x={annX}
+                    y={annY + 22}
+                    fill={BONE_DIM}
+                    fontFamily={inter}
+                    fontSize={11}
+                    fontWeight={500}
+                    letterSpacing={2.4}
+                  >
+                    MIN-ENERGY
+                  </text>
+                  <text
+                    x={annX}
+                    y={annY + 38}
+                    fill={BONE_DIM}
+                    fontFamily={inter}
+                    fontSize={11}
+                    fontWeight={500}
+                    letterSpacing={2.4}
+                  >
+                    FRACTURE
+                  </text>
                 </g>
-              );
-            })()}
-
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
-            return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
-                />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
               </g>
             );
-          })}
+          })()}
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
-            <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
-              fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
-            <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
-              fontFamily={inter}
-              fontSize={11}
-              fontWeight={600}
-              letterSpacing={3.5}
-            >
-              TOKYO
-            </text>
-          </g>
         </g>
+
+        {/* ── Spec stamp (top-right of frame) — drawn in page coords so it
+             sits reliably on top of the mosaic. ─────────────────────── */}
+        {(() => {
+          const show = dividersSpring;
+          if (show <= 0.001) return null;
+          const panelW = 270;
+          const panelH = 150;
+          const px = FRAME.x + FRAME.w - 26 - panelW;
+          const py = FRAME.y + 54;
+          const headerH = 16;
+          const titleY = py + 36;
+          const rowY = py + 68;
+          const rowH = 26;
+          return (
+            <g opacity={show}>
+              {/* Backdrop */}
+              <rect
+                x={px}
+                y={py}
+                width={panelW}
+                height={panelH}
+                rx={2}
+                fill={INK}
+                fillOpacity={0.96}
+                stroke={LICHEN}
+                strokeWidth={1.3}
+              />
+              {/* Header bar tint */}
+              <rect
+                x={px}
+                y={py}
+                width={panelW}
+                height={headerH}
+                fill={LICHEN}
+                fillOpacity={0.18}
+              />
+              {/* Corner specimen-tag tick */}
+              <polygon
+                points={`${px + panelW},${py} ${px + panelW},${py + 14} ${px + panelW - 14},${py}`}
+                fill={LICHEN}
+              />
+              {/* Title */}
+              <text
+                x={px + 18}
+                y={titleY}
+                fill={LICHEN}
+                fontFamily={inter}
+                fontSize={12}
+                fontWeight={600}
+                letterSpacing={3}
+              >
+                SPEC · COLUMNAR BASALT
+              </text>
+              {/* Divider */}
+              <line
+                x1={px + 18}
+                y1={titleY + 10}
+                x2={px + panelW - 18}
+                y2={titleY + 10}
+                stroke={LICHEN}
+                strokeOpacity={0.45}
+                strokeWidth={1}
+              />
+              {/* Key-value rows */}
+              {[
+                ["JOINT ANGLE", "120°"],
+                ["POLYGON", "HEXAGON"],
+                ["FRACTURE", "MIN-ENERGY"],
+              ].map(([k, v], i) => (
+                <g key={`spec-${i}`}>
+                  <text
+                    x={px + 18}
+                    y={rowY + i * rowH}
+                    fill={BONE_DIM}
+                    fontFamily={inter}
+                    fontSize={11}
+                    fontWeight={500}
+                    letterSpacing={2.4}
+                  >
+                    {k}
+                  </text>
+                  <text
+                    x={px + panelW - 18}
+                    y={rowY + i * rowH}
+                    textAnchor="end"
+                    fill={BONE}
+                    fontFamily={inter}
+                    fontSize={12}
+                    fontWeight={600}
+                    letterSpacing={2.4}
+                  >
+                    {v}
+                  </text>
+                </g>
+              ))}
+            </g>
+          );
+        })()}
 
         {/* Caption strip just below the drafting frame */}
         <g
           transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
-          fill={GRAY}
+          fill={BONE_DIM}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · COLUMNAR JOINTING · BASALT, UNIFORM COOLING</text>
+          <text x={FRAME.w} textAnchor="end" fill={LICHEN} opacity={0.9}>
+            HALES · HONEYCOMB THEOREM · 1999
           </text>
         </g>
       </svg>
@@ -597,16 +676,12 @@ export const PairingCard: React.FC = () => {
           right: 80,
           top: 905,
           opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          transform: `translateY(${interpolate(titleSpring, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: LICHEN,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
@@ -615,15 +690,13 @@ export const PairingCard: React.FC = () => {
             fontWeight: 600,
           }}
         >
-          Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          Role <span style={{ color: BONE_DIM, margin: "0 4px" }}>/</span>
+          <span style={{ color: BONE, letterSpacing: 5 }}>Stonemason</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: "#F4EEDC",
             fontFamily: playfair,
             fontWeight: 500,
             fontSize: 84,
@@ -632,30 +705,26 @@ export const PairingCard: React.FC = () => {
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The honeycomb
           <br />
-          city planner.
+          mason.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#CFC9B4",
             fontFamily: inter,
             fontSize: 19,
             lineHeight: 1.4,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 890,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          As basaltic lava cools uniformly, contraction cracks seek the fracture pattern that spends the least elastic energy —{" "}
+          <span style={{ color: LICHEN, fontWeight: 600 }}>a hexagonal tiling</span>
+          {" "}— which is why the ~40,000 columns at the Giant's Causeway meet at 120°.
         </div>
       </div>
 
@@ -669,7 +738,7 @@ export const PairingCard: React.FC = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
-          color: GRAY,
+          color: BONE_DIM,
           fontFamily: inter,
           fontSize: 11,
           letterSpacing: 3,
@@ -677,9 +746,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Hales · Discrete &amp; Comp. Geom. 25 (2001) 1–22</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: LICHEN }}>●</span> Hex = min-perimeter tile
         </span>
       </div>
     </AbsoluteFill>
