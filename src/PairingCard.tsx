@@ -2,9 +2,10 @@ import React from "react";
 import {
   AbsoluteFill,
   useCurrentFrame,
-  spring,
   useVideoConfig,
+  spring,
   interpolate,
+  interpolateColors,
   Easing,
   staticFile,
 } from "remotion";
@@ -50,158 +51,182 @@ const fontCss = `
 }
 `;
 
-// Palette — taken from the concept's visual brief
-const INK = "#0E1014";
-const BOARD = "#13161C";
-const PHYSARUM = "#F4C430";
-const PHYSARUM_GLOW = "#FFE99A";
-const OAT = "#E8704A";
+// ── Palette (from the visual brief) ─────────────────────────────────────
+const INK = "#0F0E0C";
+const SAND = "#BF6A2E";
+const STRAW = "#D9A646";
+const STRAW_HI = "#F4C86B";
+const STRAW_DK = "#8B6A26";
+const BARK = "#3E2F1C";
+const BARK_HI = "#6A4E2A";
+const COLD = "#4F7DA3";
+const COLD_DK = "#243E5C";
+const PARCHMENT = "#E8DDC5";
 const GRAY = "#8A8F99";
-const GRID = "#1F242D";
-const GRID_MAJOR = "#2A303B";
+const GRID_FAINT = "#1C1A17";
+const GRID_MAJOR = "#262320";
 
-// ── Map layout (coord space: 1080 × 800) ──────────────────────────────────
-// A stylised Greater Tokyo arrangement. Tokyo sits a touch right-of-centre;
-// outer prefectural cities radiate roughly to their real compass bearings.
-type Node = { id: string; x: number; y: number; label: string };
-const TOKYO: Node = { id: "tokyo", x: 540, y: 430, label: "Tokyo" };
-const NODES: Node[] = [
-  { id: "yokohama", x: 460, y: 555, label: "Yokohama" },
-  { id: "kawasaki", x: 495, y: 510, label: "Kawasaki" },
-  { id: "chiba", x: 740, y: 510, label: "Chiba" },
-  { id: "funabashi", x: 670, y: 470, label: "Funabashi" },
-  { id: "saitama", x: 520, y: 320, label: "Saitama" },
-  { id: "kasukabe", x: 615, y: 290, label: "Kasukabe" },
-  { id: "hachioji", x: 340, y: 490, label: "Hachioji" },
-  { id: "tachikawa", x: 390, y: 425, label: "Tachikawa" },
-  { id: "mito", x: 845, y: 295, label: "Mito" },
-  { id: "utsunomiya", x: 610, y: 195, label: "Utsunomiya" },
-  { id: "takasaki", x: 250, y: 320, label: "Takasaki" },
-  { id: "maebashi", x: 195, y: 235, label: "Maebashi" },
-  { id: "numazu", x: 200, y: 640, label: "Numazu" },
-  { id: "choshi", x: 925, y: 565, label: "Choshi" },
-  { id: "tateyama", x: 585, y: 730, label: "Tateyama" },
-  { id: "odawara", x: 335, y: 660, label: "Odawara" },
+// Sky colour stops across the day cycle (t 0..1)
+const skyStops: { t: number; c: string }[] = [
+  { t: 0.0, c: "#13151F" },
+  { t: 0.08, c: "#1C1A26" },
+  { t: 0.14, c: "#51333B" },
+  { t: 0.2, c: "#A05A36" },
+  { t: 0.3, c: "#C9A264" },
+  { t: 0.5, c: "#D7B678" },
+  { t: 0.65, c: "#CC8C4C" },
+  { t: 0.78, c: "#8B4228" },
+  { t: 0.86, c: "#3A2232" },
+  { t: 0.94, c: "#191824" },
+  { t: 1.0, c: "#13151F" },
 ];
 
-type Edge = { from: string; to: string; w: number; delay: number };
-const EDGES: Edge[] = [
-  // Trunks radiating from Tokyo
-  { from: "tokyo", to: "kawasaki", w: 14, delay: 0.0 },
-  { from: "tokyo", to: "saitama", w: 13, delay: 0.05 },
-  { from: "tokyo", to: "funabashi", w: 13, delay: 0.08 },
-  { from: "tokyo", to: "tachikawa", w: 12, delay: 0.1 },
-  { from: "kawasaki", to: "yokohama", w: 12, delay: 0.12 },
-  { from: "funabashi", to: "chiba", w: 11, delay: 0.14 },
-
-  // Secondary trunks
-  { from: "saitama", to: "kasukabe", w: 9, delay: 0.2 },
-  { from: "tachikawa", to: "hachioji", w: 9, delay: 0.22 },
-  { from: "yokohama", to: "odawara", w: 9, delay: 0.25 },
-  { from: "saitama", to: "tachikawa", w: 8, delay: 0.27 },
-  { from: "kasukabe", to: "utsunomiya", w: 8, delay: 0.3 },
-  { from: "chiba", to: "choshi", w: 8, delay: 0.32 },
-  { from: "chiba", to: "tateyama", w: 8, delay: 0.35 },
-
-  // Long radiants
-  { from: "hachioji", to: "takasaki", w: 6, delay: 0.4 },
-  { from: "takasaki", to: "maebashi", w: 6, delay: 0.45 },
-  { from: "utsunomiya", to: "mito", w: 6, delay: 0.48 },
-  { from: "odawara", to: "numazu", w: 6, delay: 0.5 },
-
-  // Cross-links — the Physarum redundancy that gives fault-tolerance
-  { from: "takasaki", to: "saitama", w: 4, delay: 0.6 },
-  { from: "mito", to: "kasukabe", w: 4, delay: 0.62 },
-  { from: "numazu", to: "hachioji", w: 4, delay: 0.65 },
-  { from: "tateyama", to: "yokohama", w: 4, delay: 0.68 },
-  { from: "kasukabe", to: "funabashi", w: 4, delay: 0.7 },
-  { from: "maebashi", to: "takasaki", w: 3.5, delay: 0.72 },
-  { from: "yokohama", to: "funabashi", w: 3.5, delay: 0.75 },
-];
-
-// Outer-city labels (id → placement direction and offset px)
-type LabelPlacement = {
-  id: string;
-  text: string;
-  dx: number;
-  dy: number;
-  anchor: "start" | "middle" | "end";
-};
-const LABELS: LabelPlacement[] = [
-  { id: "yokohama", text: "YOKOHAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "chiba", text: "CHIBA", dx: 16, dy: 4, anchor: "start" },
-  { id: "saitama", text: "SAITAMA", dx: -14, dy: 4, anchor: "end" },
-  { id: "mito", text: "MITO", dx: 16, dy: 4, anchor: "start" },
-  { id: "utsunomiya", text: "UTSUNOMIYA", dx: 16, dy: 4, anchor: "start" },
-  { id: "maebashi", text: "MAEBASHI", dx: -14, dy: 4, anchor: "end" },
-  { id: "numazu", text: "NUMAZU", dx: -14, dy: 4, anchor: "end" },
-  { id: "tateyama", text: "TATEYAMA", dx: 0, dy: 22, anchor: "middle" },
-  { id: "choshi", text: "CHOSHI", dx: -14, dy: -10, anchor: "end" },
-];
-
-const nodeById = (id: string): Node =>
-  id === "tokyo" ? TOKYO : (NODES.find((n) => n.id === id) as Node);
-
-const hashSeed = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h = (h ^ s.charCodeAt(i)) * 16777619;
+function skyColour(t: number): string {
+  for (let i = 0; i < skyStops.length - 1; i++) {
+    const a = skyStops[i];
+    const b = skyStops[i + 1];
+    if (t >= a.t && t <= b.t) {
+      const f = (t - a.t) / (b.t - a.t);
+      return interpolateColors(f, [0, 1], [a.c, b.c]);
+    }
   }
-  return ((h >>> 0) % 1000) / 1000;
-};
+  return skyStops[skyStops.length - 1].c;
+}
 
-const edgePath = (e: Edge): string => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  const nx = -dy / len;
-  const ny = dx / len;
-  const seed = hashSeed(e.from + "|" + e.to);
-  const bend = (seed - 0.5) * 0.18 * len;
-  const mx = (a.x + b.x) / 2 + nx * bend;
-  const my = (a.y + b.y) / 2 + ny * bend;
-  return `M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`;
-};
+// Ambient temperature across the day (°C)
+function ambientAt(t: number): number {
+  return interpolate(
+    t,
+    [0, 0.08, 0.2, 0.5, 0.75, 0.86, 1],
+    [1, -1, 12, 33, 22, 12, 1],
+    { easing: Easing.inOut(Easing.ease) },
+  );
+}
 
-const edgeLen = (e: Edge): number => {
-  const a = nodeById(e.from);
-  const b = nodeById(e.to);
-  return Math.hypot(b.x - a.x, b.y - a.y) * 1.05;
+// ── Chamber grid ─────────────────────────────────────────────────────────
+type Chamber = { x: number; y: number; delay: number };
+const NEST = { cx: 740, cy: 575, rx: 220, ry: 212 };
+
+const CHAMBERS: Chamber[] = (() => {
+  const out: Chamber[] = [];
+  const dx = 58;
+  const dy = 52;
+  const marginX = NEST.rx - 32;
+  const marginY = NEST.ry - 30;
+  for (let r = -3; r <= 3; r++) {
+    const offset = Math.abs(r) % 2 === 1 ? dx / 2 : 0;
+    for (let c = -3; c <= 3; c++) {
+      const x = NEST.cx + c * dx + offset;
+      const y = NEST.cy + r * dy;
+      const e =
+        ((x - NEST.cx) / marginX) ** 2 + ((y - NEST.cy) / marginY) ** 2;
+      if (e <= 1) {
+        const d = Math.hypot(x - NEST.cx, y - NEST.cy);
+        out.push({ x, y, delay: d / 300 });
+      }
+    }
+  }
+  return out;
+})();
+
+// Perch silhouettes (little birds at some entrances)
+const PERCH_IDX = [2, 7, 13, 21, 28];
+
+// Thermometer layout (kept clear of the sky band)
+const THERM = {
+  x: 120,
+  w: 26,
+  yTop: 388,
+  yBottom: 820,
+  tMax: 40,
+  tMin: -10,
 };
+const tempToY = (T: number) =>
+  THERM.yBottom - ((T - THERM.tMin) / (THERM.tMax - THERM.tMin)) * (THERM.yBottom - THERM.yTop);
+
+const BRANCH_Y = 352;
 
 export const PairingCard: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
 
-  const growSpan = fps * 2.6;
-  const t = Math.max(0, frame) / growSpan;
+  const t = (frame % durationInFrames) / durationInFrames;
 
-  const pulseProgress = (frame % (fps * 4)) / (fps * 4);
+  const skyNow = skyColour(t);
+  const ambient = ambientAt(t);
+  const interior = 22;
 
-  const titleSpring = spring({
-    frame: frame - fps * 0.4,
+  const sunStart = 0.08;
+  const sunEnd = 0.86;
+  const sunVisible = t > sunStart && t < sunEnd;
+  const sunPhase = sunVisible ? (t - sunStart) / (sunEnd - sunStart) : 0;
+  const sunAngle = Math.PI * (1 - sunPhase); // π → 0 (left → right)
+  const arcCx = 540;
+  const arcCy = 352;
+  const arcR = 230;
+  const sunX = arcCx + arcR * Math.cos(sunAngle);
+  const sunY = arcCy - arcR * Math.sin(sunAngle);
+
+  const starPhase = Math.min(
+    Math.max(0, 1 - sunPhase * 6),
+    Math.max(0, (sunPhase - 0.95) * 10),
+    1,
+  );
+  // simpler: stars visible when far outside sun window
+  const nightAmount =
+    t < sunStart || t > sunEnd
+      ? 1
+      : Math.min(
+          (t - sunStart) / 0.05,
+          (sunEnd - t) / 0.05,
+          1,
+        ) < 0.3
+      ? 0.7
+      : 0;
+
+  // Reveal timings
+  const sceneIn = spring({
+    frame,
     fps,
-    config: { damping: 200, mass: 0.8 },
+    config: { damping: 220, mass: 1 },
+    durationInFrames: 36,
   });
-
-  const hookOpacity = interpolate(frame, [fps * 1.0, fps * 1.9], [0, 1], {
+  const titleIn = spring({
+    frame: frame - 12,
+    fps,
+    config: { damping: 220, mass: 0.9 },
+    durationInFrames: 40,
+  });
+  const hookOpacity = interpolate(frame, [30, 60], [0, 1], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  // ── Page layout (1080 × 1350 portrait) ──────────────────────────────
-  // Top metadata band: 0..110
-  // Drafting frame      : 130..841 (h 711, w 960; aspect 1.35 = 1080/800)
-  // Title block         : 880..
-  // Hook                : ~1095..
-  // Footer              : 1280..
-  const FRAME = { x: 60, y: 130, w: 960, h: 711 };
-  const MAP_W = 1080;
-  const MAP_H = 800;
-  const scale = FRAME.w / MAP_W; // = FRAME.h / MAP_H
+  const ambientY = tempToY(ambient);
+  const interiorY = tempToY(interior);
+
+  // Nest silhouette path — a hanging thatched dome
+  const nestPath = (() => {
+    const { cx, cy, rx, ry } = NEST;
+    const topY = cy - ry;
+    const botY = cy + ry;
+    return (
+      `M ${cx - rx + 20} ${topY + 8} ` +
+      `C ${cx - rx} ${cy - 60}, ${cx - rx + 4} ${cy + 120}, ${cx - rx * 0.6} ${botY - 20} ` +
+      `C ${cx - rx * 0.3} ${botY + 12}, ${cx + rx * 0.3} ${botY + 12}, ${cx + rx * 0.6} ${botY - 20} ` +
+      `C ${cx + rx - 4} ${cy + 120}, ${cx + rx} ${cy - 60}, ${cx + rx - 20} ${topY + 8} ` +
+      `Z`
+    );
+  })();
+
+  // Format signed temp text
+  const fmtTemp = (T: number) => {
+    const n = Math.round(T);
+    return `${n > 0 ? "+" : ""}${n}°C`;
+  };
+
+  const ambientLabel = fmtTemp(ambient);
 
   return (
     <AbsoluteFill style={{ backgroundColor: INK, fontFamily: inter }}>
@@ -211,7 +236,7 @@ export const PairingCard: React.FC = () => {
       <div
         style={{
           position: "absolute",
-          top: 56,
+          top: 60,
           left: 80,
           right: 80,
           display: "flex",
@@ -225,11 +250,11 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Everyday Motivation · No. 002</span>
-        <span style={{ color: PHYSARUM }}>2026 · 06 · 24</span>
+        <span>Everyday Motivation · No. 003</span>
+        <span style={{ color: STRAW }}>2026 · 11 · 20</span>
       </div>
 
-      {/* Drafting frame + map */}
+      {/* Working frame rule */}
       <svg
         width={1080}
         height={1350}
@@ -237,425 +262,547 @@ export const PairingCard: React.FC = () => {
         style={{ position: "absolute", inset: 0 }}
       >
         <defs>
-          <pattern
-            id="grid"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={48 * scale}
-            height={48 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${48 * scale} 0 L 0 0 0 ${48 * scale}`}
-              fill="none"
-              stroke={GRID}
-              strokeWidth={1}
-            />
-          </pattern>
-          <pattern
-            id="grid-major"
-            x={FRAME.x}
-            y={FRAME.y}
-            width={192 * scale}
-            height={192 * scale}
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d={`M ${192 * scale} 0 L 0 0 0 ${192 * scale}`}
-              fill="none"
-              stroke={GRID_MAJOR}
-              strokeWidth={1}
-            />
-          </pattern>
+          <linearGradient id="sky-fade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={skyNow} stopOpacity={0.95} />
+            <stop offset="100%" stopColor={INK} stopOpacity={1} />
+          </linearGradient>
 
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={OAT} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={OAT} stopOpacity={0} />
+          <linearGradient id="therm-bar" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#E74A2B" />
+            <stop offset="35%" stopColor="#E9A24C" />
+            <stop offset="55%" stopColor="#CFCF8F" />
+            <stop offset="80%" stopColor="#6D9DBE" />
+            <stop offset="100%" stopColor={COLD_DK} />
+          </linearGradient>
+
+          <radialGradient id="sun-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={STRAW_HI} stopOpacity={0.7} />
+            <stop offset="100%" stopColor={STRAW_HI} stopOpacity={0} />
           </radialGradient>
 
-          <radialGradient id="board-vignette" cx="50%" cy="40%" r="70%">
-            <stop offset="0%" stopColor="#161A22" stopOpacity={1} />
-            <stop offset="100%" stopColor={BOARD} stopOpacity={1} />
+          <radialGradient id="chamber-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={STRAW_HI} stopOpacity={0.9} />
+            <stop offset="55%" stopColor={STRAW} stopOpacity={0.9} />
+            <stop offset="100%" stopColor={STRAW_DK} stopOpacity={0.9} />
           </radialGradient>
 
-          <filter id="tube-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
+          <radialGradient id="chamber-halo" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={STRAW_HI} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={STRAW_HI} stopOpacity={0} />
+          </radialGradient>
+
+          <linearGradient id="nest-body" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2C2217" />
+            <stop offset="55%" stopColor="#1C150E" />
+            <stop offset="100%" stopColor="#0F0A05" />
+          </linearGradient>
+
+          <linearGradient id="horizon-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={SAND} stopOpacity={0.9} />
+            <stop offset="100%" stopColor={SAND} stopOpacity={0} />
+          </linearGradient>
+
+          <pattern
+            id="thatch"
+            x={0}
+            y={0}
+            width={9}
+            height={26}
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(-4)"
+          >
+            <line x1={4.5} y1={0} x2={4.5} y2={26} stroke={STRAW_DK} strokeWidth={1.4} strokeOpacity={0.55} />
+            <line x1={4.5} y1={2} x2={4.5} y2={22} stroke="#5A4418" strokeWidth={0.6} strokeOpacity={0.9} strokeDasharray="3 4" />
+          </pattern>
+
+          <filter id="warm-bloom" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3.2" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+
+          <clipPath id="nest-clip">
+            <path d={nestPath} />
+          </clipPath>
         </defs>
 
-        {/* Drafting board */}
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#board-vignette)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid)"
-        />
-        <rect
-          x={FRAME.x}
-          y={FRAME.y}
-          width={FRAME.w}
-          height={FRAME.h}
-          fill="url(#grid-major)"
+        {/* ─── Sky band ────────────────────────────────────────────────── */}
+        <rect x={60} y={120} width={960} height={232} fill={skyNow} />
+
+        {/* Horizon haze */}
+        <rect x={60} y={300} width={960} height={54} fill="url(#horizon-grad)" opacity={0.5} />
+
+        {/* Sun arc path */}
+        <path
+          d={`M ${arcCx - arcR} ${arcCy} A ${arcR} ${arcR} 0 0 1 ${arcCx + arcR} ${arcCy}`}
+          fill="none"
+          stroke={GRID_MAJOR}
+          strokeWidth={1}
+          strokeDasharray="2 7"
         />
 
-        {/* Inner thin border */}
+        {/* Compass marks: dawn, noon, dusk */}
+        {[
+          { a: Math.PI, label: "06:00" },
+          { a: Math.PI / 2, label: "12:00" },
+          { a: 0, label: "18:00" },
+        ].map((m, i) => {
+          const mx = arcCx + arcR * Math.cos(m.a);
+          const my = arcCy - arcR * Math.sin(m.a);
+          return (
+            <g key={i}>
+              <circle cx={mx} cy={my} r={2.5} fill={GRAY} />
+              <text
+                x={mx}
+                y={i === 1 ? my - 12 : arcCy + 20}
+                textAnchor="middle"
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={500}
+                letterSpacing={2.5}
+                fill={GRAY}
+              >
+                {m.label}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Stars at night */}
+        {nightAmount > 0 &&
+          [
+            [220, 200],
+            [310, 165],
+            [440, 215],
+            [560, 148],
+            [700, 200],
+            [820, 170],
+            [920, 230],
+            [170, 260],
+            [380, 275],
+            [650, 275],
+            [860, 290],
+          ].map(([sx, sy], i) => (
+            <circle
+              key={i}
+              cx={sx}
+              cy={sy}
+              r={i % 3 === 0 ? 1.6 : 1.0}
+              fill={PARCHMENT}
+              opacity={nightAmount * (i % 2 === 0 ? 0.9 : 0.55)}
+            />
+          ))}
+
+        {/* Sun */}
+        {sunVisible && (
+          <g>
+            <circle cx={sunX} cy={sunY} r={96} fill="url(#sun-glow)" />
+            <circle cx={sunX} cy={sunY} r={56} fill="url(#sun-glow)" opacity={0.9} />
+            <circle cx={sunX} cy={sunY} r={22} fill="#FFECC2" />
+            <circle cx={sunX} cy={sunY} r={13} fill={PARCHMENT} opacity={0.85} />
+          </g>
+        )}
+
+        {/* Weaver silhouettes in flight against the sky */}
+        {[
+          { x: 260, y: 182, s: 1.0, flip: 1 },
+          { x: 400, y: 232, s: 0.85, flip: 1 },
+          { x: 780, y: 168, s: 0.8, flip: -1 },
+          { x: 900, y: 214, s: 0.72, flip: -1 },
+        ].map((b, i) => (
+          <path
+            key={`fly-${i}`}
+            d={`M ${-14 * b.s} 0 Q ${-7 * b.s} ${-10 * b.s} 0 ${-2 * b.s} Q ${7 * b.s} ${-10 * b.s} ${14 * b.s} 0`}
+            transform={`translate(${b.x}, ${b.y}) scale(${b.flip}, 1)`}
+            fill="none"
+            stroke={INK}
+            strokeWidth={2.4}
+            strokeOpacity={0.85}
+            strokeLinecap="round"
+          />
+        ))}
+
+        {/* Sky-band inner border */}
         <rect
-          x={FRAME.x + 0.5}
-          y={FRAME.y + 0.5}
-          width={FRAME.w - 1}
-          height={FRAME.h - 1}
+          x={60 + 0.5}
+          y={120 + 0.5}
+          width={960 - 1}
+          height={232 - 1}
           fill="none"
-          stroke="#2B313C"
+          stroke="#28251F"
           strokeWidth={1}
         />
 
-        {/* Corner crop marks */}
-        {(
-          [
-            [FRAME.x, FRAME.y, 1, 1],
-            [FRAME.x + FRAME.w, FRAME.y, -1, 1],
-            [FRAME.x, FRAME.y + FRAME.h, 1, -1],
-            [FRAME.x + FRAME.w, FRAME.y + FRAME.h, -1, -1],
-          ] as const
-        ).map(([cx, cy, sx, sy], i) => (
-          <g key={i} stroke={OAT} strokeWidth={1.5} fill="none">
-            <line x1={cx} y1={cy} x2={cx + sx * 26} y2={cy} />
-            <line x1={cx} y1={cy} x2={cx} y2={cy + sy * 26} />
-          </g>
-        ))}
+        {/* ─── Ground zone ─────────────────────────────────────────────── */}
+        <rect x={60} y={352} width={960} height={530} fill={INK} />
 
-        {/* N marker */}
-        <g
-          transform={`translate(${FRAME.x + 26}, ${FRAME.y + 30})`}
-          fill={GRAY}
-          fontFamily={inter}
-          fontWeight={600}
-          fontSize={11}
-          letterSpacing={3}
-        >
-          <text textAnchor="start">N</text>
+        {/* Subtle ground grid */}
+        <g opacity={0.5}>
+          {[400, 460, 520, 580, 640, 700, 760, 820].map((y, i) => (
+            <line
+              key={i}
+              x1={60}
+              y1={y}
+              x2={1020}
+              y2={y}
+              stroke={GRID_FAINT}
+              strokeWidth={1}
+            />
+          ))}
+        </g>
+
+        {/* Camelthorn branch */}
+        <g>
           <line
-            x1={5}
-            y1={6}
-            x2={5}
-            y2={24}
-            stroke={GRAY}
-            strokeWidth={1.2}
+            x1={300}
+            y1={BRANCH_Y + 2}
+            x2={1020}
+            y2={BRANCH_Y - 18}
+            stroke={BARK}
+            strokeWidth={14}
+            strokeLinecap="round"
           />
-          <polygon points={`2,9 5,2 8,9`} fill={OAT} />
+          <line
+            x1={310}
+            y1={BRANCH_Y + 1}
+            x2={1020}
+            y2={BRANCH_Y - 18}
+            stroke={BARK_HI}
+            strokeWidth={2}
+            opacity={0.8}
+          />
+          {/* Thorn twigs */}
+          <line x1={420} y1={BRANCH_Y - 6} x2={408} y2={BRANCH_Y - 22} stroke={BARK_HI} strokeWidth={1.5} />
+          <line x1={520} y1={BRANCH_Y - 10} x2={505} y2={BRANCH_Y - 26} stroke={BARK_HI} strokeWidth={1.5} />
+          <line x1={600} y1={BRANCH_Y - 12} x2={616} y2={BRANCH_Y - 30} stroke={BARK_HI} strokeWidth={1.5} />
+          <line x1={880} y1={BRANCH_Y - 20} x2={866} y2={BRANCH_Y - 38} stroke={BARK_HI} strokeWidth={1.5} />
         </g>
 
-        {/* Scale bar */}
-        <g
-          transform={`translate(${FRAME.x + FRAME.w - 160}, ${
-            FRAME.y + FRAME.h - 28
-          })`}
-          stroke={GRAY}
-          fill={GRAY}
-          fontFamily={inter}
-          fontSize={10}
-          letterSpacing={3}
-          fontWeight={500}
-        >
-          <line x1={0} y1={0} x2={100} y2={0} strokeWidth={1.2} />
-          <line x1={0} y1={-5} x2={0} y2={5} strokeWidth={1.2} />
-          <line x1={50} y1={-3} x2={50} y2={3} strokeWidth={1.2} />
-          <line x1={100} y1={-5} x2={100} y2={5} strokeWidth={1.2} />
-          <text x={110} y={4} stroke="none">
-            50 KM
-          </text>
-        </g>
+        {/* ─── Nest cross-section ──────────────────────────────────────── */}
+        <g opacity={sceneIn}>
+          {/* Shadow under nest */}
+          <ellipse
+            cx={NEST.cx}
+            cy={NEST.cy + NEST.ry + 18}
+            rx={NEST.rx * 0.9}
+            ry={14}
+            fill="#000"
+            opacity={0.45}
+          />
 
-        {/* Map content: scale 1080×800 coords into FRAME */}
-        <g transform={`translate(${FRAME.x}, ${FRAME.y}) scale(${scale})`}>
-          {/* Edges: outer glow layer first */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <path
-                key={`glow-${i}`}
-                d={edgePath(e)}
-                stroke={PHYSARUM}
-                strokeWidth={e.w + 6}
-                strokeOpacity={0.18 * eased}
-                fill="none"
-                strokeLinecap="round"
-                filter="url(#tube-glow)"
-                strokeDasharray={len}
-                strokeDashoffset={dashOffset}
-              />
-            );
-          })}
-          {/* Edges: cores */}
-          {EDGES.map((e, i) => {
-            const len = edgeLen(e);
-            const localT = (t - e.delay) / 0.18;
-            const grow = Math.max(0, Math.min(1, localT));
-            const eased = 1 - Math.pow(1 - grow, 3);
-            const dashOffset = len * (1 - eased);
-            return (
-              <g key={`core-${i}`}>
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM}
-                  strokeWidth={e.w}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-                <path
-                  d={edgePath(e)}
-                  stroke={PHYSARUM_GLOW}
-                  strokeWidth={Math.max(1, e.w - 4)}
-                  strokeOpacity={0.55}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={len}
-                  strokeDashoffset={dashOffset}
-                />
-              </g>
-            );
-          })}
+          {/* Thatch body */}
+          <path d={nestPath} fill="url(#nest-body)" />
+          <path d={nestPath} fill="url(#thatch)" opacity={0.55} />
 
-          {/* Pulse along main trunk */}
-          {t > 0.9 &&
-            (() => {
-              const trunk = ["tokyo", "kawasaki", "yokohama", "odawara"].map(
-                nodeById,
+          {/* Cross-section cut line — a vertical seam running down middle-left */}
+          <line
+            x1={NEST.cx - NEST.rx * 0.75}
+            y1={NEST.cy - NEST.ry * 0.7}
+            x2={NEST.cx - NEST.rx * 0.55}
+            y2={NEST.cy + NEST.ry * 0.85}
+            stroke={PARCHMENT}
+            strokeWidth={1}
+            strokeOpacity={0.35}
+            strokeDasharray="2 5"
+          />
+
+          {/* Interior chambers */}
+          <g clipPath="url(#nest-clip)">
+            {CHAMBERS.map((ch, i) => {
+              const reveal = Math.min(
+                1,
+                Math.max(0, sceneIn * 1.6 - ch.delay),
               );
-              const segs = trunk
-                .slice(1)
-                .map((n, i) => Math.hypot(n.x - trunk[i].x, n.y - trunk[i].y));
-              const total = segs.reduce((a, b) => a + b, 0);
-              const along = pulseProgress * total;
-              let acc = 0;
-              let p = trunk[0];
-              for (let i = 0; i < segs.length; i++) {
-                if (acc + segs[i] >= along) {
-                  const f = (along - acc) / segs[i];
-                  p = {
-                    id: "p",
-                    label: "",
-                    x: trunk[i].x + (trunk[i + 1].x - trunk[i].x) * f,
-                    y: trunk[i].y + (trunk[i + 1].y - trunk[i].y) * f,
-                  };
-                  break;
-                }
-                acc += segs[i];
-              }
-              const fadeIn = Math.min(1, (t - 0.9) * 4);
+              const warm = 0.75 + 0.25 * Math.sin((frame / fps + i * 0.3) * 1.2);
               return (
-                <g opacity={fadeIn}>
+                <g key={i} opacity={reveal}>
                   <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={14}
-                    fill={PHYSARUM_GLOW}
-                    opacity={0.35}
+                    cx={ch.x}
+                    cy={ch.y}
+                    r={30}
+                    fill="url(#chamber-halo)"
+                    opacity={warm * 0.6}
                   />
-                  <circle cx={p.x} cy={p.y} r={5} fill="#FFFFFF" />
+                  <circle
+                    cx={ch.x}
+                    cy={ch.y}
+                    r={16}
+                    fill="url(#chamber-glow)"
+                  />
+                  <circle
+                    cx={ch.x}
+                    cy={ch.y}
+                    r={7.5}
+                    fill={INK}
+                  />
+                  <circle
+                    cx={ch.x - 2}
+                    cy={ch.y - 2}
+                    r={2.8}
+                    fill={STRAW_HI}
+                    opacity={0.55}
+                  />
                 </g>
               );
-            })()}
+            })}
 
-          {/* Nodes (oat flakes) */}
-          {[TOKYO, ...NODES].map((n) => {
-            const isCenter = n.id === "tokyo";
-            const apparition = Math.min(
-              1,
-              Math.max(0, t - (isCenter ? 0 : 0.04)) * 3,
-            );
-            const r = isCenter ? 12 : 6;
+          </g>
+
+          {/* Nest outline */}
+          <path
+            d={nestPath}
+            fill="none"
+            stroke={STRAW_DK}
+            strokeWidth={2.5}
+            strokeOpacity={0.85}
+          />
+
+          {/* Bloom over whole nest for the warmth */}
+          <path
+            d={nestPath}
+            fill="none"
+            stroke={STRAW_HI}
+            strokeWidth={0.6}
+            strokeOpacity={0.5}
+            filter="url(#warm-bloom)"
+          />
+        </g>
+
+        {/* ─── Thermometer (left) ──────────────────────────────────────── */}
+        <g opacity={sceneIn}>
+          {/* Column label */}
+          <text
+            x={THERM.x + THERM.w / 2}
+            y={THERM.yTop - 16}
+            textAnchor="middle"
+            fontFamily={inter}
+            fontSize={10}
+            letterSpacing={3}
+            fontWeight={600}
+            fill={GRAY}
+          >
+            AMBIENT
+          </text>
+
+          {/* Bar */}
+          <rect
+            x={THERM.x}
+            y={THERM.yTop}
+            width={THERM.w}
+            height={THERM.yBottom - THERM.yTop}
+            fill="url(#therm-bar)"
+            rx={THERM.w / 2}
+          />
+          <rect
+            x={THERM.x + 0.5}
+            y={THERM.yTop + 0.5}
+            width={THERM.w - 1}
+            height={THERM.yBottom - THERM.yTop - 1}
+            fill="none"
+            stroke="#2A2620"
+            strokeWidth={1}
+            rx={THERM.w / 2}
+          />
+
+          {/* Scale ticks + labels */}
+          {[40, 30, 20, 10, 0, -10].map((v) => {
+            const y = tempToY(v);
             return (
-              <g key={n.id} opacity={apparition}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r * 2.8}
-                  fill="url(#node-glow)"
+              <g key={v}>
+                <line
+                  x1={THERM.x - 6}
+                  y1={y}
+                  x2={THERM.x}
+                  y2={y}
+                  stroke={GRAY}
+                  strokeWidth={1}
                 />
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={r}
-                  fill={OAT}
-                  stroke={INK}
-                  strokeWidth={isCenter ? 3 : 2}
-                />
+                <text
+                  x={THERM.x - 10}
+                  y={y + 3}
+                  textAnchor="end"
+                  fontFamily={inter}
+                  fontSize={11}
+                  fontWeight={500}
+                  fill={GRAY}
+                  letterSpacing={0.5}
+                >
+                  {v > 0 ? `+${v}` : v}
+                </text>
               </g>
             );
           })}
 
-          {/* Outer-city labels */}
-          {LABELS.map((l) => {
-            const n = nodeById(l.id);
-            const op = Math.min(1, Math.max(0, t - 0.5) * 2);
-            return (
-              <text
-                key={`lbl-${l.id}`}
-                x={n.x + l.dx}
-                y={n.y + l.dy}
-                textAnchor={l.anchor}
-                fill={GRAY}
-                fontFamily={inter}
-                fontSize={11}
-                fontWeight={500}
-                letterSpacing={2.4}
-                opacity={op}
-              >
-                {l.text}
-              </text>
-            );
-          })}
-
-          {/* Tokyo callout — leader into the empty NE quadrant */}
-          <g opacity={Math.min(1, Math.max(0, t - 0.05) * 3)}>
+          {/* Interior line — the one steady value */}
+          <g>
             <line
-              x1={TOKYO.x + 10}
-              y1={TOKYO.y - 6}
-              x2={TOKYO.x + 130}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
+              x1={THERM.x + THERM.w}
+              y1={interiorY}
+              x2={NEST.cx + NEST.rx * 0.75}
+              y2={interiorY}
+              stroke={STRAW_HI}
+              strokeWidth={1.5}
+              strokeDasharray="6 5"
+              opacity={0.85}
             />
-            <line
-              x1={TOKYO.x + 130}
-              y1={TOKYO.y - 80}
-              x2={TOKYO.x + 180}
-              y2={TOKYO.y - 80}
-              stroke={OAT}
-              strokeWidth={1.2}
-            />
+            {/* Marker on bar */}
             <rect
-              x={TOKYO.x + 178}
-              y={TOKYO.y - 92}
-              width={94}
-              height={24}
-              rx={2}
+              x={THERM.x - 2}
+              y={interiorY - 4}
+              width={THERM.w + 4}
+              height={8}
+              fill={STRAW_HI}
+              stroke={INK}
+              strokeWidth={1}
+            />
+            {/* Label block sits just above the dashed line, in free space between therm and nest */}
+            <g transform={`translate(${THERM.x + 230}, ${interiorY - 48})`}>
+              <text
+                x={0}
+                y={0}
+                fontFamily={inter}
+                fontSize={10}
+                fontWeight={600}
+                fill={STRAW_HI}
+                letterSpacing={3.5}
+              >
+                INTERIOR &nbsp;·&nbsp; ALL DAY, ALL NIGHT
+              </text>
+              <text
+                x={0}
+                y={30}
+                fontFamily={inter}
+                fontSize={26}
+                fontWeight={600}
+                fill={STRAW_HI}
+                letterSpacing={0.6}
+              >
+                +22&#176;C
+              </text>
+            </g>
+          </g>
+
+          {/* Ambient marker (moving) */}
+          <g>
+            <circle
+              cx={THERM.x + THERM.w + 4}
+              cy={ambientY}
+              r={7}
               fill={INK}
-              stroke={OAT}
-              strokeWidth={1.2}
+              stroke={PARCHMENT}
+              strokeWidth={1.5}
+            />
+            <polygon
+              points={`${THERM.x + THERM.w + 12},${ambientY - 6} ${THERM.x + THERM.w + 22},${ambientY} ${THERM.x + THERM.w + 12},${ambientY + 6}`}
+              fill={PARCHMENT}
             />
             <text
-              x={TOKYO.x + 225}
-              y={TOKYO.y - 76}
-              textAnchor="middle"
-              fill={OAT}
+              x={THERM.x + THERM.w + 30}
+              y={ambientY + 5}
               fontFamily={inter}
-              fontSize={11}
+              fontSize={16}
               fontWeight={600}
-              letterSpacing={3.5}
+              fill={PARCHMENT}
+              letterSpacing={0.5}
             >
-              TOKYO
+              {ambientLabel}
+            </text>
+            <text
+              x={THERM.x + THERM.w + 30}
+              y={ambientY + 20}
+              fontFamily={inter}
+              fontSize={9}
+              fontWeight={500}
+              fill={GRAY}
+              letterSpacing={2.5}
+            >
+              OUTSIDE AIR
             </text>
           </g>
+
+          {/* Bar bottom + top caps */}
+          <circle cx={THERM.x + THERM.w / 2} cy={THERM.yBottom + 12} r={14} fill={COLD_DK} stroke="#2A2620" strokeWidth={1} />
         </g>
 
-        {/* Caption strip just below the drafting frame */}
+        {/* ─── Caption strip under scene ───────────────────────────────── */}
         <g
-          transform={`translate(${FRAME.x}, ${FRAME.y + FRAME.h + 22})`}
+          transform={`translate(80, 870)`}
           fill={GRAY}
           fontFamily={inter}
           fontSize={11}
           letterSpacing={3}
           fontWeight={500}
         >
-          <text>FIG. 1 · TUBE NETWORK GROWN BY P. POLYCEPHALUM, 26 H</text>
-          <text
-            x={FRAME.w}
-            textAnchor="end"
-            fill={PHYSARUM}
-            opacity={0.85}
-          >
-            REPLICA OF TOKYO RAIL TOPOLOGY
+          <text>FIG. 1 · CROSS-SECTION, PHILETAIRUS SOCIUS COMMUNAL NEST</text>
+          <text x={920} textAnchor="end" fill={STRAW} opacity={0.9}>
+            UP TO 23&#176;C DIFFERENTIAL
           </text>
         </g>
       </svg>
 
-      {/* ── Type lockup ────────────────────────────────────────────── */}
+      {/* ── Type lockup ──────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           left: 80,
           right: 80,
-          top: 905,
-          opacity: titleSpring,
-          transform: `translateY(${interpolate(
-            titleSpring,
-            [0, 1],
-            [16, 0],
-          )}px)`,
+          top: 920,
+          opacity: titleIn,
+          transform: `translateY(${interpolate(titleIn, [0, 1], [16, 0])}px)`,
         }}
       >
         <div
           style={{
-            color: PHYSARUM,
+            color: STRAW,
             fontFamily: inter,
             fontSize: 13,
             letterSpacing: 6,
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 20,
             fontWeight: 600,
           }}
         >
           Role <span style={{ color: GRAY, margin: "0 4px" }}>/</span>
-          <span style={{ color: "#EDEDEF", letterSpacing: 5 }}>
-            Urban Planner
-          </span>
+          <span style={{ color: PARCHMENT, letterSpacing: 5 }}>HVAC Engineer</span>
         </div>
 
         <div
           style={{
-            color: "#F4F4F6",
+            color: PARCHMENT,
             fontFamily: playfair,
             fontWeight: 500,
-            fontSize: 84,
+            fontSize: 86,
             lineHeight: 0.96,
-            letterSpacing: -1.4,
+            letterSpacing: -1.6,
             fontStyle: "italic",
           }}
         >
-          The brainless
+          The hundred&#8209;door
           <br />
-          city planner.
+          thermostat.
         </div>
 
         <div
           style={{
             marginTop: 30,
-            color: "#C8CAD0",
+            color: "#C6C2B3",
             fontFamily: inter,
             fontSize: 19,
-            lineHeight: 1.4,
+            lineHeight: 1.42,
             fontWeight: 400,
-            maxWidth: 880,
+            maxWidth: 890,
             opacity: hookOpacity,
           }}
         >
-          Given oat flakes at the locations of 36 cities around Tokyo,{" "}
-          <span style={{ color: PHYSARUM, fontWeight: 600 }}>
-            Physarum polycephalum
-          </span>{" "}
-          — a single-celled slime mold with no nervous system — grew a
-          transport network whose length, efficiency, and fault-tolerance
-          matched the Greater Tokyo rail system.
+          A colony of sociable weavers (
+          <span style={{ color: STRAW, fontStyle: "italic", fontWeight: 500 }}>
+            Philetairus socius
+          </span>
+          ) builds the largest communal nest on Earth — one thatched dome, 100+ breeding pairs — and the insulation of the straw alone keeps interior chambers up to{" "}
+          <span style={{ color: STRAW_HI, fontWeight: 600 }}>23&#8201;&#176;C warmer</span>{" "}
+          than outside on winter desert nights, with no mechanical part anywhere in the system.
         </div>
       </div>
 
@@ -677,9 +824,9 @@ export const PairingCard: React.FC = () => {
           fontWeight: 500,
         }}
       >
-        <span>Tero et al. · Science 327 (2010) 439–442</span>
+        <span>Bartholomew, White &amp; Howell · The Condor 78 (1976) 268&ndash;273</span>
         <span>
-          <span style={{ color: OAT }}>●</span> Oat flake = City
+          <span style={{ color: STRAW }}>&#9679;</span> Thatch = Insulation
         </span>
       </div>
     </AbsoluteFill>
